@@ -1,0 +1,16 @@
+extends: base.yaml
+id: breakdown_sub_noise
+status: preregistered_draft
+hypothesis:
+  id: BREAKDOWN-sub_noise
+  prediction: >-
+    Expected: per-pixel voting misses; sensor-level aggregate statistic may detect; power vs magnitude curve reported.
+  falsification_criterion: >-
+    This is a required honest-negative experiment. The prediction fails if the method succeeds where a failure
+    is predicted; either outcome is reported unconditionally with full CIs. Description: Sub-noise fault (0.1-0.3 sigma); only aggregation over ~1e5 pixels detects it.
+  independent_variables: [fault_magnitude, which_sensor_faulty, K]
+  controlled_variables: [scenes, seeds, noise_models, overlap]
+baselines: [median_fusion, consistency_voting, loo_chi2, subset_msac, openmvs, splat_consensus]
+metrics: {primary: chamfer, secondary: [detection_precision, detection_recall, attribution_accuracy]}
+scenarios:
+  - {name: sub_noise, faulty: [0], n_sensors: 4, cell: {kind: depth_bias_const, params: {frac_of_median_range: 0.002, sign: 1}, profile: step}}

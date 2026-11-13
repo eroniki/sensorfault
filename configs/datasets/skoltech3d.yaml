@@ -1,0 +1,10 @@
+id: skoltech3d
+role: primary_real_data
+licence: "CC BY-NC 4.0 (project page; README not confirmed) - do not redistribute"
+root: ${SKOLTECH3D_ROOT}                  # env var; no hardcoded paths
+depth_sensors: [phone_tof_1, phone_tof_2, kinect_v2_tof, realsense_stereo]   # [UNVERIFIED names; check dataset README]
+reference: structured_light_gt
+time_definition: viewpoint_order           # frames are independent viewpoints
+fscore_thresholds_m: [0.001, 0.002, 0.005]
+splits: {dev: [], test: [], rule: "fill after download: sorted scene names, hash(name) % 4 == 0 -> dev (<= 25%), rest test"}
+notes: "Tabletop objects; no room-scale multipath. Download size unknown, budget TB."

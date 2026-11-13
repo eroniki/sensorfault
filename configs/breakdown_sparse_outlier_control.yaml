@@ -1,0 +1,16 @@
+extends: base.yaml
+id: breakdown_sparse_outlier_control
+status: preregistered_draft
+hypothesis:
+  id: BREAKDOWN-sparse_outlier_control
+  prediction: >-
+    Expected: per-pixel voting/median beat sensor-level elimination; report the loss.
+  falsification_criterion: >-
+    This is a required honest-negative experiment. The prediction fails if the method succeeds where a failure
+    is predicted; either outcome is reported unconditionally with full CIs. Description: Sparse independent outliers (voting should win).
+  independent_variables: [fault_magnitude, which_sensor_faulty, K]
+  controlled_variables: [scenes, seeds, noise_models, overlap]
+baselines: [median_fusion, consistency_voting, loo_chi2, subset_msac, openmvs, splat_consensus]
+metrics: {primary: chamfer, secondary: [detection_precision, detection_recall, attribution_accuracy]}
+scenarios:
+  - {name: sparse_outlier_control, faulty: [0], n_sensors: 4, cell: {kind: transient, params: {fraction: 1.0, burst_min: 3, burst_max: 10, mode: pixel_outliers, pixel_fraction: 0.05, magnitude_m: 0.5}, profile: step}}

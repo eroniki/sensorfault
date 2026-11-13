@@ -1,0 +1,16 @@
+# Proposed method. STUB: documented in src/sensorfault/elim/splat_consensus.py; not registered yet.
+baselines:
+  - id: P0
+    fuser: splat_consensus
+    family: proposed
+    status: stub
+    params:
+      variant: corrected            # corrected | literal_alg1 (ablation A8)
+      n_gaussians: 40000
+      iters: 3000
+      loo_iters: 200
+      alpha_tau: 0.5
+      theta_gate_deg: 85
+      eps: 0.17
+      F_max: null                   # default: strict minority
+      null_fer: 0.05

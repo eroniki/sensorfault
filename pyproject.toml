@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sensorfault"
+version = "0.1.0"
+description = "Sensor-level fault elimination in a shared Gaussian-splat surface: multi-sensor depth fusion benchmark"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["numpy>=1.24", "scipy>=1.10", "pyyaml>=6.0"]
+
+[project.optional-dependencies]
+tsdf = ["open3d>=0.18"]
+gs = ["torch>=2.1", "gsplat>=1.0"]
+learned = ["torch>=2.1", "torchvision>=0.16"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.5", "pre-commit>=3.5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+markers = [
+    "gpu: needs a CUDA GPU (skipped in CI)",
+    "slow: long-running test",
+    "data: needs downloaded datasets (skipped in CI)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests", "scripts"]
+extend-exclude = ["third_party", "data", "outputs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "C4", "SIM", "RUF", "NPY", "PT"]
+ignore = [
+    "E501",    # handled by the formatter
+    "N803", "N806",  # K, T_wc and friends are conventional in geometry code
+    "UP007", "UP045",  # keep Optional[...] as used in the shared contracts
+    "UP006", "UP035", "UP037",
+    "RUF012",
+    # style rules that add noise to numerical/test code; revisit if desired
+    "PT018", "PT011", "C408", "B905", "RUF005", "RUF015", "RUF046", "RUF059",
+    "E741", "E731", "N802", "N817", "SIM105",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+"src/sensorfault/*/__init__.py" = ["F401"]  # package re-exports
+
+[tool.ruff.lint.isort]
+known-first-party = ["sensorfault"]
+
+[tool.ruff.format]
+quote-style = "double"
+# shared contract files are owned/frozen elsewhere; do not reformat
+exclude = ["src/sensorfault/types.py", "src/sensorfault/baselines/base.py"]

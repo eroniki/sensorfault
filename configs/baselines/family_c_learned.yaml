@@ -1,0 +1,15 @@
+# Family C - learned fusion. Prediction H5: degrade under smooth bias / extrinsic drift.
+baselines:
+  - id: L1-pretrained
+    fuser: senfunet
+    family: C
+    params: {weights: pretrained, finetune: none}
+    variants:
+      - {name: senfunet_pretrained,  params: {finetune: none}}
+      - {name: senfunet_ft_clean,    params: {finetune: clean_split}}
+      - {name: senfunet_ft_bias,     params: {finetune: fault_like_bias}}   # strongest learned competitor
+    licence_note: "BSD-style custom text; pretrained-weight URL unverified"
+  - id: L2
+    fuser: routedfusion      # or NeuralFusion; pick one (single-sensor, run sequentially)
+    family: C
+    params: {weights: pretrained, sequential_sensors: true}

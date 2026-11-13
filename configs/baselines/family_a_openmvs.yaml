@@ -1,0 +1,16 @@
+# Family A - OpenMVS depth-map fusion (primary voting baseline). AGPL-3.0: release adapter + results only.
+baselines:
+  - id: A-openmvs
+    fuser: openmvs
+    family: A
+    plan_ref: "PLAN.md section 4 Family A"
+    params:
+      fusion_filter: 1            # variants to report: 0 (merge), 1 (voting, main), 2 (develop default)
+      geometric_iters: 0          # inference: skips PatchMatch - smoke test first (wk 3-4)
+      number_views_fuse: 2        # sweep 2-4
+      depth_rel_thresh: 0.01
+      normal_thresh_deg: 25
+      max_neighbors: 32
+      postprocess_dmaps: 0
+    sweep: {fusion_filter: [0, 1, 2], number_views_fuse: [2, 3, 4]}
+    tuned_on: dev_only

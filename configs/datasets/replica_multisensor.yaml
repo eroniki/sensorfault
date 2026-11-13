@@ -1,0 +1,7 @@
+id: replica_multisensor
+role: synthetic_rig_on_replica
+licence: "Replica research-only; do NOT redistribute renderings - release generator + seeds only"
+root: ${REPLICA_ROOT}
+rig: {n_sensors: 4, per_sensor_intrinsics: true, per_sensor_fov_deg: [60, 70, 90, 70], noise_models: [kinect_sl, tof, lidar, stereo], extrinsics: seeded_ring}
+fscore_thresholds_m: [0.02, 0.05, 0.10]
+splits: {dev: [], test: [], rule: "fill after rendering: sorted scene names, hash(name) % 4 == 0 -> dev"}

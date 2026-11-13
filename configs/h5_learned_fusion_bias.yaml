@@ -1,0 +1,25 @@
+extends: base.yaml
+id: h5_learned_fusion_bias
+status: preregistered_draft
+hypothesis:
+  id: H5
+  prediction: >-
+    Pretrained SenFuNet and single-sensor learned fusion (RoutedFusion/NeuralFusion) degrade under smooth bias
+    and extrinsic drift because they were trained on zero-mean noise/outliers; SenFuNet fine-tuned with
+    fault-like bias narrows but does not close the gap in the low-overlap / faulty-dominant regimes. Falsified
+    if fine-tuned SenFuNet matches elimination there - report it either way.
+  falsification_criterion: >-
+    Falsified if SenFuNet fine-tuned WITH fault-like bias has a Chamfer within 10% (relative; paired
+    scene-level Wilcoxon not rejecting at alpha=0.05) of sensor-level elimination in the low-overlap and
+    faulty-dominant regimes. Equivalence margin is the 10% declared here.
+  independent_variables: [learned_model_variant, fault_type, fault_magnitude, overlap, faulty_coverage_share]
+  controlled_variables: [K, scenes, seeds, training_data_budget, GT_SDF_source]
+  levels:
+    learned_model_variant: [senfunet_pretrained, senfunet_ft_clean, senfunet_ft_bias, routedfusion_pretrained]
+    fault_types: [depth_bias_const, depth_bias_range, extrinsic_drift]
+    regimes: [low_overlap, faulty_dominant, high_overlap]
+baselines: [senfunet, routedfusion, tsdf_open3d, median_fusion, loo_chi2, splat_consensus]
+metrics: {primary: chamfer, secondary: [fscore, completeness, runtime_s]}
+scenarios:
+  - {name: bias_3pct_low_overlap, faulty: [0], synthetic: {fov_deg: 45.0}, cell: {kind: depth_bias_const, params: {frac_of_median_range: 0.03, sign: 1}, profile: step}}
+  - {name: drift_2deg_faulty_dominant, faulty: [0, 1], cell: {kind: extrinsic_drift, params: {rotation_deg: 2.0}, profile: step}}

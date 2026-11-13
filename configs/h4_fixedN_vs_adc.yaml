@@ -1,0 +1,24 @@
+extends: base.yaml
+id: h4_fixedN_vs_adc
+status: preregistered_draft
+hypothesis:
+  id: H4
+  prediction: >-
+    Fixed-N MCMC resists absorbing the faulty sensor; adaptive densification (ADC) at matched N loses >=10
+    points of detection power; there is an N sweet spot.
+  falsification_criterion: >-
+    Falsified if, at matched N, the detection-power difference (fixed-N minus ADC) has a bootstrap 95% CI
+    lower bound <10 points, OR power is monotone in N over the sweep (no interior optimum within one
+    sweep step).
+  independent_variables: [densification_mode, N_gaussians, fault_magnitude]
+  controlled_variables: [K, fault_type, FER_target, iterations, seeds, scenes]
+  levels:
+    densification_mode: [fixed_N_mcmc, adc]
+    N_gaussians: [5000, 10000, 20000, 40000, 80000, 160000]
+    fault_magnitude_sigma: [1, 3]
+baselines: [gs_mcmc_depth, twodgs_depth, splat_consensus]
+ablation_ref: ablations_A0_A11.yaml#A4,A5
+metrics: {primary: detection_power_at_fer_5pct, secondary: [chamfer, runtime_s, gpu_memory_gb]}
+scenarios:
+  - {name: bias_3sigma_one_of_four, faulty: [0], cell: {kind: depth_bias_range, params: {beta: 0.03, sign: 1}, profile: step}}
+  - {name: drift_2deg_one_of_four, faulty: [0], cell: {kind: extrinsic_drift, params: {rotation_deg: 2.0}, profile: ramp}}

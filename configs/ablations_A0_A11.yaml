@@ -1,0 +1,30 @@
+# NOTE: PLAN.md section 5 contains no explicit ablation table (only H3 visibility/grazing and H4 fixed-N vs
+# ADC / N sweep, and the Alg.1 literal-vs-corrected variants in section 4). A0..A11 below are RECONSTRUCTED
+# from those hypotheses and the method steps in PLAN.md section 4; confirm before preregistration.
+extends: base.yaml
+id: ablations_A0_A11
+status: preregistered_draft
+hypothesis:
+  id: ABLATIONS
+  prediction: "Each component (visibility, grazing weighting, clamp, fixed-N, LOO warm start, corrected criterion, null calibration, refit loop, persistence logic) contributes; see per-row expectations."
+  falsification_criterion: >-
+    A component is declared non-contributing if removing it changes the primary metric by less than its
+    pre-declared margin (below) with a scene-level bootstrap 95% CI containing zero.
+  independent_variables: [ablation_id]
+  controlled_variables: [K, scenes, seeds, fault_cells]
+baselines: [splat_consensus]
+margins: {chamfer_relative: 0.05, power_points_at_fer_5pct: 5, fer_ratio: 2.0}
+ablations:
+  - {id: A0,  name: full_method,               change: none,                                              tests: reference}
+  - {id: A1,  name: no_visibility,             change: "drop alpha>tau + first-return visibility gate",   tests: H3}
+  - {id: A2,  name: no_grazing_weighting,      change: "residual weight uses sigma_r only (no tan term)",  tests: H3}
+  - {id: A3,  name: unclamped_tan2,            change: "eps=0, no 85-degree gate",                         tests: H3}
+  - {id: A4,  name: adc_densification,         change: "adaptive densification at matched N instead of fixed-N MCMC", tests: H4}
+  - {id: A5,  name: N_sweep,                   change: "N in {5k,10k,20k,40k,80k,160k}",                   tests: H4}
+  - {id: A6,  name: no_loo_warm_start,         change: "cold LOO refit / single joint fit (masking not countered)", tests: H1}
+  - {id: A7,  name: chi2_only_statistic,       change: "LOO chi2 statistic instead of admission (Lambda) criterion", tests: H2}
+  - {id: A8,  name: literal_alg1,              change: "elim.literal_algorithm1 (documented bugs) instead of corrected criterion", tests: H2}
+  - {id: A9,  name: no_null_calibration,       change: "fixed threshold instead of 5% clean-run permutation threshold", tests: H3}
+  - {id: A10, name: single_shot_no_refit,      change: "exclude once, no refit/iteration",                 tests: H1}
+  - {id: A11, name: no_persistence_logic,      change: "no CUSUM persistence; frame-level transients not separated from sensor faults", tests: dynamics}
+scenario_grid: {grid: faults/grid.yaml, kinds: [extrinsic_drift, depth_bias_const, multipath], limit_per_kind: 2, fractions: [{faulty: 1, total: 4}]}

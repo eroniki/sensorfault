@@ -1,0 +1,29 @@
+extends: base.yaml
+id: h2_entropy_vs_loo_chi2
+status: preregistered_draft
+hypothesis:
+  id: H2
+  prediction: >-
+    The entropy/admission criterion beats LOO chi^2 (B3) by >=10 points of detection power at a fixed 5%
+    false-elimination rate, only where heteroscedastic / grazing / occlusion / non-Gaussian effects break
+    chi^2; the two tie under idealised Gaussian noise.
+  falsification_criterion: >-
+    Falsified if the paired power difference (criterion minus LOO chi^2) at FER=5% has a scene-level
+    bootstrap 95% CI lower bound <10 points in EVERY non-idealised regime. A tie under idealised Gaussian
+    noise is predicted (outside 5 points = also reported). If falsified, pivot P1 (entropy becomes an
+    equivalence result; PLAN.md section 2 equivalence warning).
+  independent_variables: [noise_regime, fault_magnitude, grazing_fraction, occlusion_fraction, residual_distribution]
+  controlled_variables: [K, fault_type, overlap, FER_target, seeds, fitted_surface]
+  levels:
+    noise_regime: [idealised_gaussian, heteroscedastic, grazing_heavy, occlusion_heavy, heavy_tailed_or_multimodal]
+    fault_magnitude_sigma: [0.3, 1, 3]
+    K: [4]
+baselines: [loo_chi2, subset_msac, median_fusion, splat_consensus]
+variants: {entropy_corrected: {fuser: splat_consensus, variant: corrected}, entropy_literal: {fuser: splat_consensus, variant: literal_alg1}}
+metrics: {primary: power_at_fer_5pct, secondary: [elimination_curve_auc, detection_precision, detection_recall]}
+fer_target: 0.05
+scenarios:
+  - {name: gaussian_bias_3sigma, faulty: [0], cell: {kind: depth_bias_const, params: {frac_of_median_range: 0.03, sign: 1}, profile: step}}
+  - {name: grazing_bias_3sigma, faulty: [0], synthetic: {fov_deg: 100.0}, cell: {kind: depth_bias_const, params: {frac_of_median_range: 0.03, sign: 1}, profile: step}}
+  - {name: multipath_room, faulty: [0], cell: {kind: multipath, params: {amplitude_m: 0.15}, profile: step}}
+  - {name: clean_control, faulty: []}

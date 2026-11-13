@@ -1,0 +1,33 @@
+extends: base.yaml
+id: h1_coherent_fault_regimes
+status: preregistered_draft
+hypothesis:
+  id: H1
+  prediction: >-
+    K>=3, one coherent fault >=3 sigma: sensor-level elimination cuts Chamfer >=25% vs the best of
+    OpenMVS fusion (filter 1, tuned), C3/C4 voting, and B2 (median), and lands within 20% of oracle -
+    concentrated in low-overlap, faulty-dominant, and sub-noise regimes. With high overlap and large K,
+    voting should tie (report the tie).
+  falsification_criterion: >-
+    Falsified if, in the pre-declared regimes (overlap<=2 sensors/pixel OR faulty coverage share>=0.5 OR
+    fault 0.1-0.3 sigma aggregated), the scene-level bootstrap 95% CI lower bound of the relative Chamfer
+    reduction vs the best tuned voting/median baseline is <25%, OR median Chamfer is >20% above oracle.
+    The high-overlap/large-K tie is a predicted null, not a falsifier. Gate 1 (wk 6): see PLAN.md section 7.
+  independent_variables: [overlap_sensors_per_pixel, faulty_coverage_share, K, fault_type, fault_magnitude, fraction_faulty]
+  controlled_variables: [scene_set, per_pixel_confidence, poses_and_intrinsics_given_to_all_methods, view_graph, fault_seeds, noise_models]
+  levels:
+    K: [3, 4, 6]
+    overlap_sensors_per_pixel: [1, 2, 3, 4]
+    faulty_coverage_share: [0.25, 0.5, 0.75]
+    fault_magnitude_sigma: [0.1, 0.3, 1, 3, 5]
+    fault_types: [extrinsic_drift, depth_bias_const, depth_bias_range, multipath]
+    fraction_faulty: ["1/3", "1/4", "2/4"]
+baselines: [tsdf_open3d, median_fusion, consistency_voting, merrell_visibility, openmvs, loo_chi2, subset_msac, splat_consensus]
+comparison_set_for_best_voting: [openmvs, consistency_voting, median_fusion]
+oracle: builtin_oracle_exclusion
+metrics: {primary: chamfer, relative_reduction_threshold: 0.25, oracle_gap_threshold: 0.20}
+scenario_grid:
+  grid: faults/grid.yaml
+  kinds: [extrinsic_drift, depth_bias_const, depth_bias_range, multipath]
+  limit_per_kind: 4
+  fractions: [{faulty: 1, total: 3}, {faulty: 1, total: 4}, {faulty: 2, total: 4, direction: same}]

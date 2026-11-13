@@ -1,0 +1,23 @@
+extends: base.yaml
+id: h3_visibility_grazing_false_elim
+status: preregistered_draft
+hypothesis:
+  id: H3
+  prediction: >-
+    Visibility + grazing weighting hold clean-run false elimination <=5%; ablating either at least doubles it.
+  falsification_criterion: >-
+    Falsified if (a) the full method's clean-run false-elimination rate (over >=200 clean sensor-runs per
+    regime) has a 95% upper bound >5%, OR (b) removing visibility OR grazing weighting raises the rate by a
+    factor <2 (point estimate and lower CI bound <2) in the grazing-heavy/occlusion-heavy regimes.
+  independent_variables: [visibility_on_off, grazing_weighting_on_off, grazing_fraction, occlusion_fraction]
+  controlled_variables: [K, overlap, seeds, scenes, null_calibration_procedure]
+  levels:
+    visibility: [on, off]
+    grazing_weighting: [on, off]
+    scene_difficulty: [open_room, cluttered_room, tabletop_objects]
+baselines: [loo_chi2, splat_consensus]
+ablation_ref: ablations_A0_A11.yaml#A1,A2,A3
+metrics: {primary: false_elimination_rate_clean, secondary: [false_alarms_per_100_clean_frames, clean_run_accuracy_loss]}
+scenarios:
+  - {name: clean_open_room, faulty: []}
+  - {name: clean_wide_fov_grazing, faulty: [], synthetic: {fov_deg: 110.0}}

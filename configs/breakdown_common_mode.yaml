@@ -1,0 +1,16 @@
+extends: base.yaml
+id: breakdown_common_mode
+status: preregistered_draft
+hypothesis:
+  id: BREAKDOWN-common_mode
+  prediction: >-
+    Expected: no sensor-level method can detect a fault common to all sensors (no internal reference); every method degrades equally.
+  falsification_criterion: >-
+    This is a required honest-negative experiment. The prediction fails if the method succeeds where a failure
+    is predicted; either outcome is reported unconditionally with full CIs. Description: Common-mode fault (shared extrinsic / clock) applied identically to all sensors.
+  independent_variables: [fault_magnitude, which_sensor_faulty, K]
+  controlled_variables: [scenes, seeds, noise_models, overlap]
+baselines: [median_fusion, consistency_voting, loo_chi2, subset_msac, openmvs, splat_consensus]
+metrics: {primary: chamfer, secondary: [detection_precision, detection_recall, attribution_accuracy]}
+scenarios:
+  - {name: common_mode, faulty: [0, 1, 2, 3], n_sensors: 4, cell: {kind: extrinsic_drift, params: {rotation_deg: 2.0, common_fault_id: 0}, profile: step}}

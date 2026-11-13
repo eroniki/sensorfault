@@ -1,0 +1,5 @@
+# Family D - sensor-level elimination competitors (RAIM-style)
+baselines:
+  - {id: B3,  fuser: loo_chi2,    family: D, role: iterated_leave_one_sensor_out_normalised_residual, params: {fer_target: 0.05, max_iters: 3, min_sensors: 2}}
+  - {id: B3b, fuser: subset_msac, family: D, role: enumerated_subset_consensus, params: {fer_target: 0.05, min_sensors: 2}}
+# B4 oracle = runner built-in `builtin_oracle_exclusion`; B5 estimate-and-correct is discussion-only (cut order).

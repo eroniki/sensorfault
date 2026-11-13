@@ -1,0 +1,16 @@
+extends: base.yaml
+id: breakdown_k2
+status: preregistered_draft
+hypothesis:
+  id: BREAKDOWN-k2
+  prediction: >-
+    Expected: detection of inconsistency possible, attribution at chance (~50%).
+  falsification_criterion: >-
+    This is a required honest-negative experiment. The prediction fails if the method succeeds where a failure
+    is predicted; either outcome is reported unconditionally with full CIs. Description: K=2: attribution is unidentifiable (~50% correct attribution).
+  independent_variables: [fault_magnitude, which_sensor_faulty, K]
+  controlled_variables: [scenes, seeds, noise_models, overlap]
+baselines: [median_fusion, consistency_voting, loo_chi2, subset_msac, openmvs, splat_consensus]
+metrics: {primary: chamfer, secondary: [detection_precision, detection_recall, attribution_accuracy]}
+scenarios:
+  - {name: k2, faulty: [0], n_sensors: 2, cell: {kind: depth_bias_const, params: {frac_of_median_range: 0.03, sign: 1}, profile: step}}

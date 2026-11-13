@@ -1,0 +1,33 @@
+# Exact fault grid, PLAN.md section 6. Seeds: SeedSequence([master, stable_hash(sensor_id), fault_id]).
+master_seeds: [101, 102, 103, 104, 105]
+fault_types:
+  extrinsic_drift:           # rotation-only and translation-only cells (separate axes) x profile
+    rotation_deg: [0.5, 1.0, 2.0, 5.0]
+    translation_cm: [1.0, 2.5, 5.0, 10.0]
+    profiles: [step, ramp, random_walk]
+  depth_bias_const:
+    frac_of_median_range: [0.01, 0.02, 0.03, 0.04, 0.05]   # "1-5% of median range"
+    sign: [1, -1]
+  depth_bias_range:
+    beta: [0.01, 0.02, 0.03, 0.05]                          # range-proportional, both signs
+    sign: [1, -1]
+  multipath:                 # heuristic surrogate, positive bias A*w(concavity)
+    amplitude_m:
+      tabletop: [0.02, 0.05, 0.10]                          # 2-10 cm
+      room: [0.05, 0.15, 0.30]                              # 5-30 cm
+  transient:                 # frame-level bursts
+    fraction: [0.10, 0.30]
+    burst_frames: [3, 10]
+    offset_m: 0.1
+fraction_faulty:             # faulty/total sensors
+  - {faulty: 1, total: 3}
+  - {faulty: 1, total: 4}
+  - {faulty: 2, total: 4, direction: independent}
+  - {faulty: 2, total: 4, direction: same}
+  - {faulty: 0, total: 4, note: zero-fault control}
+sweep_which_sensor: true
+persistence:
+  persistent_onset_frac: [0.2, 0.4]
+  transient_fraction: [0.10, 0.30]
+  transient_burst_frames: [3, 10]
+report_persistent_and_transient_separately: true

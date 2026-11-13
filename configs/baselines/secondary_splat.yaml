@@ -1,0 +1,4 @@
+# Secondary (same-representation) Gaussian-splat baselines. Research-only licences. Depth-only via placeholder RGB.
+baselines:
+  - {id: S1, fuser: gs_mcmc_depth, family: secondary, params: {n_gaussians: 40000, rgb: placeholder, depth_loss: l1, alpha_mask_loss: true}}
+  - {id: S2, fuser: twodgs_depth,  family: secondary, params: {n_gaussians: 40000, rgb: placeholder, depth_distortion: true, normal_consistency: true}}

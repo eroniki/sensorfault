@@ -1,0 +1,6 @@
+baselines:
+  - {id: C1, fuser: tsdf_open3d, family: B, role: no_elimination_floor, params: {voxel_m: 0.01, sdf_trunc_m: 0.04, icp: false}}
+  - {id: C2, fuser: median_fusion, family: B, role: robust_statistic_50pct_breakdown, params: {mad_outlier_fraction: true, voxel_m: 0.01}}
+  - {id: C3, fuser: consistency_voting, family: B, role: second_voting_baseline_colmap_style, params: {rel_depth_thresh: 0.01, normal_thresh_deg: 25, min_consistent_views: 2}}
+  - {id: C4, fuser: merrell_visibility, family: B, role: closest_classical_analogue_free_space, params: {depth_tol_rel: 0.01, min_support: 2}, impl: own_reimplementation}
+  - {id: C5, fuser: tvl1_range, family: B, role: optional_cut_early, params: {lambda_tv: 0.2, iters: 200, voxel_m: 0.02}, impl: own_reimplementation}

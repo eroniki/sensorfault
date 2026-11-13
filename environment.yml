@@ -1,0 +1,19 @@
+# Conda route (recommended on hosts whose system Python is newer than the pinned stack,
+# e.g. a Python 3.12 host with an RTX 2070 8 GB dev GPU).
+#   conda env create -f environment.yml && conda activate sensorfault
+# CUDA-agnostic: this file installs CPU-safe deps only. For GPU extras pick the torch wheel
+# that matches your driver (https://pytorch.org/get-started/locally/), e.g.
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+#   pip install -e ".[gs,learned]"
+# 8 GB VRAM: keep splat counts and image sizes modest; see docs/DEVELOPMENT.md.
+name: sensorfault
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - scipy
+  - pyyaml
+  - pip:
+      - -e .[dev]

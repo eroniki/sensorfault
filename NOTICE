@@ -1,0 +1,11 @@
+sensorfault - third-party notice
+
+The MIT licence in LICENSE covers only the original code in this repository.
+
+No third-party code is vendored here. Baselines (OpenMVS, 3DGS-family implementations,
+SenFuNet, RoutedFusion/NeuralFusion, gsplat, Open3D, ...) are cloned or installed by the
+user into the git-ignored third_party/ directory or the Python environment, and remain under
+their own licences, some of which are restrictive (AGPL-3.0, research-only, non-commercial).
+Wrappers in src/sensorfault/baselines/ call them through subprocess or import boundaries only.
+
+Datasets are not distributed with this repository and keep their own terms (see README.md).

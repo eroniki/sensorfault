@@ -1,0 +1,8 @@
+id: us3d_optional
+role: optional_satellite_multi_source_DSM_section
+enabled: false                            # cut first (PLAN.md cut order); needs licence approval
+licence_conflict: "DataPort says CC BY 4.0; contest terms ban redistribution and require case-by-case publication approval (iadf_chairs@grss-ieee.org)"
+size_gb: 289
+framing: "multi-source DSM fusion, not sensor fusion; pairs sharing an image share its RPC bias (not independent)"
+metrics: [rmse_m, mae_m, completeness_at_1m]
+splits: {dev: [], test: []}
