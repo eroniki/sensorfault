@@ -21,7 +21,7 @@ licence and download checks.}
 \paragraph{Replica (simulated multi-sensor rig).} We render the same trajectories
 in Replica \cite{data_replica} with per-sensor intrinsics, field of view,
 resolution and rig extrinsics, and apply per-sensor noise models
-(Section~\ref{sec:method:noise}). Exact ground-truth geometry and concave room
+(Section~\ref{sec:form:sensor}). Exact ground-truth geometry and concave room
 corners make this the testbed for multipath and grazing-angle effects. Its terms
 do not clearly permit redistributing renderings, so only the generator,
 seeds and configurations are released.
@@ -40,9 +40,10 @@ tests and for the controlled sweeps over overlap and coverage share.
   require approval before publication and prohibit redistribution; the IARPA
   benchmark \cite{data_mvs3dm} covers San Fernando, Argentina.}
 
-\subsection{Fault model and injection}
+\subsection{Fault injection}
 \label{sec:setup:faults}
-Faults are injected by deterministic, seeded scripts, so every realisation is
+The fault classes are defined in Section~\ref{sec:form:faults}; this subsection fixes
+the grid. Faults are injected by deterministic, seeded scripts, so every realisation is
 reproducible from a manifest. Seeds are derived as
 $\mathrm{SeedSequence}([\text{master},\,h(\text{sensor id}),\,\text{fault id}])$
 with a stable hash and at least five master seeds. The grid is:
@@ -63,13 +64,8 @@ with a stable hash and at least five master seeds. The grid is:
         and same-direction), always with a fault-free control, sweeping which
         sensor is faulted.
 \end{itemize}
-Overlap fraction, the faulty sensor's coverage share and fault correlation
-across sensors are controlled variables, because per-pixel voting does not fail
-merely because a fault is coherent: with two honest sensors covering a pixel it
-still outvotes one bad one. It is expected to fail when one or two sensors
-cover a pixel, when the faulty sensor supplies most of the coverage, when the
-fault is below the per-pixel noise floor but detectable by aggregating over
-many pixels, or when the identity of the faulty sensor is required.
+Overlap fraction, the faulty sensor's coverage share and fault correlation across
+sensors are controlled variables (Section~\ref{sec:form:regimes}).
 
 \subsection{Baselines}
 \label{sec:setup:baselines}
@@ -126,7 +122,7 @@ clean-run false-elimination rate on $[0,0.2]$; it equals the ROC AUC at
 $\mathrm{FER}_{\max}=1$. Intervals are scene-level bootstrap confidence
 intervals, with paired Wilcoxon tests against baselines and scenes as the unit.
 
-\subsection{Hypotheses}
+\subsection{Hypotheses and breakdown scenarios}
 \label{sec:setup:hyp}
 The following predictions are pre-registered. Each states what would falsify it.
 \begin{description}

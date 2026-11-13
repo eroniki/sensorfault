@@ -1,0 +1,102 @@
+\section{Problem Formulation}
+\label{sec:formulation}
+
+This section states the setting, the faults we consider, the measurement model
+of a healthy sensor, and the properties an exclusion rule must have. The method
+is in Section~\ref{sec:method}.
+
+\subsection{Setting and goal}
+\label{sec:form:setting}
+There are $K$ depth sensors. Sensor $s$ produces depth images
+$D_s^t:\Omega_s\to\R_{>0}$ at times $t$, with intrinsics $\mathbf{K}_s$ and a
+believed pose $\mathbf{T}^{t}_{s}$. A subset $\mathcal{F}\subset\{1,\dots,K\}$ of
+sensors is \emph{faulty}: its depth, intrinsics or pose deviate persistently
+from the truth in a way that is not zero-mean noise (extrinsic drift, depth
+bias, multipath; Section~\ref{sec:form:faults}). Neither $\mathcal{F}$ nor
+$|\mathcal{F}|$ is known; we assume $|\mathcal{F}|\le F$ with $F<K/2$ and
+return to this assumption in Section~\ref{sec:discussion}. The goal is a fused
+surface that is close to the reconstruction from the healthy sensors alone,
+together with the identity of the excluded sensors.
+
+\subsection{Fault model}
+\label{sec:form:faults}
+A fault is a persistent, structured deviation of one sensor from the truth, in
+contrast to zero-mean noise that averages out. We consider three classes.
+\emph{Extrinsic drift:} the believed pose of sensor $s$ differs from the true pose
+by a transform $\Delta\mathbf{T}_s^{t}\in SE(3)$ that is constant (step), grows
+linearly (ramp) or follows a random walk. \emph{Depth bias:} the measured depth is
+$D'_s=D_s+b$ (additive) or $D'_s=(1+\beta)D_s$ (range-proportional). \emph{Multipath:}
+a positive depth bias concentrated near concave geometry, where light returns by
+indirect paths. A fault is \emph{sensor-level persistent} if it affects all frames
+of a sensor from an onset time, and \emph{frame-level transient} if it affects a
+subset of frames. Faults are \emph{coherent}: the corrupted measurements are spatially
+structured, so their errors are not independent across pixels. The concrete
+magnitudes and injection procedure used in the experiments are given in
+Section~\ref{sec:setup:faults}.
+
+\subsection{Sensor measurement model}
+\label{sec:form:sensor}
+For a healthy sensor, a ray of length $r$ that meets a locally planar surface at incidence angle
+$\theta$ (angle between ray and surface normal), a range noise $\sigma_r$ and a
+pointing noise $\sigma_\varphi$ give a depth \emph{residual} variance
+\begin{equation}
+  v_{\mathrm{res}}(r,\theta)=\sigma_r^{2}+\bigl(r\,\sigma_\varphi\tan\theta\bigr)^{2}.
+  \label{eq:vres}
+\end{equation}
+This follows from $\mathrm{d}r/\mathrm{d}\theta=r\tan\theta$ for a plane at
+perpendicular distance $h$, where $r=h/\cos\theta$. It is the variance of the
+discrepancy between the measured range and the intersection of the nominal ray
+with the surface; it is the right weight for a depth residual along the ray. It is
+not the covariance of the 3D point: in the ray frame $(\ray,\mathbf{u},\mathbf{v})$
+the point covariance is $\mathrm{diag}(\sigma_r^2,(r\sigma_\varphi)^2,(r\sigma_\varphi)^2)$,
+and its component along the surface normal is
+\begin{equation}
+  v_{n}(r,\theta)=\sigma_r^{2}\cos^{2}\theta+r^{2}\sigma_\varphi^{2}\sin^{2}\theta,
+  \label{eq:vn}
+\end{equation}
+which stays bounded as $\theta\to\pi/2$. We therefore use \eqref{eq:vres} to
+weight residuals and \eqref{eq:vn} (with the tangential scale stretched by
+$1/\cos\theta$ in the plane of incidence) to initialise and floor splat
+covariances. Equation~\eqref{eq:vres} diverges at grazing incidence and its
+linearisation fails once $\sigma_\varphi\tan\theta\gtrsim 0.3$, so we use
+the regularised form
+\begin{equation}
+  \tilde v_{\mathrm{res}}=\operatorname{clip}\!\Bigl(\sigma_{r,\mathrm{eff}}^{2}
+  +r^{2}\sigma_{\varphi,\mathrm{eff}}^{2}\,\tfrac{\sin^{2}\theta}{\cos^{2}\theta+\epsilon^{2}},\;
+  v_{\min},\,v_{\max}\Bigr),
+  \label{eq:vreg}
+\end{equation}
+with $\epsilon\approx\cos 80^{\circ}$, a hard gate at $\theta>85^{\circ}$, and a
+beam-footprint term added to $\sigma_\varphi^2$ for LiDAR and ToF. For stereo
+and structured-light sensors the range noise is $\sigma_z=z^{2}\sigma_d/(fb)$
+\cite{noise_khoshelham,noise_matthies}; ToF noise grows as signal amplitude falls
+\cite{noise_lange,noise_sarbolandi}. ToF multipath and flying pixels are biases
+rather than variance and are masked by amplitude and depth-gradient tests
+\cite{noise_freedman}.
+
+\subsection{Regimes where per-pixel voting is insufficient}
+\label{sec:form:regimes}
+Per-pixel voting does not fail merely because a fault is coherent: where two
+honest sensors cover a pixel, they still outvote one faulty sensor. It is
+expected to fail in four regimes. (i)~Only one or two sensors cover a pixel.
+(ii)~The faulty sensor supplies most of the coverage. (iii)~The fault is below
+the per-pixel noise but detectable by aggregating over many pixels: a sensor-level
+statistic over $10^{5}$ pixels can detect a bias of a fraction of $\sigma$ that no
+single pixel reveals. (iv)~The identity of the faulty sensor is required, which a
+vote that discards pixels does not provide. Overlap fraction, the faulty sensor's
+coverage share and fault correlation across sensors are therefore the controlled
+variables of the evaluation (Section~\ref{sec:setup:hyp}). Robust splatting
+methods that mask pixels with large residuals \cite{gs_spotless,gs_robustsplat}
+face the same limit: a coherent fault can be absorbed into the fitted surface and
+leave no sparse residual to mask.
+
+\subsection{Requirements on an exclusion rule}
+\label{sec:form:requirements}
+Given per-sensor evidence about the surface, a sensor-level rule should
+(R1)~give the same answer for any ordering of the sensors; (R2)~respond to
+\emph{disagreement} between a sensor and the others, not only to the sensor's own
+precision, since a sharp but biased sensor must not be favoured; (R3)~return
+\emph{no consensus} rather than guess when attribution is not identifiable, for
+example with $K<3$; and (R4)~keep the false-exclusion rate on fault-free data at a
+stated level. Section~\ref{sec:method:admission} shows that the entropy criterion
+we adapt does not meet (R1) and (R2) as published and gives a criterion that does.

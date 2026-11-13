@@ -1,21 +1,15 @@
-\section{Method}
+\section{Proposed Method}
 \label{sec:method}
 
-\subsection{Problem setting}
-\label{sec:method:problem}
-There are $K$ depth sensors. Sensor $s$ produces depth images
-$D_s^t:\Omega_s\to\R_{>0}$ at times $t$, with intrinsics $\mathbf{K}_s$ and a
-believed pose $\mathbf{T}^{t}_{s}$. A subset $\mathcal{F}\subset\{1,\dots,K\}$ of
-sensors is \emph{faulty}: its depth, intrinsics or pose deviate persistently
-from the truth in a way that is not zero-mean noise (extrinsic drift, depth
-bias, multipath; Section~\ref{sec:setup:faults}). Neither $\mathcal{F}$ nor
-$|\mathcal{F}|$ is known; we assume $|\mathcal{F}|\le F$ with $F<K/2$ and
-return to this assumption in Section~\ref{sec:discussion}. The goal is a fused
-surface that is close to the reconstruction from the healthy sensors alone,
-together with the identity of the excluded sensors.
+The method fits a shared surface to all sensors, renders it back into each
+sensor without that sensor's own contribution, scores each sensor's
+disagreement, and admits a sensor to the consensus only if it passes an evidence
+test (Fig.~\ref{fig:pipeline}). Surviving sensors are then fused.
 
-\subsection{Shared surface and per-ray noise model}
-\label{sec:method:noise}
+\todofig{pipeline}{Pipeline: joint fit; leave-one-sensor-out render; visibility-aware residual statistics; admission test; refit and fuse.}
+
+\subsection{Shared surface}
+\label{sec:method:surface}
 The shared surface is a set of $N$ Gaussians with means $\boldsymbol\mu_i$,
 covariances $\boldsymbol\Sigma_i$ and opacities $\alpha_i$. $N$ is fixed and
 optimised with the relocation scheme of 3DGS-MCMC \cite{gs_mcmc}, so densification
@@ -23,47 +17,12 @@ cannot create a second layer that absorbs a faulty sensor's surface. Because
 photometric supervision is absent, we add an accumulated-alpha loss on valid and
 invalid pixels and a cap on splat anisotropy; planar splats follow
 \cite{gs_2dgs}. \TODO{Specify loss weights after the dev-scene sweep.}
-
-For a ray of length $r$ that meets a locally planar surface at incidence angle
-$\theta$ (angle between ray and surface normal), a range noise $\sigma_r$ and a
-pointing noise $\sigma_\varphi$ give a depth \emph{residual} variance
-\begin{equation}
-  v_{\mathrm{res}}(r,\theta)=\sigma_r^{2}+\bigl(r\,\sigma_\varphi\tan\theta\bigr)^{2}.
-  \label{eq:vres}
-\end{equation}
-This follows from $\mathrm{d}r/\mathrm{d}\theta=r\tan\theta$ for a plane at
-perpendicular distance $h$, where $r=h/\cos\theta$. It is the variance of the
-discrepancy between the measured range and the intersection of the nominal ray
-with the surface; it is the right weight for a depth residual along the ray. It is
-not the covariance of the 3D point: in the ray frame $(\ray,\mathbf{u},\mathbf{v})$
-the point covariance is $\mathrm{diag}(\sigma_r^2,(r\sigma_\varphi)^2,(r\sigma_\varphi)^2)$,
-and its component along the surface normal is
-\begin{equation}
-  v_{n}(r,\theta)=\sigma_r^{2}\cos^{2}\theta+r^{2}\sigma_\varphi^{2}\sin^{2}\theta,
-  \label{eq:vn}
-\end{equation}
-which stays bounded as $\theta\to\pi/2$. We therefore use \eqref{eq:vres} to
-weight residuals and \eqref{eq:vn} (with the tangential scale stretched by
-$1/\cos\theta$ in the plane of incidence) to initialise and floor splat
-covariances. Equation~\eqref{eq:vres} diverges at grazing incidence and its
-linearisation fails once $\sigma_\varphi\tan\theta\gtrsim 0.3$, so we use
-the regularised form
-\begin{equation}
-  \tilde v_{\mathrm{res}}=\operatorname{clip}\!\Bigl(\sigma_{r,\mathrm{eff}}^{2}
-  +r^{2}\sigma_{\varphi,\mathrm{eff}}^{2}\,\tfrac{\sin^{2}\theta}{\cos^{2}\theta+\epsilon^{2}},\;
-  v_{\min},\,v_{\max}\Bigr),
-  \label{eq:vreg}
-\end{equation}
-with $\epsilon\approx\cos 80^{\circ}$, a hard gate at $\theta>85^{\circ}$, and a
-beam-footprint term added to $\sigma_\varphi^2$ for LiDAR and ToF. For stereo
-and structured-light sensors the range noise is $\sigma_z=z^{2}\sigma_d/(fb)$
-\cite{noise_khoshelham,noise_matthies}; ToF noise grows as signal amplitude falls
-\cite{noise_lange,noise_sarbolandi}. ToF multipath and flying pixels are biases
-rather than variance and are masked by amplitude and depth-gradient tests
-\cite{noise_freedman}. We use the per-ray variance in three places: as a
-likelihood weight $\tfrac12 r^2/\tilde v_{\mathrm{res}}$, to initialise splat
-scales, and as a soft floor on splat scale. It is not used as a fixed
-covariance prior, because the posterior variance shrinks as views accumulate.
+The per-ray variance of Section~\ref{sec:form:sensor} enters in three places.
+It weights the depth term as a likelihood,
+$\tfrac12\,(D_s-\hat D_s)^{2}/\tilde v_{\mathrm{res}}$; it initialises splat
+scales (through \eqref{eq:vn}); and it sets a soft floor on splat scale. It is not
+used as a fixed covariance prior, because the posterior variance shrinks as views
+accumulate.
 
 \subsection{Consensus rendering and visibility-aware residuals}
 \label{sec:method:consensus}

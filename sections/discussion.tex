@@ -1,6 +1,19 @@
-\section{Limitations and Failure Conditions}
+\section{Discussion and Limitations}
 \label{sec:discussion}
 
+\subsection{Interpretation of the results}
+\label{sec:disc:interp}
+\TODO{Write after the experiments: for each of H1--H5 state whether it was
+  supported, partly supported or falsified, and why. In particular state, from the
+  H2 results, whether the evidence criterion adds anything beyond the
+  leave-one-out chi-square test (Proposition~\ref{prop:loo}), and, from H1, in
+  which overlap and coverage regimes (Section~\ref{sec:form:regimes}) sensor-level
+  exclusion beats per-pixel voting and where it ties. Relate the findings to
+  sensor-level exclusion in navigation \cite{flt_raim_joerger} and to learned
+  fusion \cite{fus_senfunet}.}
+
+\subsection{Limitations and failure conditions}
+\label{sec:disc:limits}
 The method is built on a consensus of sensors and fails where the consensus
 is wrong or not identifiable. First, it assumes fewer than half of the sensors are
 faulty. When faults are correlated across sensors, or a shared extrinsic or
@@ -19,13 +32,3 @@ variance models fail near grazing incidence, which we handle by clamping and
 gating rather than by modelling. Finally, results on tabletop objects with
 injected faults need not transfer to large scenes with natural faults, for which
 no ground truth exists. \TODO{Update with observed failures once experiments run.}
-
-\section{Conclusion}
-\label{sec:conclusion}
-We have described a sensor-level fault-elimination method for multi-sensor
-depth fusion on a fixed-budget Gaussian-splat surface, a corrected admission
-criterion that separates consistency from precision, and a pre-registered
-evaluation protocol with explicit breakdown conditions. The empirical case for
-the method rests on hypotheses H1--H5, none of which has been tested in this
-version. \TODO{Rewrite the conclusion around the measured results; if H2 fails,
-reframe around sensor-level exclusion with visibility and grazing weighting.}

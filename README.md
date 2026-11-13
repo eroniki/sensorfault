@@ -15,9 +15,13 @@ latexmk -pdf main.tex        # output: build/main.pdf (needs TeX Live; uses ./la
 `latexmkrc` points TeX at `template/` for the class, fonts and `IEEEtran.bst`.
 `draft_v0.pdf` is the last committed build.
 
+## Outline (follows the section order requested; IEEE Access mandates none)
+Abstract + Index Terms; I Introduction; II Related Work; III Problem Formulation; IV Proposed Method;
+V Experimental Setup; VI Results; VII Discussion and Limitations; VIII Conclusion.
+
 ## Layout
 - `main.tex` front matter, abstract, section includes
-- `sections/` intro, related, method, setup, results (placeholders), discussion
+- `sections/` intro, related, formulation, method, setup, results (placeholders), discussion, conclusion
 - `refs/references.bib` merged bibliography (`refs/part_*.bib` + `part_*_evidence.md` are the sources and the evidence log)
 - `template/` IEEE Access template files (see licence note)
 - `figures/` (empty; placeholders are drawn by `\todofig` in `sections/macros.tex`)
