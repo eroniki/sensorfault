@@ -1,76 +1,184 @@
 \section{Introduction}
 \label{sec:intro}
 
-\paragraph{Problem.}
-Depth-based 3D reconstruction increasingly combines several range sensors with
-different physics: LiDAR, continuous-wave time-of-flight (ToF) cameras,
-structured-light RGB-D cameras and stereo rigs. Their error models differ in
-range dependence, incidence-angle dependence and failure modes
-\cite{noise_khoshelham,noise_nguyen,noise_lange,noise_sarbolandi,noise_matthies}.
-Fusing them is attractive because each sensor covers weaknesses of the others,
-but fusion also couples the sensors: one sensor with a wrong extrinsic
-calibration, a depth bias, or multipath contamination can corrupt a shared
-surface that every other sensor is trying to estimate. The problem we address is
-detecting and excluding such a sensor, or such frames, before fusion, without
-knowing in advance which sensor is faulty.
+Image-based 3D reconstruction increasingly uses monocular depth estimators as a
+geometric prior. A depth map predicted from a single image constrains the relative
+pose of two views, fills in regions where feature matching fails, and provides the
+surface that is fused at the end. Several estimators are available
+\cite{est_midas,est_dav2,est_metric3dv2,est_unidepth,est_depthpro,est_moge,est_marigold},
+they differ in architecture, training data and output convention (metric depth versus
+affine-invariant depth), and their errors are not independent of the scene: an
+estimator may be accurate on most views of a scene and fail coherently on a few, for
+example on reflective or transparent surfaces, in textureless regions, or where its
+training data does not cover the scene type. Henceforth, a \emph{depth source} denotes
+the depth map that one estimator predicts for one view, and a \emph{view-level fault}
+denotes a source whose depth is wrong in a spatially structured way (a smooth warp, a
+failed region, an inconsistent scale), as opposed to sparse pixel noise.
 
-\paragraph{Gap.}
-Existing robustness mechanisms mostly act \emph{per pixel}. Depth-map fusion
-rejects a measurement when too few other views support it or when other views
-see free space in front of it
-\cite{fus_merrell,fus_colmap_mvs,fus_openmvs}; robust Gaussian-splatting
-methods down-weight or mask pixels whose residuals are large
-\cite{gs_spotless,gs_robustsplat}; learned multi-sensor fusion predicts
-per-voxel sensor weights \cite{fus_senfunet}. These mechanisms work well when
-errors are sparse and spatially incoherent. They are weaker when a sensor fails
-\emph{coherently}: a drifted extrinsic or a smooth depth bias moves a whole
-image in the same direction, and the corrupted measurements can agree with each
-other, with the fitted surface, or both. Where only one or two other sensors
-cover a pixel, or where the faulty sensor supplies most of the coverage, a
-per-pixel vote cannot attribute the disagreement to the right source
-(Section~\ref{sec:form:regimes}). In navigation, this attribution problem is
-classical, and \emph{sensor-level} fault detection and exclusion has a long
-history \cite{flt_raim_parkinson,flt_raim_brown,flt_raim_joerger,flt_lamport,flt_marzullo}.
-We are not aware of work that tests whole depth sensors against a Gaussian-splat
-consensus surface and excludes them before dense fusion
-(Section~\ref{sec:related}).
+This paper proposes a \emph{view-level gate}: a test that decides which depth sources
+to trust \emph{before} pose graph optimisation and fusion. The gate is the
+contribution. To make the setting concrete we embed it in a test bed whose depth maps
+come from an ensemble of monocular estimators applied to RGB images, whose poses come
+from a partly end-to-end pose graph optimisation, and which serves as an alternative to
+a classical structure-from-motion (SfM) pipeline. The pipeline is the test bed: it
+supplies the depth maps, the poses and the downstream task on which the gate is
+evaluated, and we do not claim it as a new reconstruction system.
 
-\paragraph{Approach.}
-We represent the shared surface with a fixed budget of Gaussian splats
-\cite{gs_3dgs,gs_mcmc}, render the consensus back into each sensor without that
-sensor's own contribution, and compute a per-sensor disagreement statistic from
-visibility-aware, noise-normalised residuals. A sensor is admitted to the
-consensus only if it passes an evidence test. The test adapts the
-consensus-growing idea of Ambarkutuk \emph{et~al.}\ \cite{flt_ambarkutuk}, whose
-entropy criterion, as published, cannot distinguish an agreeing sensor from a
-sharp but biased one; we replace it with a Bayes-factor test and use entropy only
-to select among admissible consensus sets (Section~\ref{sec:method}).
+\subsection{Relevant Literature}
+\label{sec:intro:lit}
+\runin{Monocular depth estimators.}
+MiDaS learns depth that is invariant to range and scale by mixing datasets
+\cite{est_midas}; Depth Anything V2 reports finer and more robust predictions from
+synthetic labels and pseudo-labelled real images \cite{est_dav2}. Metric3D v2,
+UniDepth and Depth Pro target zero-shot metric depth \cite{est_metric3dv2,est_unidepth,est_depthpro};
+MoGe predicts an affine-invariant point map \cite{est_moge}, and Marigold repurposes
+diffusion-based image generators for depth \cite{est_marigold}. Outputs therefore differ
+in whether they carry metric scale, and none of these works states when a prediction
+should not be used for downstream geometry. Ensembles are a standard route to
+predictive uncertainty \cite{ens_deepensembles}; here the members are different
+estimators, and we use their disagreement as evidence.
 
-\paragraph{Contributions.}
+\runin{SfM, view graphs and multi-view consistency.}
+Incremental and global SfM estimate poses from feature matches
+\cite{fus_colmap_sfm,sfm_glomap}; view-graph filtering removes inconsistent
+pairwise constraints before global estimation \cite{sfm_1dsfm}. In multi-view stereo, a
+depth map is kept pixel by pixel when enough neighbouring views agree on depth and
+normal \cite{fus_colmap_mvs}, or when other views do not see free space in front of it
+\cite{fus_merrell}, and surviving depth is fused volumetrically
+\cite{fus_curless,fus_kinectfusion}. These filters decide per pixel.
+
+\runin{Robust pose graph optimisation.}
+Pose graph and factor-graph solvers \cite{opt_g2o,opt_factorgraphs} are made robust to
+bad constraints with robust cost functions \cite{flt_huber,rob_blackrangarajan,rob_barron,rob_mactavish},
+graduated non-convexity \cite{rob_gnc}, switchable constraints \cite{rob_switchable},
+dynamic covariance scaling \cite{rob_dcs} and max-mixture models \cite{rob_maxmix}. These
+act on the residual of each constraint, after the constraint has been built from the
+depth map.
+
+\runin{Learned reconstruction and differentiable optimisation.}
+DUSt3R reconstructs image collections without calibration or poses
+\cite{rec_dust3r}; MASt3R casts matching as a 3D task \cite{rec_mast3r}, and MASt3R-SfM
+builds a fully integrated SfM solution on it \cite{rec_mast3rsfm}. VGGT is a
+feed-forward network that infers camera parameters, point maps, depth maps and tracks
+from one to hundreds of views \cite{rec_vggt}. DROID-SLAM updates poses and pixelwise
+depth through a dense bundle-adjustment layer \cite{rec_droidslam}, and Theseus provides
+differentiable nonlinear least squares on PyTorch \cite{opt_theseus}. We use MASt3R-SfM and
+VGGT as reference points rather than rivals: they replace the pipeline, whereas the
+gate is a component that can precede one.
+
+\runin{Source-level fault detection and exclusion.}
+Excluding a faulty source from a redundant set is a classical problem. Byzantine fault
+tolerance \cite{flt_lamport}, interval-based fusion of continuous-valued sensors
+\cite{flt_marzullo,flt_brooksiyengar}, and receiver autonomous integrity monitoring
+with residual-based, solution-separation and multiple-hypothesis tests
+\cite{flt_raim_parkinson,flt_raim_brown,flt_raim_joerger,flt_raim_pervan} detect and
+exclude a faulty source, and random-sample-consensus methods select a consistent subset
+\cite{flt_ransac,flt_msac}. In our earlier work we eliminated Byzantine accelerometers
+from a vibration-based localisation by building a consensus of per-sensor PDFs
+\cite{flt_ambarkutuk}, and used a joint likelihood over several sensors for dispersive
+wave propagation \cite{flt_ambarkutuk2024}.
+
+\runin{Positioning.}
+Pixel filters, robust kernels and voting decide at a different unit and stage from the
+gate: pixel filters per pixel and after poses are fixed, kernels per constraint and after
+the constraint exists, voting per pixel across sources. A coherent view-level fault is
+neither sparse nor independent across pixels, so none of these is designed to attribute
+it to a source. To our knowledge, a gate that decides trust per depth source before pose
+graph optimisation has not been studied in this setting; this statement rests on a
+limited literature search and will be re-checked before submission.
+\TODO{Final literature pass over IEEE Xplore and Google Scholar: depth-prior filtering in SfM or SLAM,
+  and uncertainty-aware use of monocular depth in pose graphs.}
+
+\subsection{Challenges in Using Monocular Depth Before Pose Estimation}
+\label{sec:intro:challenges}
+Several challenges limit current approaches.
 \begin{enumerate}
-  \item A sensor-level fault-elimination method for multi-sensor depth fusion on
-        a fixed-budget Gaussian-splat surface, with per-ray variance models that
-        weight the residuals and set the splat covariance
-        (Sections~\ref{sec:form:sensor} and~\ref{sec:method:surface}--\ref{sec:method:consensus}).
-  \item A corrected, self-consistent admission criterion for consensus-based
-        sensor elimination, with an analysis of when an entropy criterion
-        reduces to a leave-one-out chi-square test and when it does not
-        (Section~\ref{sec:method:admission}).
-  \item A pre-registered evaluation protocol with five falsifiable hypotheses,
-        a deterministic fault-injection grid (extrinsic drift, depth bias,
-        multipath surrogate), explicit breakdown scenarios, and baselines from
-        three families (OpenMVS-style depth-map fusion, classical fusion, learned
-        fusion) (Section~\ref{sec:setup}).
+  \item[\textbf{C1.}] \textbf{View-level faults are coherent.} When an estimator
+        fails on a view, its error is smooth or confined to a region, so most pixels
+        of the view still look plausible. Per-pixel consistency filters decide pixel
+        by pixel and can keep a warped depth map whose pixels agree with each other,
+        and a robust kernel only down-weights a constraint after the faulty depth has
+        entered the graph. Where the faulty view is covered by few neighbours, or
+        where several neighbouring views fail together, a vote over pixels has no
+        majority to rely on.
+  \item[\textbf{C2.}] \textbf{Monocular depth has no reference scale.} Many estimators
+        output affine-invariant depth, and even metric ones are only approximately
+        metric, so a source can be compared with others only after fitting a scale and
+        shift per view. That fit can absorb part of a fault and make the faulty source
+        look consistent, so the comparison must be made after a fit that excludes the
+        source under test.
+  \item[\textbf{C3.}] \textbf{Estimators share failure modes.} Estimators trained on
+        overlapping data tend to fail on the same content, so a majority of an
+        ensemble can be wrong together, and with fewer than three sources attribution
+        is not identifiable. A gate must be able to answer \emph{no consensus}.
+  \item[\textbf{C4.}] \textbf{Disagreement is not always a fault.} Occlusion, low
+        overlap and moving content make sources disagree for reasons unrelated to
+        their quality, so residuals must be compared only on pixels that are visible
+        in both views and have enough support.
+  \item[\textbf{C5.}] \textbf{The consensus criterion must detect disagreement.} A
+        criterion that rewards the precision of the combined estimate, as the entropy
+        test of our earlier work does as published, cannot distinguish an agreeing
+        source from a sharp but biased one.
 \end{enumerate}
+
+\subsection{Baseline Study and Overview of the Fundamental Differences}
+\label{sec:intro:baseline}
+The gate must beat three families of baselines, which act at different units and
+stages (Table~\ref{tab:diff}): robust kernels in the pose graph, the geometric
+consistency filter of COLMAP \cite{fus_colmap_mvs}, and plain voting. MASt3R-SfM and
+VGGT are reference points. The consensus criterion adapted for the gate comes from our
+earlier Byzantine sensor elimination (BSE) \cite{flt_ambarkutuk}, which localised
+footsteps from the signal energies of floor-mounted accelerometers: each sensor gave a
+PDF of the location over a grid, the PDFs were multiplied, and a consensus set was grown
+greedily from the best pair under an entropy criterion. Here the sources are
+estimator--view pairs, the PDFs are per-pixel depth distributions, and the admission
+test is corrected (Section~\ref{sec:method:gate}).
+\begin{table}[t]
+\caption{\textbf{Where each method decides.}}
+\label{tab:diff}
+\centering
+\small
+\begin{tabular}{p{0.22\columnwidth}p{0.20\columnwidth}p{0.22\columnwidth}p{0.20\columnwidth}}
+\toprule
+Method & Decision unit & Stage & Needs poses \\
+\midrule
+Robust kernel & Constraint (graph edge) & Inside the pose graph, after edges are built & Estimated jointly \\
+COLMAP consistency filter & Pixel & After poses, before fusion & Yes \\
+Plain voting & Pixel, across sources & Before or after fusion & Optional \\
+\textbf{Gate (this work)} & \textbf{Depth source (estimator, view)} & \textbf{Before the pose graph and fusion} & \textbf{Provisional only} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Summary of the Contributions}
+\label{sec:intro:contrib}
+This paper presents a view-level gate for depth sources. The following points summarise
+the contributions.
+\begin{itemize}
+  \item \textbf{A view-level gate for depth sources} (addresses C1 and C3): each
+        estimator--view pair is admitted or rejected before pose graph optimisation
+        and fusion, with \emph{no consensus} as an explicit outcome
+        (Section~\ref{sec:method:gate}).
+  \item \textbf{Leave-one-source-out comparison with alignment and visibility}
+        (addresses C2 and C4): sources are compared after a scale-and-shift fit that
+        excludes the source under test, on pixels visible in both views
+        (Section~\ref{sec:method:gate}).
+  \item \textbf{A corrected admission criterion} (addresses C5): a Bayes-factor test
+        with an analysis of when the entropy criterion reduces to a leave-one-out
+        chi-square test and when it does not (Section~\ref{sec:method:gate}).
+  \item \textbf{A test bed and a pre-registered protocol}: an RGB-plus-monocular-depth
+        ensemble pipeline with a partly end-to-end pose graph, five falsifiable
+        hypotheses, injected and natural view-level faults, explicit breakdown scenarios,
+        and the three baseline families (Sections~\ref{sec:method:pipeline} and~\ref{sec:setup}).
+\end{itemize}
 \TODO{Replace the preceding list by result-bearing contributions once H1--H5
   are evaluated; keep only claims supported by the final tables.}
 
-\paragraph{Organisation.}
-Section~\ref{sec:related} positions the work against prior art.
-Section~\ref{sec:formulation} states the setting, the fault model, the sensor
-measurement model and the requirements on an exclusion rule.
-Section~\ref{sec:method} presents the method.
-Section~\ref{sec:setup} describes the data, faults, baselines, metrics and
-hypotheses, and Section~\ref{sec:results} reports the results.
-Section~\ref{sec:discussion} discusses their meaning and the limits of the
-approach, and Section~\ref{sec:conclusion} concludes.
+\subsection{Organization of the Paper}
+\label{sec:intro:org}
+The rest of the paper is organized as follows. Section~\ref{sec:method} presents the
+method: the notation, the forward model of a depth source, the inverse problem of pose
+graph optimisation with depth sources, the view-level gate, and the test-bed pipeline.
+Section~\ref{sec:setup} describes the experiments, and Section~\ref{sec:results} reports
+the results. Section~\ref{sec:conclusion} presents the conclusions, the limitations and
+future work. Derivations and proofs are in the appendices.

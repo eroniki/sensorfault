@@ -26,56 +26,55 @@
 \history{Draft v0 --- not submitted. Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.}
 \doi{10.1109/ACCESS.2026.XXXXXXX}
 
-\title{Sensor-Level Fault Elimination for Multi-Sensor Depth Fusion on a Fixed-Budget Gaussian-Splat Surface}
-\author{\textcolor{red}{\uppercase{[TODO: Author name]}}\authorrefmark{1}}
+\title{A View-Level Gate for Monocular Depth Sources Before Pose Graph Optimisation and Fusion}
+\author{\uppercase{Murat Ambarkutuk}\authorrefmark{1}}
 \address[1]{\textcolor{red}{[TODO: affiliation, city, country] (e-mail: [TODO])}}
 \tfootnote{\textcolor{red}{[TODO: funding / support statement, or delete.]}}
 
 \markboth
-{Author \headeretal: Sensor-Level Fault Elimination for Multi-Sensor Depth Fusion}
-{Author \headeretal: Sensor-Level Fault Elimination for Multi-Sensor Depth Fusion}
+{Ambarkutuk: A View-Level Gate for Monocular Depth Sources}
+{Ambarkutuk: A View-Level Gate for Monocular Depth Sources}
 
 \corresp{Corresponding author: \textcolor{red}{[TODO: name (e-mail)]}.}
 
 \begin{abstract}
-Depth reconstruction from several range sensors is fragile when one sensor fails
-coherently: a drifted extrinsic calibration, a smooth depth bias, or multipath
-contamination can corrupt the shared surface that every other sensor helps to
-estimate. Existing safeguards act per pixel and cannot attribute a spatially
-coherent disagreement to a particular sensor. This paper describes a
-sensor-level fault-elimination method for multi-sensor depth fusion. The shared
-surface is a fixed budget of Gaussian splats whose covariances and residual
-weights follow per-ray range, pointing, and incidence-angle noise models. Each
-sensor's depth is compared with a consensus surface fitted without that sensor,
-using residuals that account for visibility and grazing geometry, and a sensor
-is admitted only if it passes an evidence test. The admission test corrects a
-consensus-based elimination criterion from the sensor-fusion literature, whose
-entropy test cannot distinguish an agreeing sensor from a sharp but biased one.
-We show that, for Gaussian noise, the evidence criterion reduces to a
-leave-one-out chi-square test plus a covariance-volume term. A pre-registered
-protocol compares the method with depth-map fusion in OpenMVS, classical
-volumetric and visibility-based fusion, and learned multi-sensor fusion under
-injected extrinsic drift, depth bias, and multipath faults, with explicit
-breakdown scenarios. \textcolor{red}{\textbf{[TODO: one sentence with the main
-quantitative result once experiments exist.]}}
+Image-based 3D reconstruction increasingly relies on monocular depth estimators as a
+geometric prior, but an estimator can fail coherently on some views, for example on
+reflective surfaces, producing a smooth warp or a failed region rather than sparse
+pixel noise. Pixel-wise consistency filters, robust kernels in the pose graph, and
+plain voting decide at the wrong unit or too late, after the faulty depth has entered
+the graph. This paper proposes a view-level gate that decides which depth sources, that
+is, which estimator outputs on which views, to trust before pose graph optimisation and
+fusion. The gate compares each source with the consensus of the others after a fit that
+excludes the source under test, on pixels visible in both views, and admits a source
+only if its mean log Bayes factor against the consensus passes a calibrated threshold;
+it returns no consensus when attribution is not identifiable. The test corrects an
+entropy criterion from earlier work on Byzantine sensor elimination, which cannot
+distinguish an agreeing source from a sharp but biased one. The gate is evaluated in a
+test bed with an ensemble of monocular depth estimators, a partly end-to-end pose graph,
+and fusion, against robust kernels, the COLMAP geometric consistency filter, and plain
+voting, with learned reconstruction systems as reference points. A pre-registered
+protocol states five falsifiable hypotheses and explicit breakdown scenarios.
+\textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 
 \begin{keywords}
-3D reconstruction, Byzantine fault tolerance, depth fusion, fault detection
-and exclusion, Gaussian splatting, multi-sensor fusion.
+3D reconstruction, Byzantine fault tolerance, depth fusion, monocular depth estimation,
+pose graph optimisation, robust estimation.
 \end{keywords}
 
 \titlepgskip=-21pt
 \maketitle
 
 \input{sections/intro}
-\input{sections/related}
-\input{sections/formulation}
 \input{sections/method}
 \input{sections/setup}
 \input{sections/results}
-\input{sections/discussion}
 \input{sections/conclusion}
+\input{sections/appendix}
+
+\section*{Data and Code Availability}
+\textcolor{red}{[TODO: the code, configurations, seeds and fault manifests are to be released; add the repository URL when it is public. Restricted datasets are not redistributed.]}
 
 \section*{Acknowledgment}
 \textcolor{red}{[TODO: acknowledgments. If AI tools assisted drafting, IEEE Access

@@ -1,180 +1,181 @@
-\section{Experimental Setup}
+\section{Experiments}
 \label{sec:setup}
 
-All experiments use public datasets, public sensor models and public code. The
-protocol, hypotheses and decision thresholds are written down and tagged in the
-code repository before any test scene is run (Section~\ref{sec:setup:protocol}).
+The experiments evaluate whether the view-level gate improves trajectory and fused-surface
+accuracy when some depth sources are wrong in a coherent, view-level way, whether it
+beats the three baseline families that act at other units and stages, and where it
+should not help. All experiments use public datasets, public pretrained models and public
+code. The protocol, hypotheses and decision thresholds are written down and tagged in the
+code repository before any test scene is run (Section~\ref{sec:setup:protocol}). Below
+are the details of the experiments employed in this study.
 
-\subsection{Data}
+\subsection{Experimental Setup}
+\label{sec:setup:expsetup}
+
+\subsubsection{Data}
 \label{sec:setup:data}
-\paragraph{Skoltech3D (primary real data).} Skoltech3D \cite{data_skoltech3d}
-provides several real depth sensors observing the same tabletop objects
-(two phone ToF cameras, a Kinect-class ToF camera, an active-stereo RealSense
-camera), per-sensor depth and calibration, and a structured-light reference
-scan. Faults are injected on top of the calibrated, otherwise clean data, so
-the true fault is known exactly. Scenes are small, single-object scenes without
-room-scale multipath, and frames are independent viewpoints; ``time'' is defined by
-viewpoint order. Data are used under their non-commercial licence and are not
-redistributed. \TODO{Fix the scene subset and the dev/test split after the
-licence and download checks.}
+\runin{ETH3D (primary real data).} ETH3D provides multi-view images with
+high-resolution laser-scan ground truth and calibrated camera poses \cite{data_eth3d}.
+The laser scan gives, for every view, a reference depth against which each estimator
+source can be scored, so natural estimator failures can be labelled without injecting
+anything. \TODO{Fix the scene subset, the dev/test split and the licence check.}
 
-\paragraph{Replica (simulated multi-sensor rig).} We render the same trajectories
-in Replica \cite{data_replica} with per-sensor intrinsics, field of view,
-resolution and rig extrinsics, and apply per-sensor noise models
-(Section~\ref{sec:form:sensor}). Exact ground-truth geometry and concave room
-corners make this the testbed for multipath and grazing-angle effects. Its terms
-do not clearly permit redistributing renderings, so only the generator,
-seeds and configurations are released.
+\runin{ScanNet++ (secondary, subject to access terms).} ScanNet++ provides indoor
+scenes with registered images and high-fidelity laser-scanned geometry
+\cite{data_scannetpp}, and contains reflective and transparent surfaces on which
+monocular estimators are expected to fail. Access requires accepting the dataset terms.
+\TODO{Confirm access and terms before relying on it.}
 
-\paragraph{Synthetic planes and rooms.} A generator in the code repository
-produces box rooms with an obstacle, with no dataset required. It is used for unit
-tests and for the controlled sweeps over overlap and coverage share.
+\runin{Replica (controlled synthetic).} Rendered images and exact depth from Replica
+\cite{data_replica} allow every fault parameter and the overlap between views to be
+varied. Its terms do not clearly permit redistributing renderings, so only the
+generator, seeds and configurations are released.
 
-\paragraph{Satellite digital surface models (optional).}
-\TODO{Decide whether this section stays. If it does: Jacksonville and Omaha tiles
-  from the 2019 data fusion contest \cite{data_us3d,data_dfc2019}, with
-  lidar-derived DSMs, and the pair-selection and DSM-generation pipeline of
-  \cite{data_gongfritsch}; each image pair or stereo DSM is treated as a source,
-  and the framing is ``multi-source DSM fusion'' rather than sensor fusion, since pairs
-  sharing an image share its RPC bias and are not independent. The contest terms
-  require approval before publication and prohibit redistribution; the IARPA
-  benchmark \cite{data_mvs3dm} covers San Fernando, Argentina.}
+\runin{Trajectory benchmarks (optional).} The TUM RGB-D protocol \cite{data_tum} and
+the Tanks and Temples benchmark \cite{data_tnt} define trajectory and reconstruction
+metrics that are used as the metric definition when a scene lacks a laser reference.
 
-\subsection{Fault injection}
+\runin{Depth ensemble.} The ensemble is drawn from Depth Anything V2, Metric3D v2,
+UniDepth, Depth Pro and MoGe \cite{est_dav2,est_metric3dv2,est_unidepth,est_depthpro,est_moge}
+with $M\in\{3,4,5\}$; Marigold \cite{est_marigold} is optional. All are run as released.
+\TODO{Check the licence of each set of weights and the GPU memory of each model.}
+
+\subsubsection{Fault injection}
 \label{sec:setup:faults}
-The fault classes are defined in Section~\ref{sec:form:faults}; this subsection fixes
-the grid. Faults are injected by deterministic, seeded scripts, so every realisation is
-reproducible from a manifest. Seeds are derived as
-$\mathrm{SeedSequence}([\text{master},\,h(\text{sensor id}),\,\text{fault id}])$
-with a stable hash and at least five master seeds. The grid is:
+The fault classes are defined in Section~\ref{sec:method:defs}; this subsection fixes the
+grid. Faults are injected into the output of one estimator, by deterministic, seeded
+scripts, so every realisation is reproducible from a manifest. Seeds are derived as
+$\mathrm{SeedSequence}([\text{master},\,h(\text{source id}),\,\text{fault id}])$ with a
+stable hash and at least five master seeds. The grid is:
 \begin{itemize}
-  \item \emph{extrinsic drift:} rotation $\{0.5,1,2,5\}^{\circ}$ and
-        translation $\{1,2.5,5,10\}$~cm, applied as a step, a linear ramp or a
-        random walk (rotation-only and translation-only cells);
-  \item \emph{depth bias:} additive, $1$--$5\%$ of the median range, and
-        range-proportional, $\beta\in\{1,2,3,5\}\%$ of both signs;
-  \item \emph{multipath surrogate:} a positive bias near concave regions,
-        amplitude $2$--$10$~cm (tabletop) or $5$--$30$~cm (rooms), clamped to be
-        non-negative. This is a controlled heuristic, not a physical multipath
-        model;
-  \item \emph{persistence:} sensor-level persistent faults (onset at 20\% or 40\%
-        of the sequence) versus frame-level transient bursts (10\% or 30\% of
-        frames in bursts of 3--10), reported separately;
-  \item \emph{fraction faulted:} 1 of 3, 1 of 4 and 2 of 4 sensors (independent
-        and same-direction), always with a fault-free control, sweeping which
-        sensor is faulted.
+  \item \emph{smooth warp:} a random low-frequency field added to the inverse depth,
+        with amplitude $\alpha\in\{0.25,0.5,1,2\}$ times the standard deviation of the
+        inverse depth of the view;
+  \item \emph{region failure:} a connected region covering $20$--$40\%$ of the pixels is
+        replaced by a plane fitted to the whole view or by a blurred copy;
+  \item \emph{non-affine distortion:} $D'=D^{\gamma}$ with $\gamma\in\{0.8,0.9,1.1,1.25\}$;
+  \item \emph{persistence:} a fraction $p\in\{10,20,40,60\}\%$ of the views of the faulted
+        estimator, scattered at random or clustered in contiguous views, and
+        estimator-level faults on all views;
+  \item \emph{faulted estimators per view:} 1 or 2 of $M$, with independent parameters and,
+        separately, identical parameters (common mode);
+  \item \emph{controls:} sparse independent outliers at the same corrupted-pixel rate, and
+        fault-free runs.
 \end{itemize}
-Overlap fraction, the faulty sensor's coverage share and fault correlation across
-sensors are controlled variables (Section~\ref{sec:form:regimes}).
+Natural failures need no injection: sources are labelled faulty when, after robust affine
+alignment, their error against the laser reference exceeds a threshold fixed on
+development scenes. \TODO{Fix the labelling threshold on development scenes.}
+Overlap between views and the clustering of faulty views are controlled variables, because
+a pixel filter or a kernel does not fail merely because a fault is coherent: it is
+expected to fail when faulty views have few neighbours, when neighbouring views fail
+together, or when the fault is below the per-pixel noise but detectable by aggregating
+over many pixels (challenge C1).
 
-\subsection{Baselines}
+\subsubsection{Baselines}
 \label{sec:setup:baselines}
-Every method receives the same fault-injected depth maps, the same (possibly
-drifted) poses and intrinsics, the same view graph, the same confidence (or
-none), and the same fault realisations. Thresholds are tuned on development
-scenes only, with the tuning budget reported. Re-implementations are labelled
-as such and released.
+Every method receives the same images, matches, depth ensemble, fault realisations and
+pose-graph solver; thresholds are tuned on development scenes only, with the tuning
+budget reported. Re-implementations are labelled as such and released.
 \begin{itemize}
-  \item \textbf{Family A: OpenMVS depth-map fusion.} The fusion stage of
-        OpenMVS \cite{fus_openmvs}, run on externally supplied depth maps
-        (PatchMatch skipped): merge-all as the no-filter floor, the per-pixel
-        consistency vote (relative depth and normal agreement in at least $n$
-        views, with a free-space filter), and its newer fusion mode as a separate
-        variant. We sweep the number of views to fuse and the thresholds.
-  \item \textbf{Family B: classical fusion.} Weighted-average TSDF
-        \cite{fus_curless,fus_kinectfusion}; per-pixel median across sensors;
-        geometric-consistency voting in the style of COLMAP
-        \cite{fus_colmap_mvs}; visibility-based fusion \cite{fus_merrell}; TV-$L^1$
-        range integration \cite{fus_zach07}; and optionally a
-        probabilistic inlier-ratio method \cite{fus_psdf,fus_vogiatzis}.
-  \item \textbf{Family C: learned fusion.} SenFuNet \cite{fus_senfunet}
-        (pretrained, fine-tuned on a fault-free split, and fine-tuned with
-        fault-like bias) and one single-sensor learned fuser
-        \cite{fus_routedfusion,fus_neuralfusion}.
-  \item \textbf{Family D: sensor-level elimination.} Iterated
-        leave-one-sensor-out normalised-residual test, enumerated subset
-        consensus with a MSAC score \cite{flt_ransac,flt_msac}, an oracle that
-        knows the faulty sensor, and an estimate-and-correct baseline that
-        jointly optimises extrinsics and bias.
-  \item \textbf{Secondary, same representation.} 3DGS-MCMC \cite{gs_mcmc} and
-        2DGS \cite{gs_2dgs} with a depth loss and the same $N$. These need RGB as
-        shipped; we report a depth-only variant with placeholder colour and, separately,
-        an RGB-available variant. Photometric transient-masking methods
-        \cite{gs_spotless,gs_robustsplat} are not run, since their masks are
-        photometric and do not target depth faults; the depth-space analogue is
-        the robust per-pixel mask baseline.
+  \item \textbf{Robust kernels in the pose graph (no gate).} Huber, Cauchy and
+        Geman--McClure kernels \cite{flt_huber,rob_blackrangarajan,rob_barron,rob_mactavish},
+        graduated non-convexity \cite{rob_gnc}, switchable constraints \cite{rob_switchable}
+        and dynamic covariance scaling \cite{rob_dcs}, applied to the geometric and the
+        depth constraints.
+  \item \textbf{COLMAP geometric consistency filter.} The pixel-wise cross-view depth and
+        reprojection consistency test of COLMAP \cite{fus_colmap_mvs}, run with the same
+        poses, masking depth constraints and fusion pixel by pixel.
+  \item \textbf{Plain voting.} Per-pixel median and majority across the ensemble and
+        across neighbouring views, with no gate.
+  \item \textbf{No gate, no robust kernel;} and an \textbf{oracle gate} that excludes
+        exactly the faulty sources (from the injection manifest, or from the laser
+        reference for natural failures), as an upper bound.
+  \item \textbf{Gate variants:} a leave-one-source-out chi-square gate (the statistic
+        $T_k$ of \eqref{eq:Ts} with a calibrated threshold) and the evidence gate of
+        Section~\ref{sec:method:admission}; and, as a context for the choice of
+        exclusion over correction, an estimate-and-correct baseline that refits the
+        alignment of every source without excluding any.
+  \item \textbf{Reference points, not rivals.} MASt3R-SfM \cite{rec_mast3rsfm} and VGGT
+        \cite{rec_vggt}, run as released on the same images, with classical COLMAP SfM
+        \cite{fus_colmap_sfm} as a classical reference. They do not use our depth
+        sources and therefore do not see the injected faults; they are reported to place
+        the test bed in context, and no claim is made to beat them.
 \end{itemize}
-OpenMVS is an offline batch tool and does not meet a per-frame real-time budget.
-We report latency for every method and state which ones are accuracy baselines
-only.
+Every method is timed. The test bed is an offline pipeline, and we report latency and memory
+per stage and state which methods do not meet a per-frame real-time budget.
 
-\subsection{Metrics and statistics}
+\subsubsection{Metrics and statistics}
 \label{sec:setup:metrics}
-Reconstruction quality is reported as accuracy, completeness, Chamfer distance and
-F-score against the reference geometry (F-score thresholds $1/2/5$~mm for
-Skoltech3D, $2/5/10$~cm for Replica); accuracy and completeness are reported
-separately, because excluding a sensor lowers completeness whenever the
-reference includes surfaces that only that sensor observed. Detection is
-reported as per-sensor precision and recall, time-to-detect (median and
-90th percentile, right-censored), and false alarms per 100 clean frames. The
-\emph{elimination curve AUC} is the normalised partial area under power versus
-clean-run false-elimination rate on $[0,0.2]$; it equals the ROC AUC at
-$\mathrm{FER}_{\max}=1$. Intervals are scene-level bootstrap confidence
-intervals, with paired Wilcoxon tests against baselines and scenes as the unit.
+Pose quality is reported as absolute trajectory error after similarity alignment, relative
+pose error, and the area under the curve of the relative pose error at fixed angular
+thresholds. Fused-surface quality is reported as accuracy, completeness and F-score
+against the laser reference; accuracy and completeness are reported separately, because
+excluding a source lowers completeness wherever only that source saw a region. Depth
+quality is the absolute relative error and the fraction within a ratio of the reference
+after alignment. The gate is scored per source: precision and recall against the oracle
+labels, the false-exclusion rate on fault-free data, power at a fixed 5\% false-exclusion
+rate, and the \emph{elimination curve AUC}, the normalised partial area under power versus
+clean-run false-exclusion rate on $[0,0.2]$ (it equals the ROC AUC at
+$\mathrm{FER}_{\max}=1$). Intervals are scene-level bootstrap confidence intervals, with
+paired Wilcoxon tests against baselines and scenes as the unit.
 
-\subsection{Hypotheses and breakdown scenarios}
+\subsection{Hypotheses and Breakdown Scenarios}
 \label{sec:setup:hyp}
 The following predictions are pre-registered. Each states what would falsify it.
 \begin{description}
-  \item[H1 (coherent faults).] With $K\ge 3$ and one coherent fault of at least
-        $3\sigma$, sensor-level elimination reduces Chamfer error by at least 25\%
-        relative to the best tuned per-pixel baseline (OpenMVS consistency
-        fusion, COLMAP-style voting, robust masking) and lands within 20\% of
-        the oracle. The advantage is concentrated in low-overlap,
-        faulty-dominant and sub-noise regimes; with high overlap and large $K$
-        voting is expected to tie, and the tie is reported.
-        \emph{Falsified if} the paired confidence interval of the improvement
-        includes zero in those regimes.
-  \item[H2 (entropy vs.\ chi-square).] At a fixed 5\% false-elimination rate, the
-        evidence-based criterion exceeds the leave-one-out chi-square test by at
-        least 10 points of detection power, only where heteroscedastic noise,
-        grazing geometry, occlusion or non-Gaussian residuals break the
-        chi-square assumptions, and ties under idealised Gaussian noise
-        (Proposition~\ref{prop:loo}). \emph{Falsified if} there is no gain in
-        any pre-registered regime; the fallback is to report the method as
-        sensor-level exclusion with visibility and grazing weighting, with the
-        entropy relation as an equivalence result.
-  \item[H3 (visibility and grazing).] Visibility-aware residuals and grazing
-        weighting keep the clean-run false-elimination rate at or below 5\%;
-        ablating either at least doubles it. \emph{Falsified if} ablations leave
-        the rate and error unchanged.
-  \item[H4 (fixed $N$).] Fixed-$N$ MCMC resists absorbing the faulty sensor's
-        surface: with adaptive densification at matched final $N$, detection
-        power drops by at least 10 points, and there is a sweet spot in $N$.
-        \emph{Falsified if} densification matches fixed-$N$ or the $N$ sweep
-        is flat.
-  \item[H5 (learned fusion).] Pretrained SenFuNet and single-sensor learned
-        fusion degrade under smooth bias and extrinsic drift, because they
-        were trained on zero-mean noise and outliers; fine-tuning SenFuNet with
-        fault-like bias narrows but does not close the gap in the low-overlap,
-        faulty-dominant regimes. \emph{Falsified if} the fine-tuned model matches
-        elimination there; we report it either way.
+  \item[H1 (view-level gate versus the three baselines).] With $M\ge3$ and one estimator
+        corrupted by a view-level fault on a fraction of the views, the gated pipeline
+        reduces the absolute trajectory error and the fused-surface error by at least 25\%
+        relative to the best tuned of the robust kernels, the COLMAP consistency filter
+        and plain voting, and lands within 20\% of the oracle gate. The advantage is
+        concentrated where faulty views are clustered or have few neighbours and where
+        the fault is smooth rather than sparse; with sparse independent outliers the pixel
+        filters and kernels are expected to tie or win, and that tie is reported.
+        \emph{Falsified if} the paired confidence interval of the improvement includes zero
+        in those regimes.
+  \item[H2 (evidence criterion versus chi-square).] At a fixed 5\% false-exclusion rate,
+        the evidence criterion exceeds the leave-one-source-out chi-square gate by at
+        least 10 points of detection power, only where heteroscedastic depth noise,
+        grazing geometry, occlusion or non-Gaussian residuals break the chi-square
+        assumptions, and ties under idealised Gaussian noise (Proposition~\ref{prop:loo}).
+        \emph{Falsified if} there is no gain in any pre-registered regime; the fallback is
+        to report the gate with the chi-square statistic, with the entropy relation as an
+        equivalence result.
+  \item[H3 (alignment and visibility).] Fitting the alignment without the source under test
+        and comparing only on pixels visible in both views keeps the false-exclusion rate
+        on clean data at or below 5\%; fitting the alignment jointly lets the fit absorb
+        the fault and lowers detection power by at least 10 points, and removing the
+        visibility mask at least doubles the false-exclusion rate. \emph{Falsified if}
+        the ablations leave the rate and the power unchanged.
+  \item[H4 (placement and complementarity).] Gating before pose graph optimisation gives
+        lower trajectory error than applying the same statistic after the graph, and the
+        gate combined with a robust kernel is at least as accurate as either alone.
+        \emph{Falsified if} gating after the graph matches gating before it, or if the
+        combination is worse than the better component.
+  \item[H5 (cost on clean data and reference points).] On fault-free data the gate changes
+        trajectory and fused-surface error by at most 5\% relative to the pipeline
+        without it (the price of gating); on natural failures the gated test bed narrows
+        the gap to the reference points MASt3R-SfM and VGGT, which are reported as context.
+        \emph{Falsified if} the price of gating on clean data exceeds 5\%.
 \end{description}
 
 \paragraph{Breakdown scenarios.} The following are tested and reported as honest
-negatives: a majority of faulty sensors with correlated (same-sign) faults;
-common-mode faults (a shared extrinsic or clock); $K=2$, where attribution
-is unidentifiable ($\approx$50\% attribution accuracy) and only detection is
-possible; sub-noise faults below a detection floor; sparse independent outliers,
-where per-pixel methods should win or tie; and non-overlapping fields of view.
+negatives: a majority of estimators failing in the same way on a view (common-mode
+failure, expected because estimators share training data); $M=2$, where attribution is
+unidentifiable and the gate returns no consensus; faults below the detection floor;
+sparse independent outliers, where pixel methods should win or tie; views with too little
+overlap for a cross-view comparison; and provisional poses of poor quality.
 
-\subsection{Protocol and implementation}
+\subsection{Implementation}
 \label{sec:setup:protocol}
-Hypotheses, thresholds, metrics, the tuning protocol and the dev/test split are
-fixed in a preregistration file and tagged in version control before any test
-scene is processed; the runner refuses the test split without that tag. The
-elimination threshold is calibrated by permutation on clean dev runs to a 5\%
-per-run false-elimination rate. At least six scenes (three dev, three test) and
-five seeds are used per dataset. Code, configurations, seeds and fault manifests
-are released; restricted datasets are not redistributed.
-\TODO{Add GPU model, wall-clock and GPU-hours per experiment once runs exist.}
+Hypotheses, thresholds, metrics, the tuning protocol and the dev/test split are fixed in a
+preregistration file and tagged in version control before any test scene is processed;
+the runner refuses the test split without that tag. The gate threshold is calibrated by
+permutation on clean development runs to a 5\% per-view false-exclusion rate. At least six
+scenes (three development, three test) and five seeds are used per dataset. The
+test bed uses an off-the-shelf feature matcher, a Gauss--Newton or Levenberg--Marquardt
+pose-graph solver \cite{opt_g2o,opt_factorgraphs,opt_theseus}, and TSDF fusion
+\cite{fus_curless,fus_kinectfusion}. Code, configurations, seeds and fault manifests are
+released; restricted datasets are not redistributed.
+\TODO{Choose and cite the matcher and the solver; add the GPU model, wall-clock time and
+  GPU-hours per experiment once runs exist.}

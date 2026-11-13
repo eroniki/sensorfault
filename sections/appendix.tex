@@ -1,0 +1,28 @@
+\appendices
+
+\section{Derivation of the Residual Variance}
+\label{app:variance}
+Let a ray with unit direction $\ray$ meet a locally planar surface with unit normal
+$\nrm$ at perpendicular distance $h$ from the camera, with incidence angle $\theta$
+($\cos\theta=|\nrm\cdot\ray|$). The range to the plane is $r(\theta)=h/\cos\theta$,
+so $\mathrm{d}r/\mathrm{d}\theta=h\sin\theta/\cos^{2}\theta=r\tan\theta$ exactly. A
+pointing error $\delta\varphi$ in the plane of incidence therefore changes the
+intersection range by $\delta r\approx r\tan\theta\,\delta\varphi$, whereas the
+out-of-plane component has no first-order effect. With $\delta\varphi$ independent of
+the range noise,
+$\mathrm{Var}(r_{\mathrm{meas}}-r_{\mathrm{plane}})=\sigma_r^{2}+r^{2}\sigma_\varphi^{2}\tan^{2}\theta$,
+which is \eqref{eq:vres}. The derivation assumes a locally planar surface, small errors
+($\sigma_\varphi\tan\theta\ll1$) and independent Gaussian $\sigma_r$ and $\sigma_\varphi$.
+The regularisation \eqref{eq:vreg} replaces $\tan^{2}\theta$ by
+$\sin^{2}\theta/(\cos^{2}\theta+\epsilon^{2})$, which is bounded, and clips the result.
+
+\section{Proof of the Proposition}
+\label{app:proof}
+$d=P_{-k}S^{-1}\nu$ and $\mathrm{Cov}(d)=P_{-k}-P_{\mathrm{all}}=P_{-k}S^{-1}P_{-k}$, so
+\begin{align*}
+d^{\top}\mathrm{Cov}(d)^{-1}d
+ &=\nu^{\top}S^{-1}P_{-k}\bigl(P_{-k}S^{-1}P_{-k}\bigr)^{-1}P_{-k}S^{-1}\nu\\
+ &=\nu^{\top}S^{-1}\nu .
+\end{align*}
+The evidence $\int p_C f_k$ is the Gaussian density of $\nu$ under $\mathcal{N}(0,S)$,
+whose negative logarithm is $\tfrac12\nu^{\top}S^{-1}\nu+\tfrac12\log\det(2\pi S)$.

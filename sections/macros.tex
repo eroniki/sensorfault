@@ -6,12 +6,13 @@
 \newcommand{\todofig}[2]{%
   \begin{figure}[!t]
     \centering
-    \fbox{\parbox[c][3.2cm][c]{0.92\columnwidth}{\centering
-      \textcolor{red}{\textbf{TODO FIGURE}}\\[2pt]\footnotesize #2}}
-    \caption{#1\ \textcolor{red}{\textbf{[PLACEHOLDER --- not yet produced]}}}
+    \fbox{\parbox[c][2.6cm][c]{0.92\columnwidth}{\centering
+      \textcolor{red}{\textbf{TODO FIGURE}}}}
+    \caption{#2\ \textcolor{red}{\textbf{[PLACEHOLDER --- not yet produced]}}}
     \label{fig:#1}
   \end{figure}}
 
+\newcommand{\runin}[1]{\par\smallskip\noindent\textit{#1}\ }
 \DeclareMathOperator*{\argmax}{arg\,max}
 \DeclareMathOperator*{\argmin}{arg\,min}
 \newcommand{\R}{\mathbb{R}}

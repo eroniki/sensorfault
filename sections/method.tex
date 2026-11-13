@@ -1,153 +1,273 @@
-\section{Proposed Method}
+\section{Method}
 \label{sec:method}
 
-The method fits a shared surface to all sensors, renders it back into each
-sensor without that sensor's own contribution, scores each sensor's
-disagreement, and admits a sensor to the consensus only if it passes an evidence
-test (Fig.~\ref{fig:pipeline}). Surviving sensors are then fused.
+In this section, the manuscript provides its principal contribution: a view-level gate
+that decides which depth sources to trust before pose graph optimisation and fusion.
+Depth sources are produced by an ensemble of monocular estimators on RGB images. A
+pose graph couples the views through geometric and depth-induced constraints. The gate
+compares the sources of each view with each other and with the depth predicted from
+neighbouring views, admits those that agree, and passes only admitted sources to the
+graph and to fusion (Fig.~\ref{fig:pipeline}). The gate is the contribution; the
+surrounding pipeline (Section~\ref{sec:method:pipeline}) is the test bed on which it is
+evaluated.
 
-\todofig{pipeline}{Pipeline: joint fit; leave-one-sensor-out render; visibility-aware residual statistics; admission test; refit and fuse.}
+\todofig{pipeline}{Test bed: RGB images; matches and monocular depth ensemble; provisional poses; \emph{view-level gate} (contribution); pose graph optimisation with gated depth factors; fusion.}
 
-\subsection{Shared surface}
-\label{sec:method:surface}
-The shared surface is a set of $N$ Gaussians with means $\boldsymbol\mu_i$,
-covariances $\boldsymbol\Sigma_i$ and opacities $\alpha_i$. $N$ is fixed and
-optimised with the relocation scheme of 3DGS-MCMC \cite{gs_mcmc}, so densification
-cannot create a second layer that absorbs a faulty sensor's surface. Because
-photometric supervision is absent, we add an accumulated-alpha loss on valid and
-invalid pixels and a cap on splat anisotropy; planar splats follow
-\cite{gs_2dgs}. \TODO{Specify loss weights after the dev-scene sweep.}
-The per-ray variance of Section~\ref{sec:form:sensor} enters in three places.
-It weights the depth term as a likelihood,
-$\tfrac12\,(D_s-\hat D_s)^{2}/\tilde v_{\mathrm{res}}$; it initialises splat
-scales (through \eqref{eq:vn}); and it sets a soft floor on splat scale. It is not
-used as a fixed covariance prior, because the posterior variance shrinks as views
-accumulate.
+\subsection{Definitions and Notation}
+\label{sec:method:defs}
+A static scene is observed by $N$ RGB images $I_i$, $i\in\mathcal{V}=\{1,\dots,N\}$, with
+approximately known intrinsics $\mathbf{K}_i$ and unknown poses
+$\mathbf{T}_i\in SE(3)$ (camera to world). An ensemble of $M$ monocular estimators
+$f_m$, $m\in\mathcal{M}=\{1,\dots,M\}$, predicts a depth map
+$D_{m,i}:\Omega_i\to\R_{>0}$ for each view. A \emph{depth source} is a pair $(m,i)$.
+Estimators that predict affine-invariant depth are used through a per-source scale and
+shift $\mathbf{a}_{m,i}=(s_{m,i},t_{m,i})$, giving the aligned depth
+$\tilde D_{m,i}=s_{m,i}D_{m,i}+t_{m,i}$; metric estimators use the same form with
+initial values $(1,0)$. A pose graph $\mathcal{G}=(\mathcal{V},\mathcal{E})$ has an edge
+$(i,j)$ for each pair of views with enough feature matches and co-visibility. The gate
+outputs $g_{m,i}\in\{0,1\}$ for each source, where $g_{m,i}=0$ means the source is
+excluded from the depth constraints and from fusion; a view whose sources are all
+excluded still takes part in the graph through its geometric constraints.
 
-\subsection{Consensus rendering and visibility-aware residuals}
-\label{sec:method:consensus}
-Let $\hat D_{-s}^{t}$ be the depth rendered into sensor $s$'s view from a surface
-fitted \emph{without} sensor $s$ (a warm-started refit of about $200$
-iterations), with accumulated alpha $A_{-s}^{t}$ and variance $v_{-s}$. Fitting
-without $s$ prevents self-influence: a joint fit can absorb a sensor's own bias
-and make its residuals look small. A pixel $u$ enters the residual only if it is
-valid, $A_{-s}^{t}(u)>\tau_A$, and the rendered first return agrees with the
-sensor's first return within a visibility gate, so that occluded regions do not
-count as disagreement. The normalised residual and per-sensor statistic are
+A set $\mathcal{F}\subset\mathcal{M}\times\mathcal{V}$ of sources is \emph{faulty}:
+their depth deviates from the true depth by a spatially structured error that is not
+removed by the scale-and-shift alignment. We consider three classes.
+\emph{Smooth warp:} the inverse depth is perturbed by a low-frequency field,
+$1/D'_{m,i}=1/D_{m,i}+w_i(u)$. \emph{Region failure:} on a connected region covering a
+fraction of the view, the depth is replaced by one that is unrelated to the true
+geometry (for example a plane or a blurred copy). \emph{Non-affine distortion:}
+$D'_{m,i}=D_{m,i}^{\gamma}$ with $\gamma\neq1$. A fault is \emph{view-level} if it
+affects a subset of the views of an estimator, either scattered or clustered in
+neighbouring views, and \emph{estimator-level} if it affects all of them. Neither
+$\mathcal{F}$ nor its size is known; we assume that at most $F<M/2$ sources of any view
+are faulty, and return to this assumption in Section~\ref{sec:disc:limits}.
+Scale-and-shift errors are not faults in this sense, because the alignment, both in the
+gate and in the pose graph, removes them; the gate targets the structure that
+alignment cannot remove. The goal is a trajectory and a fused surface that are close to
+those obtained from the healthy sources alone, together with the identity of the
+excluded sources. The concrete magnitudes and the injection procedure are given in
+Section~\ref{sec:setup:faults}.
+
+\subsection{Forward Problem: Monocular Depth as a Measurement}
+\label{sec:method:forward}
+For a healthy source, the aligned depth equals the true depth $d_i(u)$ up to noise whose
+spread grows with depth,
+$\tilde D_{m,i}(u)=d_i(u)+\varepsilon$, $\varepsilon\sim\mathcal{N}\bigl(0,\sigma_m^{2}(d_i(u))\bigr)$,
+with $\sigma_m(d)=\sigma_{0,m}+\kappa_m d$ fitted per estimator on clean development
+data. When a point of view $i$ is compared with view $j$, the pose uncertainty adds a
+pointing error to the ray. For a ray of length $r$ that meets a locally planar surface at
+incidence angle $\theta$ (the angle between ray and surface normal), a range noise
+$\sigma_r=\sigma_m(r)$ and a pointing noise $\sigma_\varphi$ taken from the rotational
+covariance of the pose give a depth \emph{residual} variance
 \begin{equation}
-  \rho_s(u)=\frac{D_s(u)-\hat D_{-s}(u)}{\sqrt{\tilde v_{\mathrm{res},s}(u)+v_{-s}(u)}},
-  \qquad
-  T_s=\frac{1}{|\Omega_s^{\mathrm{vis}}|}\sum_{u\in\Omega_s^{\mathrm{vis}}}\rho_s(u)^{2}.
+  v_{\mathrm{res}}(r,\theta)=\sigma_r^{2}+\bigl(r\,\sigma_\varphi\tan\theta\bigr)^{2}.
+  \label{eq:vres}
+\end{equation}
+This follows from $\mathrm{d}r/\mathrm{d}\theta=r\tan\theta$ for a plane at
+perpendicular distance $h$, where $r=h/\cos\theta$ (Appendix~\ref{app:variance}); it is
+the variance of the discrepancy between the measured depth and the intersection of the
+nominal ray with the surface. Equation~\eqref{eq:vres} diverges at grazing incidence and
+its linearisation fails once $\sigma_\varphi\tan\theta\gtrsim 0.3$, so we use the
+regularised form
+\begin{equation}
+  \tilde v_{\mathrm{res}}=\operatorname{clip}\!\Bigl(\sigma_{r}^{2}
+  +r^{2}\sigma_{\varphi}^{2}\,\tfrac{\sin^{2}\theta}{\cos^{2}\theta+\epsilon^{2}},\;
+  v_{\min},\,v_{\max}\Bigr),
+  \label{eq:vreg}
+\end{equation}
+with $\epsilon\approx\cos 80^{\circ}$ and a hard gate at $\theta>85^{\circ}$. Pixels
+that are not visible in the other view, or whose incidence angle exceeds the gate, do
+not enter any comparison. Natural failures of estimators (reflective or transparent
+surfaces, sky, textureless regions) are not variance but structured errors, and are the
+faults the gate is designed to catch.
+
+\subsection{Inverse Problem: Pose Graph Optimisation with Depth Sources}
+\label{sec:method:inverse}
+The poses and the alignments are estimated jointly,
+\begin{equation}
+\begin{split}
+  \min_{\{\mathbf{T}_i\},\{\mathbf{a}_{m,i}\}}\;
+  \sum_{(i,j)\in\mathcal{E}}\Bigl[&\rho_{g}\bigl(\|\mathbf{r}^{\mathrm{geo}}_{ij}\|^{2}_{\Sigma_g}\bigr)\\
+  &+\sum_{m\in\mathcal{M}} g_{m,i}\,g_{m,j}\,
+  \rho_{d}\bigl(\|\mathbf{r}^{\mathrm{dep}}_{m,ij}\|^{2}_{\Sigma_d}\bigr)\Bigr],
+\end{split}
+  \label{eq:pgo}
+\end{equation}
+where $\mathbf{r}^{\mathrm{geo}}_{ij}$ are epipolar or reprojection residuals of the
+feature matches between views $i$ and $j$, $\rho_g$ and $\rho_d$ are robust kernels
+(a quadratic kernel when no robust baseline is used), and the depth-induced residual
+back-projects a pixel $u$ of view $i$ with its aligned depth, transforms it into view
+$j$, and compares its depth there with the depth of source $(m,j)$:
+\begin{equation}
+\begin{split}
+  r^{\mathrm{dep}}_{m,ij}(u)&=\tilde D_{m,j}\bigl(\pi_j(\mathbf{q})\bigr)-q_z,\\
+  \mathbf{q}&=\mathbf{T}_j^{-1}\mathbf{T}_i\,\pi_i^{-1}\bigl(u,\tilde D_{m,i}(u)\bigr).
+\end{split}
+  \label{eq:rdep}
+\end{equation}
+The weights $g_{m,i}g_{m,j}$ are where the gate acts: a depth constraint is built only
+from two trusted sources. The problem is \emph{partly end-to-end} in the following
+sense: the matcher and the depth ensemble are learned and kept fixed, while the
+back-end is a differentiable least-squares solver \cite{opt_theseus}, so that residual
+weights or the gate itself could be trained through it; in this paper the gate is
+training-free and the back-end is used as an ordinary solver
+\cite{opt_g2o,opt_factorgraphs}. \TODO{Author to confirm this reading of ``partly
+  end-to-end'' (learned front-end, differentiable back-end, training-free gate) or
+  state the intended one.}
+
+\subsection{View-Level Gate}
+\label{sec:method:gate}
+
+\subsubsection{Requirements}
+Given evidence from several sources about the depth of a view, an exclusion rule should
+(R1)~give the same answer for any ordering of the sources; (R2)~respond to
+\emph{disagreement} between a source and the others, not only to the source's own
+precision, since a sharp but biased source must not be favoured; (R3)~return
+\emph{no consensus} rather than guess when attribution is not identifiable, for
+example with $M<3$; and (R4)~keep the false-exclusion rate on fault-free data at a
+stated level. The entropy criterion of our earlier work does not meet (R1) and (R2) as
+published (challenge C5); this subsection gives a criterion that does.
+
+\subsubsection{Leave-one-source-out consensus and visibility-aware residuals}
+\label{sec:method:consensus}
+For view $i$, the candidate sources are the $M$ estimator outputs $(m,i)$. Supporting
+evidence comes from neighbouring views: for a view $j$ with provisional pose, the
+consensus depth of $j$ is warped into view $i$ and acts as an additional source that is
+never itself gated. For a candidate $k$, let $\hat D_{-k}$ be the consensus of the
+other sources, after a robust scale-and-shift fit of each of them to a common
+reference, with variance $v_{-k}$ (the inverse-variance combination of the aligned
+sources). Fitting without $k$ prevents self-influence: a joint fit can absorb a source's
+own error and make its residuals look small (challenge C2). The candidate is aligned to
+$\hat D_{-k}$ by its own robust affine fit, so only the non-affine part of its
+deviation remains. A pixel $u$ enters the comparison only if it is valid, visible in
+both views (by a depth-buffer test against occluders), and below the grazing gate.
+With $\Omega_{k}^{\mathrm{vis}}$ the set of such pixels, the normalised residual and
+the per-source statistic are
+\begin{equation}
+\begin{split}
+  \rho_k(u)&=\frac{\tilde D_k(u)-\hat D_{-k}(u)}{\sqrt{\tilde v_{\mathrm{res},k}(u)+v_{-k}(u)}},\\
+  T_k&=\frac{1}{|\Omega_k^{\mathrm{vis}}|}\sum_{u\in\Omega_k^{\mathrm{vis}}}\rho_k(u)^{2}.
+\end{split}
   \label{eq:Ts}
 \end{equation}
-Pixel residuals are spatially correlated, so we do not use the nominal
-$\chi^2$ quantile as a threshold; the threshold $\tau$ is calibrated on
-fault-free dev runs to a 5\% per-run false-elimination rate
-(Section~\ref{sec:setup:protocol}). We also record Moran's~I of $\rho_s$ as a
-diagnostic: a coherent fault leaves spatially structured residuals, whereas
-sparse outliers do not. \TODO{Report Moran's~I figure (Fig.~\ref{fig:residual-structure}).}
+Pixel residuals are spatially correlated, so the nominal $\chi^2$ quantile is not used
+as a threshold; thresholds are calibrated on fault-free development runs to a 5\%
+per-view false-exclusion rate (Section~\ref{sec:setup:protocol}). We also record
+Moran's~I of $\rho_k$ as a diagnostic: a view-level fault leaves spatially structured
+residuals, whereas sparse outliers do not.
+\TODO{Report the Moran's~I figure (Fig.~\ref{fig:residual-structure}).}
 
-\subsection{Corrected admission criterion}
+\subsubsection{Corrected admission criterion}
 \label{sec:method:admission}
-Ambarkutuk \emph{et~al.}\ \cite{flt_ambarkutuk} give each sensor $i$ a PDF $f_i$
-over a common grid $\Sgrid$, form the product over a consensus set $C$, and grow $C$
-greedily from the best pair using an entropy test. In our reading of the
-published text, the prose and Eq.~(14) seed the set with the pair of
-\emph{maximum} entropy after fusion, whereas the corresponding line of
-Algorithm~1 tests $h_{ij}\le h^{*}$ with $h^{*}$ initialised to $-\infty$, so the
-seed branch never executes; the expansion test accepts a sensor when entropy
-does not decrease, which is the opposite of the stated aim of sharpening the
+In our earlier work \cite{flt_ambarkutuk}, each sensor $i$ has a PDF $f_i$ over a
+common grid $\Sgrid$, the product over a consensus set $C$ is formed, and $C$ is grown
+greedily from the best pair using an entropy test. Revisiting that work, the prose and
+Eq.~(14) seed the set with the pair of \emph{maximum} entropy after fusion, whereas the
+corresponding line of Algorithm~1 tests $h_{ij}\le h^{*}$ with $h^{*}$ initialised to
+$-\infty$, so the seed branch never executes; the expansion test accepts a sensor when
+entropy does not decrease, which is the opposite of the stated aim of sharpening the
 joint PDF, and it depends on sensor order.
-\TODO{Re-check the direction of the inequalities against the typeset equations in the
-  published PDF; our reading used a text rendering in which math was flattened.}
+\TODO{Author to confirm the direction of these inequalities against the typeset
+  equations of \cite{flt_ambarkutuk}; our check used a text rendering in which the math
+  was flattened.}
 
-A more basic problem is that entropy of a normalised product cannot detect a
-biased sensor. For one-dimensional Gaussians $\mathcal{N}(m_C,\sigma_C^2)$ and
+A more basic problem is that the entropy of a normalised product cannot detect a
+biased source. For one-dimensional Gaussians $\mathcal{N}(m_C,\sigma_C^2)$ and
 $\mathcal{N}(m_k,\sigma_k^2)$, the normalised product has variance
-$\sigma_C^2\sigma_k^2/(\sigma_C^2+\sigma_k^2)$ regardless of the offset
-$m_C-m_k$, so
+$\sigma_C^2\sigma_k^2/(\sigma_C^2+\sigma_k^2)$ regardless of the offset $m_C-m_k$, so
 \begin{equation}
   H(C\cup k)-H(C)=-\tfrac12\log\!\bigl(1+\sigma_C^{2}/\sigma_k^{2}\bigr)<0
   \label{eq:dH}
 \end{equation}
-for every sensor, healthy or faulty; a sharp biased sensor lowers entropy the
-most. Entropy measures the precision of a consensus, not its consistency.
+for every source, healthy or faulty; a sharp biased source lowers entropy the most.
+Entropy measures the precision of a consensus, not its consistency.
 
-We therefore separate the two roles. Let $F_C=\prod_{i\in C}f_i$,
-$Z_C=\int_{\Sgrid}F_C$, $p_C=F_C/Z_C$ and $H(C)=-\!\int p_C\log p_C$, all evaluated in
-log space on the grid. Sensor $k$ is \emph{compatible} with $C$ when its Bayes
-factor against a uniform null on $\Sgrid$ is at least one:
+We therefore separate the two roles. For a pixel $u$, the depth PDF of source $k$ is
+$f_{k,u}$ on an interval $\Sgrid_u$ of admissible depths. Let $F_C=\prod_{i\in C}f_{i,u}$,
+$Z_C=\int_{\Sgrid_u}F_C$, $p_C=F_C/Z_C$ and $H(C)=-\!\int p_C\log p_C$, all evaluated in
+log space. Source $k$ is \emph{compatible} with $C$ at $u$ when its Bayes factor against
+a uniform null on $\Sgrid_u$ is at least one:
 \begin{equation}
-  \Lambda_k(C)=|\Sgrid|\int_{\Sgrid}p_C f_k\,\mathrm{d}x=|\Sgrid|\,\frac{Z_{C\cup k}}{Z_C}\;\ge\;1.
+  \Lambda_{k,u}(C)=|\Sgrid_u|\int_{\Sgrid_u}p_C f_{k,u}\,\mathrm{d}z
+  =|\Sgrid_u|\,\frac{Z_{C\cup k}}{Z_C}\;\ge\;1 .
   \label{eq:lambda}
 \end{equation}
-For Gaussians, $\Lambda_k(C)\ge 1$ is equivalent to
-$\tfrac12\nu^{2}/(\sigma_C^2+\sigma_k^2)\le \log\!\bigl(|\Sgrid|/\sqrt{2\pi(\sigma_C^2+\sigma_k^2)}\bigr)$
-with $\nu=m_C-m_k$, so the offset enters exponentially.
-Algorithm~\ref{alg:admission} seeds with the pair maximising $Z_{ij}$ (and
-requires it to pass the test), expands with the compatible sensor of largest
-$\Lambda_k$, which removes the order dependence, and finally returns the
-minimum-entropy set among admissible sets with at most $F$ removals. The grid
-volume $|\Sgrid|$ is part of the test and must be fixed and reported. For $K<3$ or
-when no admissible set satisfies the removal budget, the algorithm returns
-\emph{no consensus} and excludes nobody.
+For Gaussians, $\Lambda_{k,u}(C)\ge 1$ is equivalent to
+$\tfrac12\nu^{2}/(\sigma_C^2+\sigma_k^2)\le \log\!\bigl(|\Sgrid_u|/\sqrt{2\pi(\sigma_C^2+\sigma_k^2)}\bigr)$
+with $\nu=m_C-m_k$, so the offset enters exponentially. A source is admitted on the
+\emph{mean log Bayes factor} over its visible pixels,
+$\bar\ell_k(C)=|\Omega_k^{\mathrm{vis}}|^{-1}\sum_u\log\Lambda_{k,u}(C)\ge\tau$, where
+$\tau=0$ is the nominal null and the calibrated $\tau$ absorbs the correlation of
+pixels. Algorithm~\ref{alg:admission} seeds with the pair of largest pairwise evidence
+(and requires it to pass the test), expands with the compatible source of largest
+$\bar\ell_k$, which removes the order dependence, and finally returns the minimum-entropy
+set among admissible sets with at most $F$ removals. The interval volume $|\Sgrid_u|$ is
+part of the test and must be fixed and reported. For $M<3$, or when no admissible set
+satisfies the removal budget, the gate returns \emph{no consensus}, and the view's depth
+is not used.
 
 \begin{algorithm}[t]
-\caption{Admission-based consensus (corrected criterion)}
+\caption{View-level admission (corrected criterion)}
 \label{alg:admission}
 \begin{algorithmic}[1]
-\REQUIRE PDFs $\{f_i\}_{i=1}^{K}$ on grid $\Sgrid$, removal budget $F<K/2$
-\STATE $(i^\star,j^\star)\gets\argmax_{i\ne j}Z_{\{i,j\}}$
-\IF{$\Lambda_{j^\star}(\{i^\star\})<1$}
+\REQUIRE aligned depth PDFs $\{f_{k,u}\}_{k=1}^{M}$ of one view, removal budget $F<M/2$, threshold $\tau$
+\STATE $(i^\star,j^\star)\gets\argmax_{i\ne j}\bar\ell_{j}(\{i\})$
+\IF{$\bar\ell_{j^\star}(\{i^\star\})<\tau$}
   \RETURN no consensus
 \ENDIF
 \STATE $C\gets\{i^\star,j^\star\}$
-\WHILE{$\exists\,k\notin C:\ \Lambda_k(C)\ge 1$}
-  \STATE $k^\star\gets\argmax_{k\notin C}\Lambda_k(C)$; \ $C\gets C\cup\{k^\star\}$
+\WHILE{$\exists\,k\notin C:\ \bar\ell_k(C)\ge\tau$}
+  \STATE $k^\star\gets\argmax_{k\notin C}\bar\ell_k(C)$; \ $C\gets C\cup\{k^\star\}$
 \ENDWHILE
-\STATE Among admissible sets $C'$ with $K-|C'|\le F$, \textbf{return} $\argmin_{C'}H(C')$
+\STATE Among admissible sets $C'$ with $M-|C'|\le F$, \textbf{return} $\argmin_{C'}H(C')$
 \end{algorithmic}
 \end{algorithm}
 
 \begin{proposition}[Relation to leave-one-out and solution-separation tests]
 \label{prop:loo}
-Let sensor $k$ measure a state $x$ directly with noise covariance $R_k$, let
+Let source $k$ measure a state $x$ directly with noise covariance $R_k$, let
 $\hat x_{-k}$ be the estimate without it with covariance $P_{-k}$, and let
 $\nu=z_k-\hat x_{-k}$ with $S=R_k+P_{-k}$. Then the solution-separation statistic
 $d^{\top}\mathrm{Cov}(d)^{-1}d$, with $d=\hat x_{\mathrm{all}}-\hat x_{-k}$,
 equals the leave-one-out innovation statistic $\nu^{\top}S^{-1}\nu$. For Gaussian
 PDFs the negative log-evidence of $k$ under the consensus,
-$-\log\!\int p_C f_k=\tfrac12\nu^{\top}S^{-1}\nu+\tfrac12\log\det(2\pi S)$, is the leave-one-out statistic plus a covariance-volume term.
+$-\log\!\int p_C f_k=\tfrac12\nu^{\top}S^{-1}\nu+\tfrac12\log\det(2\pi S)$, is the
+leave-one-out statistic plus a covariance-volume term.
 \end{proposition}
-\begin{proof}[Sketch]
-$d=P_{-k}S^{-1}\nu$ and $\mathrm{Cov}(d)=P_{-k}-P_{\mathrm{all}}=P_{-k}S^{-1}P_{-k}$, so
-\begin{align*}
-d^{\top}\mathrm{Cov}(d)^{-1}d
- &=\nu^{\top}S^{-1}P_{-k}\bigl(P_{-k}S^{-1}P_{-k}\bigr)^{-1}P_{-k}S^{-1}\nu\\
- &=\nu^{\top}S^{-1}\nu .
-\end{align*}
-The evidence is the Gaussian density of $\nu$ under $\mathcal{N}(0,S)$.
-\end{proof}
+(Proof in Appendix~\ref{app:proof}.)
 \begin{remark}
-Under equal covariances and Gaussian residuals, ranking sensors by this evidence is
-therefore the same as ranking by the leave-one-out chi-square statistic, and
-the entropy-based criterion can add value only where noise is heteroscedastic,
-residuals are non-Gaussian or multimodal, or occlusion and grazing geometry
+Under equal covariances and Gaussian residuals, ranking sources by this evidence is
+therefore the same as ranking by the leave-one-out chi-square statistic, and the
+entropy-based criterion can add value only where noise is heteroscedastic (as depth
+noise is), residuals are non-Gaussian or multimodal, or occlusion and grazing geometry
 break the chi-square assumptions. We test exactly this in H2
 (Section~\ref{sec:setup:hyp}) and treat a tie as a reportable outcome.
 \end{remark}
 
-\subsection{Elimination, refit and persistence}
+\subsubsection{Output, refit and persistence}
 \label{sec:method:elim}
-We apply the admission test to the per-sensor depth posteriors induced by the
-consensus renders. Procedure: (i)~fit jointly; (ii)~compute $T_s$ and the
-admission statistics by warm-started leave-one-sensor-out refits; (iii)~exclude
-the sensor with the strongest evidence of inconsistency if it exceeds the
-calibrated threshold; (iv)~refit and repeat until no sensor is flagged or
-fewer than three remain. To separate sensor faults from dynamics we track the
-per-sensor, per-frame residual energy $e_{s,t}=\overline{\rho_s^2}$: a
-persistent rise in one sensor while others stay flat is flagged by a CUSUM
-test as a sensor fault, whereas a localised rise visible to several sensors in
-few frames is treated as a dynamic object and masked.
-\TODO{Dynamics handling is optional and first to be cut if the schedule slips;
-  state its status in the final version.}
+The gate returns, for each view, the admitted set $C_i\subseteq\mathcal{M}$ and sets
+$g_{m,i}=1$ for $m\in C_i$ and $0$ otherwise; if the answer is \emph{no consensus}, all
+$g_{m,i}=0$ and the view is excluded from depth constraints and fusion. To separate a
+failing view from a failing estimator, we track, along the view order, how often each
+estimator is rejected: if one estimator is rejected on a run of neighbouring views, it
+is flagged by a CUSUM test and excluded for the whole scene (estimator-level exclusion),
+whereas isolated rejections remain view-level.
+\TODO{Estimator-level exclusion is optional and the first item to cut if the schedule
+  slips; state its status in the final version.}
+
+\subsection{Test Bed: Gate, Pose Graph and Fusion}
+\label{sec:method:pipeline}
+The test bed runs five steps. (i)~\emph{Depth ensemble and matches:} each view is
+processed by the $M$ estimators, and feature matches are computed for view pairs.
+(ii)~\emph{Provisional poses:} a pose graph with the geometric constraints only is
+solved with a robust kernel, to give poses that are good enough to warp depth between
+neighbouring views. (iii)~\emph{Gate:} Section~\ref{sec:method:gate}, using the
+provisional poses. (iv)~\emph{Pose graph optimisation:} \eqref{eq:pgo}, with gated depth
+constraints and, optionally, a robust kernel. (v)~\emph{Fusion:} the admitted depth of
+all views is fused with a truncated signed distance function
+\cite{fus_curless,fus_kinectfusion}. The gate may be repeated once with the refined
+poses. Because the gate in step (iii) relies on provisional poses, errors in those poses
+can corrupt the gate; the repetition, and the comparison of gating before versus after
+the pose graph (H4), test this. The three baseline families replace or complement step
+(iii) (Section~\ref{sec:setup:baselines}).
