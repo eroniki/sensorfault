@@ -1,0 +1,194 @@
+\section{Method}
+\label{sec:method}
+
+\subsection{Problem setting}
+\label{sec:method:problem}
+There are $K$ depth sensors. Sensor $s$ produces depth images
+$D_s^t:\Omega_s\to\R_{>0}$ at times $t$, with intrinsics $\mathbf{K}_s$ and a
+believed pose $\mathbf{T}^{t}_{s}$. A subset $\mathcal{F}\subset\{1,\dots,K\}$ of
+sensors is \emph{faulty}: its depth, intrinsics or pose deviate persistently
+from the truth in a way that is not zero-mean noise (extrinsic drift, depth
+bias, multipath; Section~\ref{sec:setup:faults}). Neither $\mathcal{F}$ nor
+$|\mathcal{F}|$ is known; we assume $|\mathcal{F}|\le F$ with $F<K/2$ and
+return to this assumption in Section~\ref{sec:discussion}. The goal is a fused
+surface that is close to the reconstruction from the healthy sensors alone,
+together with the identity of the excluded sensors.
+
+\subsection{Shared surface and per-ray noise model}
+\label{sec:method:noise}
+The shared surface is a set of $N$ Gaussians with means $\boldsymbol\mu_i$,
+covariances $\boldsymbol\Sigma_i$ and opacities $\alpha_i$. $N$ is fixed and
+optimised with the relocation scheme of 3DGS-MCMC \cite{gs_mcmc}, so densification
+cannot create a second layer that absorbs a faulty sensor's surface. Because
+photometric supervision is absent, we add an accumulated-alpha loss on valid and
+invalid pixels and a cap on splat anisotropy; planar splats follow
+\cite{gs_2dgs}. \TODO{Specify loss weights after the dev-scene sweep.}
+
+For a ray of length $r$ that meets a locally planar surface at incidence angle
+$\theta$ (angle between ray and surface normal), a range noise $\sigma_r$ and a
+pointing noise $\sigma_\varphi$ give a depth \emph{residual} variance
+\begin{equation}
+  v_{\mathrm{res}}(r,\theta)=\sigma_r^{2}+\bigl(r\,\sigma_\varphi\tan\theta\bigr)^{2}.
+  \label{eq:vres}
+\end{equation}
+This follows from $\mathrm{d}r/\mathrm{d}\theta=r\tan\theta$ for a plane at
+perpendicular distance $h$, where $r=h/\cos\theta$. It is the variance of the
+discrepancy between the measured range and the intersection of the nominal ray
+with the surface; it is the right weight for a depth residual along the ray. It is
+not the covariance of the 3D point: in the ray frame $(\ray,\mathbf{u},\mathbf{v})$
+the point covariance is $\mathrm{diag}(\sigma_r^2,(r\sigma_\varphi)^2,(r\sigma_\varphi)^2)$,
+and its component along the surface normal is
+\begin{equation}
+  v_{n}(r,\theta)=\sigma_r^{2}\cos^{2}\theta+r^{2}\sigma_\varphi^{2}\sin^{2}\theta,
+  \label{eq:vn}
+\end{equation}
+which stays bounded as $\theta\to\pi/2$. We therefore use \eqref{eq:vres} to
+weight residuals and \eqref{eq:vn} (with the tangential scale stretched by
+$1/\cos\theta$ in the plane of incidence) to initialise and floor splat
+covariances. Equation~\eqref{eq:vres} diverges at grazing incidence and its
+linearisation fails once $\sigma_\varphi\tan\theta\gtrsim 0.3$, so we use
+the regularised form
+\begin{equation}
+  \tilde v_{\mathrm{res}}=\operatorname{clip}\!\Bigl(\sigma_{r,\mathrm{eff}}^{2}
+  +r^{2}\sigma_{\varphi,\mathrm{eff}}^{2}\,\tfrac{\sin^{2}\theta}{\cos^{2}\theta+\epsilon^{2}},\;
+  v_{\min},\,v_{\max}\Bigr),
+  \label{eq:vreg}
+\end{equation}
+with $\epsilon\approx\cos 80^{\circ}$, a hard gate at $\theta>85^{\circ}$, and a
+beam-footprint term added to $\sigma_\varphi^2$ for LiDAR and ToF. For stereo
+and structured-light sensors the range noise is $\sigma_z=z^{2}\sigma_d/(fb)$
+\cite{noise_khoshelham,noise_matthies}; ToF noise grows as signal amplitude falls
+\cite{noise_lange,noise_sarbolandi}. ToF multipath and flying pixels are biases
+rather than variance and are masked by amplitude and depth-gradient tests
+\cite{noise_freedman}. We use the per-ray variance in three places: as a
+likelihood weight $\tfrac12 r^2/\tilde v_{\mathrm{res}}$, to initialise splat
+scales, and as a soft floor on splat scale. It is not used as a fixed
+covariance prior, because the posterior variance shrinks as views accumulate.
+
+\subsection{Consensus rendering and visibility-aware residuals}
+\label{sec:method:consensus}
+Let $\hat D_{-s}^{t}$ be the depth rendered into sensor $s$'s view from a surface
+fitted \emph{without} sensor $s$ (a warm-started refit of about $200$
+iterations), with accumulated alpha $A_{-s}^{t}$ and variance $v_{-s}$. Fitting
+without $s$ prevents self-influence: a joint fit can absorb a sensor's own bias
+and make its residuals look small. A pixel $u$ enters the residual only if it is
+valid, $A_{-s}^{t}(u)>\tau_A$, and the rendered first return agrees with the
+sensor's first return within a visibility gate, so that occluded regions do not
+count as disagreement. The normalised residual and per-sensor statistic are
+\begin{equation}
+  \rho_s(u)=\frac{D_s(u)-\hat D_{-s}(u)}{\sqrt{\tilde v_{\mathrm{res},s}(u)+v_{-s}(u)}},
+  \qquad
+  T_s=\frac{1}{|\Omega_s^{\mathrm{vis}}|}\sum_{u\in\Omega_s^{\mathrm{vis}}}\rho_s(u)^{2}.
+  \label{eq:Ts}
+\end{equation}
+Pixel residuals are spatially correlated, so we do not use the nominal
+$\chi^2$ quantile as a threshold; the threshold $\tau$ is calibrated on
+fault-free dev runs to a 5\% per-run false-elimination rate
+(Section~\ref{sec:setup:protocol}). We also record Moran's~I of $\rho_s$ as a
+diagnostic: a coherent fault leaves spatially structured residuals, whereas
+sparse outliers do not. \TODO{Report Moran's~I figure (Fig.~\ref{fig:residual-structure}).}
+
+\subsection{Corrected admission criterion}
+\label{sec:method:admission}
+Ambarkutuk \emph{et~al.}\ \cite{flt_ambarkutuk} give each sensor $i$ a PDF $f_i$
+over a common grid $\Sgrid$, form the product over a consensus set $C$, and grow $C$
+greedily from the best pair using an entropy test. In our reading of the
+published text, the prose and Eq.~(14) seed the set with the pair of
+\emph{maximum} entropy after fusion, whereas the corresponding line of
+Algorithm~1 tests $h_{ij}\le h^{*}$ with $h^{*}$ initialised to $-\infty$, so the
+seed branch never executes; the expansion test accepts a sensor when entropy
+does not decrease, which is the opposite of the stated aim of sharpening the
+joint PDF, and it depends on sensor order.
+\TODO{Re-check the direction of the inequalities against the typeset equations in the
+  published PDF; our reading used a text rendering in which math was flattened.}
+
+A more basic problem is that entropy of a normalised product cannot detect a
+biased sensor. For one-dimensional Gaussians $\mathcal{N}(m_C,\sigma_C^2)$ and
+$\mathcal{N}(m_k,\sigma_k^2)$, the normalised product has variance
+$\sigma_C^2\sigma_k^2/(\sigma_C^2+\sigma_k^2)$ regardless of the offset
+$m_C-m_k$, so
+\begin{equation}
+  H(C\cup k)-H(C)=-\tfrac12\log\!\bigl(1+\sigma_C^{2}/\sigma_k^{2}\bigr)<0
+  \label{eq:dH}
+\end{equation}
+for every sensor, healthy or faulty; a sharp biased sensor lowers entropy the
+most. Entropy measures the precision of a consensus, not its consistency.
+
+We therefore separate the two roles. Let $F_C=\prod_{i\in C}f_i$,
+$Z_C=\int_{\Sgrid}F_C$, $p_C=F_C/Z_C$ and $H(C)=-\!\int p_C\log p_C$, all evaluated in
+log space on the grid. Sensor $k$ is \emph{compatible} with $C$ when its Bayes
+factor against a uniform null on $\Sgrid$ is at least one:
+\begin{equation}
+  \Lambda_k(C)=|\Sgrid|\int_{\Sgrid}p_C f_k\,\mathrm{d}x=|\Sgrid|\,\frac{Z_{C\cup k}}{Z_C}\;\ge\;1.
+  \label{eq:lambda}
+\end{equation}
+For Gaussians, $\Lambda_k(C)\ge 1$ is equivalent to
+$\tfrac12\nu^{2}/(\sigma_C^2+\sigma_k^2)\le \log\!\bigl(|\Sgrid|/\sqrt{2\pi(\sigma_C^2+\sigma_k^2)}\bigr)$
+with $\nu=m_C-m_k$, so the offset enters exponentially.
+Algorithm~\ref{alg:admission} seeds with the pair maximising $Z_{ij}$ (and
+requires it to pass the test), expands with the compatible sensor of largest
+$\Lambda_k$, which removes the order dependence, and finally returns the
+minimum-entropy set among admissible sets with at most $F$ removals. The grid
+volume $|\Sgrid|$ is part of the test and must be fixed and reported. For $K<3$ or
+when no admissible set satisfies the removal budget, the algorithm returns
+\emph{no consensus} and excludes nobody.
+
+\begin{algorithm}[t]
+\caption{Admission-based consensus (corrected criterion)}
+\label{alg:admission}
+\begin{algorithmic}[1]
+\REQUIRE PDFs $\{f_i\}_{i=1}^{K}$ on grid $\Sgrid$, removal budget $F<K/2$
+\STATE $(i^\star,j^\star)\gets\argmax_{i\ne j}Z_{\{i,j\}}$
+\IF{$\Lambda_{j^\star}(\{i^\star\})<1$}
+  \RETURN no consensus
+\ENDIF
+\STATE $C\gets\{i^\star,j^\star\}$
+\WHILE{$\exists\,k\notin C:\ \Lambda_k(C)\ge 1$}
+  \STATE $k^\star\gets\argmax_{k\notin C}\Lambda_k(C)$; \ $C\gets C\cup\{k^\star\}$
+\ENDWHILE
+\STATE Among admissible sets $C'$ with $K-|C'|\le F$, \textbf{return} $\argmin_{C'}H(C')$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{proposition}[Relation to leave-one-out and solution-separation tests]
+\label{prop:loo}
+Let sensor $k$ measure a state $x$ directly with noise covariance $R_k$, let
+$\hat x_{-k}$ be the estimate without it with covariance $P_{-k}$, and let
+$\nu=z_k-\hat x_{-k}$ with $S=R_k+P_{-k}$. Then the solution-separation statistic
+$d^{\top}\mathrm{Cov}(d)^{-1}d$, with $d=\hat x_{\mathrm{all}}-\hat x_{-k}$,
+equals the leave-one-out innovation statistic $\nu^{\top}S^{-1}\nu$. For Gaussian
+PDFs the negative log-evidence of $k$ under the consensus,
+$-\log\!\int p_C f_k=\tfrac12\nu^{\top}S^{-1}\nu+\tfrac12\log\det(2\pi S)$, is the leave-one-out statistic plus a covariance-volume term.
+\end{proposition}
+\begin{proof}[Sketch]
+$d=P_{-k}S^{-1}\nu$ and $\mathrm{Cov}(d)=P_{-k}-P_{\mathrm{all}}=P_{-k}S^{-1}P_{-k}$, so
+\begin{align*}
+d^{\top}\mathrm{Cov}(d)^{-1}d
+ &=\nu^{\top}S^{-1}P_{-k}\bigl(P_{-k}S^{-1}P_{-k}\bigr)^{-1}P_{-k}S^{-1}\nu\\
+ &=\nu^{\top}S^{-1}\nu .
+\end{align*}
+The evidence is the Gaussian density of $\nu$ under $\mathcal{N}(0,S)$.
+\end{proof}
+\begin{remark}
+Under equal covariances and Gaussian residuals, ranking sensors by this evidence is
+therefore the same as ranking by the leave-one-out chi-square statistic, and
+the entropy-based criterion can add value only where noise is heteroscedastic,
+residuals are non-Gaussian or multimodal, or occlusion and grazing geometry
+break the chi-square assumptions. We test exactly this in H2
+(Section~\ref{sec:setup:hyp}) and treat a tie as a reportable outcome.
+\end{remark}
+
+\subsection{Elimination, refit and persistence}
+\label{sec:method:elim}
+We apply the admission test to the per-sensor depth posteriors induced by the
+consensus renders. Procedure: (i)~fit jointly; (ii)~compute $T_s$ and the
+admission statistics by warm-started leave-one-sensor-out refits; (iii)~exclude
+the sensor with the strongest evidence of inconsistency if it exceeds the
+calibrated threshold; (iv)~refit and repeat until no sensor is flagged or
+fewer than three remain. To separate sensor faults from dynamics we track the
+per-sensor, per-frame residual energy $e_{s,t}=\overline{\rho_s^2}$: a
+persistent rise in one sensor while others stay flat is flagged by a CUSUM
+test as a sensor fault, whereas a localised rise visible to several sensors in
+few frames is treated as a dynamic object and masked.
+\TODO{Dynamics handling is optional and first to be cut if the schedule slips;
+  state its status in the final version.}

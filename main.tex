@@ -1,0 +1,87 @@
+\documentclass{ieeeaccess}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{booktabs}
+\usepackage{bm}
+\makeatletter
+\AtBeginDocument{\DeclareMathVersion{bold}
+\SetSymbolFont{operators}{bold}{T1}{times}{b}{n}
+\SetSymbolFont{NewLetters}{bold}{T1}{times}{b}{it}
+\SetMathAlphabet{\mathrm}{bold}{T1}{times}{b}{n}
+\SetMathAlphabet{\mathit}{bold}{T1}{times}{b}{it}
+\SetMathAlphabet{\mathbf}{bold}{T1}{times}{b}{n}
+\SetMathAlphabet{\mathtt}{bold}{OT1}{pcr}{b}{n}
+\SetSymbolFont{symbols}{bold}{OMS}{cmsy}{b}{n}
+\renewcommand\boldmath{\@nomath\boldmath\mathversion{bold}}}
+\makeatother
+
+\input{sections/macros}
+
+%Your document starts from here ___________________________________________________
+\begin{document}
+\history{Draft v0 --- not submitted. Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.}
+\doi{10.1109/ACCESS.2026.XXXXXXX}
+
+\title{Sensor-Level Fault Elimination for Multi-Sensor Depth Fusion on a Fixed-Budget Gaussian-Splat Surface}
+\author{\textcolor{red}{\uppercase{[TODO: Author name]}}\authorrefmark{1}}
+\address[1]{\textcolor{red}{[TODO: affiliation, city, country] (e-mail: [TODO])}}
+\tfootnote{\textcolor{red}{[TODO: funding / support statement, or delete.]}}
+
+\markboth
+{Author \headeretal: Sensor-Level Fault Elimination for Multi-Sensor Depth Fusion}
+{Author \headeretal: Sensor-Level Fault Elimination for Multi-Sensor Depth Fusion}
+
+\corresp{Corresponding author: \textcolor{red}{[TODO: name (e-mail)]}.}
+
+\begin{abstract}
+Depth reconstruction from several range sensors is fragile when one sensor fails
+coherently: a drifted extrinsic calibration, a smooth depth bias, or multipath
+contamination can corrupt the shared surface that every other sensor helps to
+estimate. Existing safeguards act per pixel and cannot attribute a spatially
+coherent disagreement to a particular sensor. This paper describes a
+sensor-level fault-elimination method for multi-sensor depth fusion. The shared
+surface is a fixed budget of Gaussian splats whose covariances and residual
+weights follow per-ray range, pointing, and incidence-angle noise models. Each
+sensor's depth is compared with a consensus surface fitted without that sensor,
+using residuals that account for visibility and grazing geometry, and a sensor
+is admitted only if it passes an evidence test. The admission test corrects a
+consensus-based elimination criterion from the sensor-fusion literature, whose
+entropy test cannot distinguish an agreeing sensor from a sharp but biased one.
+We show that, for Gaussian noise, the evidence criterion reduces to a
+leave-one-out chi-square test plus a covariance-volume term. A pre-registered
+protocol compares the method with depth-map fusion in OpenMVS, classical
+volumetric and visibility-based fusion, and learned multi-sensor fusion under
+injected extrinsic drift, depth bias, and multipath faults, with explicit
+breakdown scenarios. \textcolor{red}{\textbf{[TODO: one sentence with the main
+quantitative result once experiments exist.]}}
+\end{abstract}
+
+\begin{keywords}
+Byzantine fault tolerance, depth fusion, fault detection and exclusion,
+Gaussian splatting, multi-sensor fusion, 3D reconstruction.
+\end{keywords}
+
+\titlepgskip=-21pt
+\maketitle
+
+\input{sections/intro}
+\input{sections/related}
+\input{sections/method}
+\input{sections/setup}
+\input{sections/results}
+\input{sections/discussion}
+
+\section*{Acknowledgment}
+\textcolor{red}{[TODO: acknowledgments. If AI tools assisted drafting, IEEE Access
+requires disclosure here: name the system, the sections affected, and how it was
+used.]}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs/references}
+
+\EOD
+\end{document}

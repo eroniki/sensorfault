@@ -1,0 +1,184 @@
+\section{Experimental Setup}
+\label{sec:setup}
+
+All experiments use public datasets, public sensor models and public code. The
+protocol, hypotheses and decision thresholds are written down and tagged in the
+code repository before any test scene is run (Section~\ref{sec:setup:protocol}).
+
+\subsection{Data}
+\label{sec:setup:data}
+\paragraph{Skoltech3D (primary real data).} Skoltech3D \cite{data_skoltech3d}
+provides several real depth sensors observing the same tabletop objects
+(two phone ToF cameras, a Kinect-class ToF camera, an active-stereo RealSense
+camera), per-sensor depth and calibration, and a structured-light reference
+scan. Faults are injected on top of the calibrated, otherwise clean data, so
+the true fault is known exactly. Scenes are small, single-object scenes without
+room-scale multipath, and frames are independent viewpoints; ``time'' is defined by
+viewpoint order. Data are used under their non-commercial licence and are not
+redistributed. \TODO{Fix the scene subset and the dev/test split after the
+licence and download checks.}
+
+\paragraph{Replica (simulated multi-sensor rig).} We render the same trajectories
+in Replica \cite{data_replica} with per-sensor intrinsics, field of view,
+resolution and rig extrinsics, and apply per-sensor noise models
+(Section~\ref{sec:method:noise}). Exact ground-truth geometry and concave room
+corners make this the testbed for multipath and grazing-angle effects. Its terms
+do not clearly permit redistributing renderings, so only the generator,
+seeds and configurations are released.
+
+\paragraph{Synthetic planes and rooms.} A generator in the code repository
+produces box rooms with an obstacle, with no dataset required. It is used for unit
+tests and for the controlled sweeps over overlap and coverage share.
+
+\paragraph{Satellite digital surface models (optional).}
+\TODO{Decide whether this section stays. If it does: Jacksonville and Omaha tiles
+  from the 2019 data fusion contest \cite{data_us3d,data_dfc2019}, with
+  lidar-derived DSMs, and the pair-selection and DSM-generation pipeline of
+  \cite{data_gongfritsch}; each image pair or stereo DSM is treated as a source,
+  and the framing is ``multi-source DSM fusion'' rather than sensor fusion, since pairs
+  sharing an image share its RPC bias and are not independent. The contest terms
+  require approval before publication and prohibit redistribution; the IARPA
+  benchmark \cite{data_mvs3dm} covers San Fernando, Argentina.}
+
+\subsection{Fault model and injection}
+\label{sec:setup:faults}
+Faults are injected by deterministic, seeded scripts, so every realisation is
+reproducible from a manifest. Seeds are derived as
+$\mathrm{SeedSequence}([\text{master},\,h(\text{sensor id}),\,\text{fault id}])$
+with a stable hash and at least five master seeds. The grid is:
+\begin{itemize}
+  \item \emph{extrinsic drift:} rotation $\{0.5,1,2,5\}^{\circ}$ and
+        translation $\{1,2.5,5,10\}$~cm, applied as a step, a linear ramp or a
+        random walk (rotation-only and translation-only cells);
+  \item \emph{depth bias:} additive, $1$--$5\%$ of the median range, and
+        range-proportional, $\beta\in\{1,2,3,5\}\%$ of both signs;
+  \item \emph{multipath surrogate:} a positive bias near concave regions,
+        amplitude $2$--$10$~cm (tabletop) or $5$--$30$~cm (rooms), clamped to be
+        non-negative. This is a controlled heuristic, not a physical multipath
+        model;
+  \item \emph{persistence:} sensor-level persistent faults (onset at 20\% or 40\%
+        of the sequence) versus frame-level transient bursts (10\% or 30\% of
+        frames in bursts of 3--10), reported separately;
+  \item \emph{fraction faulted:} 1 of 3, 1 of 4 and 2 of 4 sensors (independent
+        and same-direction), always with a fault-free control, sweeping which
+        sensor is faulted.
+\end{itemize}
+Overlap fraction, the faulty sensor's coverage share and fault correlation
+across sensors are controlled variables, because per-pixel voting does not fail
+merely because a fault is coherent: with two honest sensors covering a pixel it
+still outvotes one bad one. It is expected to fail when one or two sensors
+cover a pixel, when the faulty sensor supplies most of the coverage, when the
+fault is below the per-pixel noise floor but detectable by aggregating over
+many pixels, or when the identity of the faulty sensor is required.
+
+\subsection{Baselines}
+\label{sec:setup:baselines}
+Every method receives the same fault-injected depth maps, the same (possibly
+drifted) poses and intrinsics, the same view graph, the same confidence (or
+none), and the same fault realisations. Thresholds are tuned on development
+scenes only, with the tuning budget reported. Re-implementations are labelled
+as such and released.
+\begin{itemize}
+  \item \textbf{Family A: OpenMVS depth-map fusion.} The fusion stage of
+        OpenMVS \cite{fus_openmvs}, run on externally supplied depth maps
+        (PatchMatch skipped): merge-all as the no-filter floor, the per-pixel
+        consistency vote (relative depth and normal agreement in at least $n$
+        views, with a free-space filter), and its newer fusion mode as a separate
+        variant. We sweep the number of views to fuse and the thresholds.
+  \item \textbf{Family B: classical fusion.} Weighted-average TSDF
+        \cite{fus_curless,fus_kinectfusion}; per-pixel median across sensors;
+        geometric-consistency voting in the style of COLMAP
+        \cite{fus_colmap_mvs}; visibility-based fusion \cite{fus_merrell}; TV-$L^1$
+        range integration \cite{fus_zach07}; and optionally a
+        probabilistic inlier-ratio method \cite{fus_psdf,fus_vogiatzis}.
+  \item \textbf{Family C: learned fusion.} SenFuNet \cite{fus_senfunet}
+        (pretrained, fine-tuned on a fault-free split, and fine-tuned with
+        fault-like bias) and one single-sensor learned fuser
+        \cite{fus_routedfusion,fus_neuralfusion}.
+  \item \textbf{Family D: sensor-level elimination.} Iterated
+        leave-one-sensor-out normalised-residual test, enumerated subset
+        consensus with a MSAC score \cite{flt_ransac,flt_msac}, an oracle that
+        knows the faulty sensor, and an estimate-and-correct baseline that
+        jointly optimises extrinsics and bias.
+  \item \textbf{Secondary, same representation.} 3DGS-MCMC \cite{gs_mcmc} and
+        2DGS \cite{gs_2dgs} with a depth loss and the same $N$. These need RGB as
+        shipped; we report a depth-only variant with placeholder colour and, separately,
+        an RGB-available variant. Photometric transient-masking methods
+        \cite{gs_spotless,gs_robustsplat} are not run, since their masks are
+        photometric and do not target depth faults; the depth-space analogue is
+        the robust per-pixel mask baseline.
+\end{itemize}
+OpenMVS is an offline batch tool and does not meet a per-frame real-time budget.
+We report latency for every method and state which ones are accuracy baselines
+only.
+
+\subsection{Metrics and statistics}
+\label{sec:setup:metrics}
+Reconstruction quality is reported as accuracy, completeness, Chamfer distance and
+F-score against the reference geometry (F-score thresholds $1/2/5$~mm for
+Skoltech3D, $2/5/10$~cm for Replica); accuracy and completeness are reported
+separately, because excluding a sensor lowers completeness whenever the
+reference includes surfaces that only that sensor observed. Detection is
+reported as per-sensor precision and recall, time-to-detect (median and
+90th percentile, right-censored), and false alarms per 100 clean frames. The
+\emph{elimination curve AUC} is the normalised partial area under power versus
+clean-run false-elimination rate on $[0,0.2]$; it equals the ROC AUC at
+$\mathrm{FER}_{\max}=1$. Intervals are scene-level bootstrap confidence
+intervals, with paired Wilcoxon tests against baselines and scenes as the unit.
+
+\subsection{Hypotheses}
+\label{sec:setup:hyp}
+The following predictions are pre-registered. Each states what would falsify it.
+\begin{description}
+  \item[H1 (coherent faults).] With $K\ge 3$ and one coherent fault of at least
+        $3\sigma$, sensor-level elimination reduces Chamfer error by at least 25\%
+        relative to the best tuned per-pixel baseline (OpenMVS consistency
+        fusion, COLMAP-style voting, robust masking) and lands within 20\% of
+        the oracle. The advantage is concentrated in low-overlap,
+        faulty-dominant and sub-noise regimes; with high overlap and large $K$
+        voting is expected to tie, and the tie is reported.
+        \emph{Falsified if} the paired confidence interval of the improvement
+        includes zero in those regimes.
+  \item[H2 (entropy vs.\ chi-square).] At a fixed 5\% false-elimination rate, the
+        evidence-based criterion exceeds the leave-one-out chi-square test by at
+        least 10 points of detection power, only where heteroscedastic noise,
+        grazing geometry, occlusion or non-Gaussian residuals break the
+        chi-square assumptions, and ties under idealised Gaussian noise
+        (Proposition~\ref{prop:loo}). \emph{Falsified if} there is no gain in
+        any pre-registered regime; the fallback is to report the method as
+        sensor-level exclusion with visibility and grazing weighting, with the
+        entropy relation as an equivalence result.
+  \item[H3 (visibility and grazing).] Visibility-aware residuals and grazing
+        weighting keep the clean-run false-elimination rate at or below 5\%;
+        ablating either at least doubles it. \emph{Falsified if} ablations leave
+        the rate and error unchanged.
+  \item[H4 (fixed $N$).] Fixed-$N$ MCMC resists absorbing the faulty sensor's
+        surface: with adaptive densification at matched final $N$, detection
+        power drops by at least 10 points, and there is a sweet spot in $N$.
+        \emph{Falsified if} densification matches fixed-$N$ or the $N$ sweep
+        is flat.
+  \item[H5 (learned fusion).] Pretrained SenFuNet and single-sensor learned
+        fusion degrade under smooth bias and extrinsic drift, because they
+        were trained on zero-mean noise and outliers; fine-tuning SenFuNet with
+        fault-like bias narrows but does not close the gap in the low-overlap,
+        faulty-dominant regimes. \emph{Falsified if} the fine-tuned model matches
+        elimination there; we report it either way.
+\end{description}
+
+\paragraph{Breakdown scenarios.} The following are tested and reported as honest
+negatives: a majority of faulty sensors with correlated (same-sign) faults;
+common-mode faults (a shared extrinsic or clock); $K=2$, where attribution
+is unidentifiable ($\approx$50\% attribution accuracy) and only detection is
+possible; sub-noise faults below a detection floor; sparse independent outliers,
+where per-pixel methods should win or tie; and non-overlapping fields of view.
+
+\subsection{Protocol and implementation}
+\label{sec:setup:protocol}
+Hypotheses, thresholds, metrics, the tuning protocol and the dev/test split are
+fixed in a preregistration file and tagged in version control before any test
+scene is processed; the runner refuses the test split without that tag. The
+elimination threshold is calibrated by permutation on clean dev runs to a 5\%
+per-run false-elimination rate. At least six scenes (three dev, three test) and
+five seeds are used per dataset. Code, configurations, seeds and fault manifests
+are released; restricted datasets are not redistributed.
+\TODO{Add GPU model, wall-clock and GPU-hours per experiment once runs exist.}

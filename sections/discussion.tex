@@ -1,0 +1,31 @@
+\section{Limitations and Failure Conditions}
+\label{sec:discussion}
+
+The method is built on a consensus of sensors and fails where the consensus
+is wrong or not identifiable. First, it assumes fewer than half of the sensors are
+faulty. When faults are correlated across sensors, or a shared extrinsic or
+clock is wrong (common-mode faults), the faulty sensors form the largest mutually
+consistent set and the healthy ones can be excluded; in these cases it is
+expected to be no better than fusing everything. Second, with $K=2$ the
+residuals are symmetric and attribution is not identifiable; only detection is
+possible. Third, faults below the per-pixel noise can be detected only by
+aggregating over many pixels, so there is a detection floor that depends on
+overlap and pixel count. Fourth, leave-one-out refits cost compute, and
+exclusion reduces completeness wherever a sensor observed surfaces no other
+sensor saw. Fifth, the faults in our protocol are controlled surrogates; in
+particular the multipath surrogate is a heuristic, and real multipath depends on
+surface reflectance and modulation. Sixth, the Gaussian assumptions behind the
+variance models fail near grazing incidence, which we handle by clamping and
+gating rather than by modelling. Finally, results on tabletop objects with
+injected faults need not transfer to large scenes with natural faults, for which
+no ground truth exists. \TODO{Update with observed failures once experiments run.}
+
+\section{Conclusion}
+\label{sec:conclusion}
+We have described a sensor-level fault-elimination method for multi-sensor
+depth fusion on a fixed-budget Gaussian-splat surface, a corrected admission
+criterion that separates consistency from precision, and a pre-registered
+evaluation protocol with explicit breakdown conditions. The empirical case for
+the method rests on hypotheses H1--H5, none of which has been tested in this
+version. \TODO{Rewrite the conclusion around the measured results; if H2 fails,
+reframe around sensor-level exclusion with visibility and grazing weighting.}

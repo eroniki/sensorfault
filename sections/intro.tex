@@ -1,0 +1,70 @@
+\section{Introduction}
+\label{sec:intro}
+
+Depth-based 3D reconstruction increasingly combines several range sensors with
+different physics: LiDAR, continuous-wave time-of-flight (ToF) cameras,
+structured-light RGB-D cameras and stereo rigs. Their error models differ in
+range dependence, incidence-angle dependence and failure modes
+\cite{noise_khoshelham,noise_nguyen,noise_lange,noise_sarbolandi,noise_matthies}.
+Fusing them is attractive because each sensor covers weaknesses of the others,
+but fusion also couples the sensors: one sensor with a wrong extrinsic
+calibration, a depth bias, or multipath contamination can corrupt a shared
+surface that every other sensor is trying to estimate.
+
+Existing robustness mechanisms mostly act \emph{per pixel}. Depth-map fusion
+rejects a measurement when too few other views support it or when other views
+see free space in front of it
+\cite{fus_merrell,fus_colmap_mvs,fus_openmvs}; robust Gaussian-splatting
+methods down-weight or mask pixels whose residuals are large
+\cite{gs_spotless,gs_robustsplat}; learned multi-sensor fusion predicts
+per-voxel sensor weights \cite{fus_senfunet}. These mechanisms work well when
+errors are sparse and spatially incoherent. They are weaker when a sensor fails
+\emph{coherently}: a drifted extrinsic or a smooth depth bias moves a whole
+image in the same direction, and the corrupted measurements can agree with each
+other, with the fitted surface, or both. Where only one or two other sensors
+cover a pixel, or where the faulty sensor supplies most of the coverage, a
+per-pixel vote cannot attribute the disagreement to the right source. In
+navigation, this attribution problem is classical, and \emph{sensor-level}
+fault detection and exclusion has a long history
+\cite{flt_raim_parkinson,flt_raim_brown,flt_raim_joerger,flt_lamport,flt_marzullo}.
+We are not aware of work that tests whole depth sensors against a Gaussian-splat
+consensus surface and excludes them before dense fusion;
+Section~\ref{sec:related} states what the closest works do and do not do.
+
+\paragraph{Approach.}
+We represent the shared surface with a fixed budget of $N$ Gaussian splats
+\cite{gs_3dgs,gs_mcmc}, fit it from all sensors' depth, render the consensus
+back into each sensor, and compute a per-sensor disagreement statistic from
+visibility-aware, noise-normalised residuals. A sensor (or frame) is admitted to
+the consensus only if it passes an evidence test; the survivors are fused.
+The admission test adapts the consensus-growing idea of Ambarkutuk
+\emph{et~al.}\ \cite{flt_ambarkutuk}, who eliminate Byzantine sensors by
+back-propagating each sensor's signal to a common source space and building a
+consensus. As written, their entropy criterion cannot distinguish an agreeing
+sensor from a sharp but biased one (Section~\ref{sec:method}); we replace it
+with a Bayes-factor admission test and use entropy only to select among
+admissible consensus sets.
+
+\paragraph{Contributions.} This manuscript makes the following contributions.
+\begin{enumerate}
+  \item A sensor-level fault-elimination method for multi-sensor depth fusion on
+        a fixed-budget Gaussian-splat surface, with per-ray variance models that
+        set the splat covariance and weight the residuals
+        (Sections~\ref{sec:method:noise}--\ref{sec:method:consensus}).
+  \item A corrected, self-consistent admission criterion for consensus-based
+        sensor elimination, with an analysis of when an entropy criterion
+        reduces to a leave-one-out chi-square test and when it does not
+        (Section~\ref{sec:method:admission}).
+  \item A pre-registered evaluation protocol with five falsifiable hypotheses,
+        a deterministic fault-injection grid (extrinsic drift, depth bias,
+        multipath surrogate), explicit breakdown scenarios, and baselines from
+        three families (OpenMVS-style depth-map fusion, classical fusion, learned
+        fusion) (Section~\ref{sec:setup}).
+\end{enumerate}
+\TODO{Replace the preceding list by result-bearing contributions once H1--H5
+  are evaluated; keep only claims supported by the final tables.}
+
+\paragraph{Status of this draft.}
+This is a version-0 manuscript written before any experiment has been run. All
+result tables and figures are placeholders, and every quantitative statement in
+Section~\ref{sec:setup} is a pre-registered \emph{prediction}, not a finding.
