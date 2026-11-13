@@ -1,0 +1,4 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+{dataset: Replica, role: controlled_synthetic, release_policy: 'generator, seeds and configs only; do
+    not redistribute renderings', licence: research-only (see legacy notes), renderer: scripts/data/render_replica_multisensor.py
+    is a legacy stub; a monocular-view renderer is TODO}

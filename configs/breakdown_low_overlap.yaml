@@ -1,0 +1,17 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: breakdown_low_overlap
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: breakdown
+  prediction: Views with too little overlap for a cross-view comparison.
+  falsification_criterion: Report degradation of the gate toward ensemble-only evidence.
+  independent_variables: [views_per_neighbourhood, overlap_fraction]
+  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    overlap_fraction: [0.1, 0.3, 0.5]
+baselines: [no_gate, gate_evidence, rk_huber, vote_median, colmap_geom_consistency]
+metrics:
+  primary: [ate_rmse_sim3, fscore, precision, recall]
+implemented: false

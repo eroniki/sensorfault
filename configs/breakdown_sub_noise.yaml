@@ -1,16 +1,17 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: breakdown_sub_noise
 status: preregistered_draft
+design: v2_view_level_gate
 hypothesis:
-  id: BREAKDOWN-sub_noise
-  prediction: >-
-    Expected: per-pixel voting misses; sensor-level aggregate statistic may detect; power vs magnitude curve reported.
-  falsification_criterion: >-
-    This is a required honest-negative experiment. The prediction fails if the method succeeds where a failure
-    is predicted; either outcome is reported unconditionally with full CIs. Description: Sub-noise fault (0.1-0.3 sigma); only aggregation over ~1e5 pixels detects it.
-  independent_variables: [fault_magnitude, which_sensor_faulty, K]
-  controlled_variables: [scenes, seeds, noise_models, overlap]
-baselines: [median_fusion, consistency_voting, loo_chi2, subset_msac, openmvs, splat_consensus]
-metrics: {primary: chamfer, secondary: [detection_precision, detection_recall, attribution_accuracy]}
-scenarios:
-  - {name: sub_noise, faulty: [0], n_sensors: 4, cell: {kind: depth_bias_const, params: {frac_of_median_range: 0.002, sign: 1}, profile: step}}
+  id: breakdown
+  prediction: Faults below the per-pixel noise but detectable by aggregating over many pixels.
+  falsification_criterion: Report the detection floor versus overlap and pixel count.
+  independent_variables: [fault_magnitude_sigma]
+  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    fault_magnitude_sigma: [0.1, 0.3, 1]
+baselines: [no_gate, gate_evidence, rk_huber, vote_median, colmap_geom_consistency]
+metrics:
+  primary: [ate_rmse_sim3, fscore, precision, recall]
+implemented: false

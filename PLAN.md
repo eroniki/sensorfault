@@ -1,36 +1,32 @@
-# Sensor-level fault elimination in a shared Gaussian-splat surface — research plan
+# View-level gate for monocular depth sources — research plan (design v2)
 
-Target: IEEE Access, solo author, 14–18 evening weeks (~10 h/wk), one consumer GPU.
-Status: merged from 8 research agents on 2026-11-13. Items marked **[UNVERIFIED]** come from memory or abstract-only reads and must be checked before they appear in the paper.
-Hygiene: public datasets, public sensor models and public code only.
+Target: IEEE Access, solo author, 14–18 evening weeks (~10 h/wk), one 8 GB consumer GPU (RTX 2070 on this machine).
+Status: design v2 of 2026-11-13. Design v1 (sensor-level fault elimination on a Gaussian-splat surface, physical depth sensors) is in git history and `configs/legacy_sensor_faults/`. Items marked **[UNVERIFIED]** come from memory or abstract-only reads.
+Hygiene: public datasets, public pretrained models and public code only.
 
----
-
-## 1. Contribution, stated narrowly
-
-> Consensus-render-based, whole-sensor (or whole-frame) exclusion before dense Gaussian-splat fusion, with a corrected, evidence-based admission test.
-
-Do NOT claim "nobody drops sensors". Precedents exist (RAIM/FDE in navigation; Byzantine per-robot exclusion in Swarm-SLAM; whole-frame rejection in DROID-Splat; measurement-level rejection in ToF-Splatting). The novelty is the dense splat-consensus application and sensor-level attribution under coherent faults.
-
-### Novelty check result (agent: novelty)
-No paper found that tests whole sensors against a Gaussian-splat consensus. Search was ~12 web queries, abstract-level, no IEEE Xplore/Scholar. **Not a proof of absence.**
-
-| Work | Verdict |
-|---|---|
-| BayesianGS-SLAM (arXiv 2609.24140, Sep 2026) | Single RGB-D sensor; uncertainty-weighted tracking + keyframe skipping. Low threat. Abstract page only seen by agent — your full read supersedes. |
-| 3DGS-Calib (arXiv 2403.11577) | LiDAR-camera calibration; no fault detection. Low. |
-| ToF-Splatting (arXiv 2504.16545) | Drops individual ToF measurements by residual quantile. **Med** — cite and contrast. |
-| DROID-Splat (arXiv 2411.17660) | Whole-frame test vs rendered disparity, one sensor. **Med.** |
-| SenFuNet (ECCV 2022) | Learned soft per-sensor weights. **Med** — reviewer will cite it; also a baseline. |
-| arXiv 2306.11048 | Multi-sensor neural-implicit SLAM, pixel-wise uncertainty. Med. |
-| YOGO (arXiv 2604.21400) | "availability-registration protocol for multi-sensor fusion". **Unresolved — read full text before committing to novelty.** |
-| MiCaDe (arXiv 2611.04912) | LiDAR-camera miscalibration change detection, not splats. Low-Med. |
-
-Still to do: IEEE Xplore/Scholar pass on "leave-one-out / sensor exclusion + TSDF/volumetric fusion" and "Gaussian splatting + sensor/modality dropout"; verify PSDF Fusion and SenFuNet grazing-angle claims (not checked); Ground-Fusion++ (arXiv 2507.08364) unchecked; ignore "LIT-GS 2606.20424" until verified.
+**Framing: the gate is the contribution; the pipeline is the test bed.**
 
 ---
 
-## 2. Fix for Eq. 14 / Algorithm 1 (Ambarkutuk et al., Sensors 23(23):9309)
+## 1. Contribution, setting and honest gap
+
+**Contribution.** A *view-level gate* that decides which depth sources to trust *before* pose graph optimisation (PGO) and fusion. A *depth source* is one monocular estimator's depth map for one view (estimator × view).
+
+**Test bed (answers "where do the depth maps come from").** RGB images → ensemble of M monocular estimators (Depth Anything V2, Metric3D v2, UniDepth, Depth Pro, MoGe; Marigold optional) → feature matches → provisional poses from a geometry-only graph → **gate** → PGO with gated depth factors (partly end-to-end: learned front-end, differentiable back-end, training-free gate) → TSDF fusion. It is an alternative to classical SfM, not a claimed new system.
+
+**Baselines the gate must beat** (act at other units/stages): robust kernels in the pose graph (per constraint, after the edge exists); COLMAP geometric consistency filter (per pixel, after poses); plain voting (per pixel across sources). **Reference points, not rivals:** MASt3R-SfM, VGGT (and classical COLMAP SfM).
+
+**Why existing methods may not catch a coherent view-level fault (and where they do).**
+- Estimators fail coherently (smooth warp, failed region, non-affine distortion), not sparsely; pixels still look plausible.
+- Pixel filters decide per pixel; kernels act after the faulty depth has built the constraint; voting needs a majority per pixel.
+- Honest limit: a pure scale/shift error is absorbed by the per-source alignment (in the gate and in PGO) and is *not* a fault here. Pixel filters and kernels should tie or win on sparse outliers. Estimators share training data, so common-mode failures can defeat any consensus.
+- The gap is regime-specific (clustered or low-neighbour faulty views, smooth faults, fault below per-pixel noise). The paper must show these regimes occur, using natural failures scored against a laser reference.
+
+**Novelty (limited search, to be re-checked).** No work found that gates per depth source before PGO. The earlier novelty table (splat / multi-sensor) is obsolete. New literature areas to check: depth-prior filtering in SfM/SLAM; uncertainty-aware monocular depth in pose graphs; view-graph filtering (1DSfM, GLOMAP are cited). Previous finding kept: UncLe-SLAM (arXiv 2306.11048) is single-stream pixel-wise uncertainty, not multi-source.
+
+---
+
+## 2. Fix for Eq. 14 / Algorithm 1 (the author's own Sensors 23(23):9309; a self-correction)
 
 Source read via Europe PMC XML (MDPI blocked); typeset math was flattened, so a ≤/≥ could be a dump artefact — **re-check against the PDF**. Prose independently supports the findings.
 
@@ -50,106 +46,65 @@ Source read via Europe PMC XML (MDPI blocked); typeset math was flattened, so a 
 - Select: among admissible subsets with ≤ F removals, minimise H(C).
 - Entropy then measures precision of the surviving consensus; Λ provides the fault test.
 
-**Equivalence warning (agents: classical + design).** For the unnormalised-product surprisal, −log Z = ½νᵀS⁻¹ν + ½log det(2πS): a leave-one-out Mahalanobis test plus a volume term. Solution separation equals the leave-one-out innovation statistic when H is invertible. So under Gaussian residuals your criterion ≈ leave-one-out χ². The paper must show where it adds something (heteroscedastic noise, non-Gaussian/multimodal residuals, occlusion, grazing) or concede equivalence (pivot P1 below).
+**Equivalence warning.** For the unnormalised-product surprisal, −log Z = ½νᵀS⁻¹ν + ½log det(2πS): a leave-one-out Mahalanobis test plus a volume term. Solution separation equals the leave-one-out innovation statistic when H is invertible. So under Gaussian residuals the entropy criterion ≈ leave-one-out χ². The paper must show where it adds something (heteroscedastic noise, non-Gaussian/multimodal residuals, occlusion, grazing) or concede equivalence (pivot P1 in section 7).
 
 ---
 
-## 3. Per-ray variance and splat covariance (agent: covariance — **from memory, no web**)
+---
 
-- σ_r² + (rσ_φ tanθ)² is correct as the variance of the **depth residual along the ray**: dr/dθ = r tanθ exactly.
-- It is NOT the 3D point error. In the ray frame the covariance is diag(σ_r², (rσ_φ)², (rσ_φ)²). Projected on the surface normal: σ_n² = σ_r²cos²θ + r²σ_φ²sin²θ, bounded as θ→90°.
-  → Use the tanθ form to **weight depth residuals**; use σ_n / ray-frame form to **set splat covariance**.
-- Grazing: linearisation fails when σ_φ tanθ ≳ 0.3. Clamp: tan²θ → sin²θ/(cos²θ+ε²), ε≈0.17; hard-gate θ > 85°. Add beam-footprint term σ_φ,eff² = σ_φ² + (κγ)². Floor/cap the variance.
-- Stereo/structured light: σ_z = z²σ_d/(fb) → variance z⁴σ_d²/(fb)² (square the fb). ToF noise ∝ 1/amplitude; multipath/flying pixels are biases, not variance — mask them.
-- Use of variance in the model: init + likelihood weight (½ r²/var) + soft floor on scale; not a fixed prior (posterior variance shrinks ~1/N).
-- 3DGS-MCMC fixed N, depth-only: add accumulated-alpha mask loss (else opacity L1 collapses opacity), cap anisotropy, scale SGLD noise below σ_n, 2DGS depth-distortion + normal-consistency terms rescaled to metric units. LiDAR needs a non-pinhole rasteriser.
-- References to verify: Kheradmand 2024 (3DGS-MCMC), Huang 2024 (2DGS), Khoshelham & Elberink 2012, Nguyen/Izadi/Lovell 2012, Lange & Seitz 2001, Matthies & Shafer 1987, Sarbolandi 2015, Glennie & Lichti 2010, Soudarissanane 2011. Constants marked [U] by the agent are unverified.
+## 3. Measurement model and gate statistic (as in the manuscript)
+
+- Aligned depth of source (m,i): `D~ = s·D + t`; healthy: `D~ = d + ε`, `σ_m(d) = σ0_m + κ_m·d`, fitted per estimator on dev data.
+- Cross-view comparison adds pose-induced pointing error: `v_res = σ_r² + (r σ_φ tanθ)²` (derivation in the manuscript's Appendix A; regularised: `tan²θ → sin²θ/(cos²θ+ε²)`, ε≈cos 80°, clip, hard gate at θ>85°). **Verified by hand; not a model of monocular error itself.**
+- Leave-one-source-out: consensus of the other sources after robust affine alignment; candidate aligned by its own affine fit (so only non-affine deviation remains); compare only on pixels visible in both views.
+- Statistic: normalised residual ρ_k, mean square T_k (chi-square gate) and mean log Bayes factor `ℓ_k(C)` (evidence gate). Threshold calibrated on clean dev data to 5% per-view false exclusion (pixels are correlated).
+- Gate outputs `g_{m,i}∈{0,1}`; "no consensus" (M<3 or no admissible set) ⇒ view depth unused. Optional CUSUM for estimator-level exclusion.
+- Caveat to test (H4, breakdown): the gate uses *provisional* poses; poor provisional poses can corrupt it.
 
 ---
 
-## 4. Methods and baselines
+## 4. Baselines and reference points (configs/baselines/)
 
-### Sensor-level elimination procedure
-1. Joint fit (fixed-N MCMC splats, depth-only).
-2. Visibility-aware residuals r = (D_s − D̂)/σ_s(z,θ) only where rendered alpha > τ and the first-return gate matches (occlusion handling).
-3. Per-sensor statistics: leave-one-out χ² (warm-started LOO refit, ~200 iters, to counter masking), Δ-entropy (mixture-of-per-sensor-posteriors form), Moran's I residual autocorrelation (diagnostic only).
-4. Exclude worst sensor if statistic exceeds a threshold calibrated on clean-run permutations (5% false-elimination); refit; iterate; keep ≥ 2–3 sensors.
-5. Dynamics: per-sensor persistent residual rise (CUSUM) = sensor fault; localised, multi-sensor-visible, few-frame residual = dynamic object → mask.
-6. Implement the Alg. 1 literal reading and the corrected reading as variants; pre-register the corrected one.
-
-### Baselines — main benchmark: three families (updated)
-
-Protocol for ALL methods: identical fault-injected depth maps, identical (possibly drifted) poses and intrinsics, identical view graph, identical per-pixel confidence (or none), same fault realisations/seeds. Thresholds tuned on dev scenes only, tuning budget reported, sweeps shown. Reimplementations are labelled as such and released. Offline baselines (OpenMVS) are accuracy baselines only; report latency for every method and state which miss the < 100 ms/frame target.
-
-**Family A — OpenMVS depth-map fusion (primary voting baseline)** (agent read `develop` source; nothing built or run)
-- Fusion = per-pixel consistency voting: back-project each depth pixel, project into up to 32 neighbour views, keep if relative depth (default 1%) and normal (25 deg) agree in >= `--number-views-fuse` views (default 2), zero neighbours that project in front and disagree (free-space filter), confidence-weighted average.
-- Variants to report: `--fusion-filter 0` (merge, no-filter floor), `1` (classic voting; main), `2` (newer default in `develop`, different rule: reprojection error 0.6 px + virtual-support prior; agent read only its header). Sweep views-to-fuse 2-4 and the depth/normal thresholds.
-- No native external-depth input. Adapter: write per-view `depthNNNN.dmap` (header "D2", half-float depth, octahedral normals, uint8 confidence; **check field order against `ExportDepthDataRaw`**), a minimal Interface `.mvs` with poses, run `DensifyPointCloud --geometric-iters 0 --fusion-filter 1 --postprocess-dmaps 0 --view-neighbors-file ...`. **Smoke-test first (week 3-4)**: that `--geometric-iters 0` skips PatchMatch is an inference. Supply valid normals (compute from depth). Fallback: C++ shim calling `FuseDepthMaps`.
-- Licence AGPL-3.0: release adapter + results, not OpenMVS code; check obligations if distributing modifications. Cite repo + version tag (no recommended citation); PatchMatch lineage (Shen 2013, Schonberger 2016, Barnes 2009, Galliani 2015, Xu & Tao 2019 — from memory, verify).
-- Expected failure regimes (to test, not assume): extrinsic drift makes the reprojection test reject good points; bias consistent across views survives the vote.
-
-**Family B — classical fusion** (from memory; verify every licence/reference)
-| ID | Method | Notes |
+| Family | Methods | Registry name (stub) |
 |---|---|---|
-| C1 | Weighted-average TSDF (Curless & Levoy 1996 / KinectFusion) via Open3D, known poses, no ICP | no-elimination floor |
-| C2 | Per-pixel median across sensors (+ MAD outlier fraction) | robust-statistic baseline, 50% breakdown |
-| C3 | COLMAP stereo-fusion geometric consistency (needs COLMAP depth/normal binaries + hand-built model) or own reimplementation of the same test | second voting baseline; compare against OpenMVS |
-| C4 | Merrell 2007 visibility/free-space fusion | own reimplementation (~100-300 lines); closest classical analogue |
-| C5 | TV-L1 range integration (Zach 2007/2008) | own reimplementation (primal-dual on voxel grid) |
-| C6 | Probabilistic inlier-ratio fusion (Vogiatzis & Hernandez 2011 style / PSDF Fusion) | own reimplementation; no public PSDF code found (GitHub not searched directly); optional |
-Cite only: ElasticFusion, BundleFusion, InfiniTAM, voxel hashing, Poisson. Exclude (need RGB): Goesele 2006, ACMH/ACMM/ACMP. Do not cite the "Ma/Zhang robust Kalman TSDF" — unverifiable. Optional speed/memory reference: VDBFusion / Voxblox / Nvblox. No open-source "sensor elimination before TSDF fusion" system was found (weak negative).
+| Robust kernels (no gate) | Huber, Cauchy, Geman–McClure via GNC, switchable constraints, DCS | `robust_kernel_pgo` |
+| Pixel filter | COLMAP geometric consistency (numpy test exists: `consistency_voting`) | `colmap_consistency_filter` |
+| Plain voting | per-pixel median / majority across ensemble and neighbours (`median_fusion` exists) | `plain_voting` |
+| Floor / bound / context | no gate; oracle gate; estimate-and-correct | `no_gate`, `oracle_gate`, `estimate_and_correct` |
+| Gate variants | leave-one-source-out chi-square; evidence criterion | `view_gate` (param `statistic`) |
+| Reference points | MASt3R-SfM, VGGT, COLMAP SfM | `mast3r_sfm`, `vggt`, `colmap_sfm` |
 
-**Family C — learned fusion**
-| ID | Method | Notes |
-|---|---|---|
-| L1 | **SenFuNet** (ECCV 2022; github.com/tfy14esa/SenFuNet; last push 2025-02) | only native multi-depth-sensor learned method with code. Learns per-voxel sensor weights; trained with GT SDF on Replica/CoRBS/Scene3D. Python 3.8, Open3D 0.13+, submodule, hardcoded paths. Report pretrained AND fine-tuned-on-clean-split. Pretrained-weight URL unverified. Licence BSD-style custom text. |
-| L2 | RoutedFusion (CVPR 2020) **or** NeuralFusion (CVPR 2021), pick one | single-sensor learned fusion; ShapeNet-trained, synthetic zero-mean noise; no cross-sensor mechanism; run sensors sequentially. Last push 2021/2022. |
-| L3 | optional: PromptDA (depth-prompted foundation model) | out-of-family proxy, needs RGB; label as such |
-Skip: V-FUSE (needs MVS confidences/RGB; licence none; use only if you also run MVS), DI-Fusion (SLAM, no licence), Atlas/NeuralRecon/TransformerFusion (RGB only), NLSPN/CompletionFormer. No 2024-2026 learned multi-depth-sensor fusion with code was found (two searches; not proof).
-Prediction to test (judgement, not measured): learned fusion trained on zero-mean noise and outliers will not cope with smooth, spatially consistent bias or extrinsic drift unless such faults are in its training distribution; add a "SenFuNet fine-tuned WITH fault-like bias" row as the strongest learned competitor.
-
-**Family D — sensor-level elimination competitors (RAIM-style)**
-B3 iterated leave-one-sensor-out normalised residual; B3b enumerated subset consensus (MSAC); B4 oracle; B5 estimate-and-correct (joint extrinsic/bias optimisation).
-
-**Secondary (same-representation) — Gaussian splats:** 3DGS-MCMC with depth loss and same N, 2DGS if time. None runs depth-only as shipped (need RGB; placeholder-RGB + depth loss, plus an RGB-available row). SpotLessSplats/RobustSplat are photometric transient maskers: skip, justify in one sentence, B2 is the depth-space analogue. Research-only licences.
+Same images, matches, ensemble, fault realisations and solver for all; thresholds tuned on dev scenes; tuning budget reported; re-implementations labelled. Reference points do not see injected depth faults (they ignore our depth) — context only. **All are stubs** (`src/sensorfault/baselines/gate_testbed.py`); nothing in the test bed is implemented yet.
 
 ---
 
-## 5. Hypotheses (pre-register at week 1)
+## 5. Hypotheses (pre-register at week 1; mirrored in configs/h*.yaml and the manuscript)
 
-- **H1** K≥3, one coherent fault ≥3σ: sensor-level elimination cuts Chamfer ≥25% vs the best of OpenMVS fusion (filter 1, tuned), C3/C4 voting, and B2, and lands within 20% of oracle — concentrated in low-overlap, faulty-dominant, and sub-noise regimes. With high overlap and large K, voting should tie (report the tie).
-- **H2** Entropy criterion beats LOO χ² (B3) by ≥10 points of power at fixed 5% false-elimination rate, only where heteroscedastic/grazing/occlusion/non-Gaussian effects break χ²; ties under idealised Gaussian noise.
-- **H3** Visibility + grazing weighting hold clean-run false elimination ≤5%; ablating either at least doubles it.
-- **H5** (learned fusion) Pretrained SenFuNet and single-sensor learned fusion (RoutedFusion/NeuralFusion) degrade under smooth bias and extrinsic drift because they were trained on zero-mean noise/outliers; SenFuNet fine-tuned with fault-like bias narrows but does not close the gap in the low-overlap / faulty-dominant regimes. Falsified if fine-tuned SenFuNet matches elimination there — report it either way.
-- **H4** Fixed-N MCMC resists absorbing the faulty sensor; adaptive densification at matched N loses ≥10 points of detection power; there is an N sweet spot.
+- **H1 (gate vs the three baselines).** M≥3, one estimator corrupted on a fraction of views: gated pipeline cuts ATE and fused-surface error ≥25% vs the best tuned of {kernels, COLMAP filter, voting}, within 20% of oracle; advantage concentrated in clustered/few-neighbour faulty views and smooth faults; ties on sparse outliers. *Falsified if* the paired CI includes 0 in those regimes.
+- **H2 (evidence vs chi-square).** At fixed 5% false exclusion, ≥10 points more power only where heteroscedastic noise, grazing, occlusion or non-Gaussian residuals break chi-square; ties under idealised Gaussian noise. *Falsified if* no gain anywhere → pivot P1.
+- **H3 (alignment and visibility).** Alignment fitted without the source under test + visibility mask keep clean false exclusion ≤5%; joint alignment lowers power ≥10 points; no visibility mask doubles false exclusion.
+- **H4 (placement, complementarity).** Gating before PGO beats the same statistic after PGO; gate + robust kernel ≥ either alone.
+- **H5 (clean cost, reference points).** Price of gating on clean data ≤5%; on natural failures the test bed narrows the gap to MASt3R-SfM/VGGT (context only).
+- **Breakdown (honest negatives).** Common-mode estimator failure; M=2 (no consensus); sub-noise faults; sparse outliers (baselines win/tie); low overlap; poor provisional poses.
 
-Note on the premise: per-pixel voting does NOT fail simply because faults are coherent — two honest sensors still outvote it per pixel. It fails with ≤2 sensors covering a pixel, when the faulty sensor dominates coverage, when the fault is below the per-pixel noise floor (aggregation over ~10⁵ pixels detects 0.1–0.3σ), and when attribution is needed. Overlap and coverage share are controlled variables.
-
-**Required honest-negative experiments:** majority faulty with same-sign bias; common-mode fault (shared extrinsic/clock); K=2 (attribution unidentifiable ≈50%); sub-noise faults; sparse independent outliers (voting should win); non-overlapping FOV.
+Mapping from design v1: old H1 (sensor-level vs per-pixel) → new H1; old H2 → H2; old H3 (visibility/grazing) → H3 (+ alignment); old H4 (fixed-N splats) → **dropped** (no splats in v2) and replaced by placement; old H5 (learned fusion) → reframed as reference points.
 
 ---
 
-## 6. Data and fault protocol
+## 6. Data and fault protocol (configs/datasets/, configs/faults/view_fault_grid.yaml)
 
-| Dataset | Role | Status |
+| Dataset | Role | Notes |
 |---|---|---|
-| Skoltech3D (CVPR 2023) | **Primary real data.** Depth sensors: 2 phone ToF, Kinect v2 ToF, RealSense stereo; SL reference; per-sensor depth, poses, calibration. | CC BY-NC 4.0 (project page; README not confirmed). Tabletop objects, no room-scale multipath. Frames are independent viewpoints — define "time" by viewpoint order. Download size unknown; budget TB. |
-| Replica | Synthetic multi-sensor rig (build per-sensor intrinsics, FOV, noise, extrinsics yourself); room-scale concave corners for multipath. | Research-only; **do not redistribute renderings**; release generator + seeds. |
-| US3D / DFC2019 (Jacksonville, Omaha) | Optional satellite section. | **Licence conflict**: DataPort says CC BY 4.0, contest terms ban redistribution and require case-by-case publication approval (iadf_chairs@grss-ieee.org). ~289 GB. "UCSD" source not found — drop. |
-| IARPA MVS3DM | Gong & Fritsch 2018 used it; it is **San Fernando, Argentina**, not Jacksonville/Omaha/UCSD. | Verify availability. |
+| ETH3D | primary real | multi-view images, laser-scan GT depth, calibrated poses; natural estimator failures labelled against laser depth. **[UNVERIFIED]** scene names in base.yaml, licence, download script not written. |
+| ScanNet++ | secondary | laser-scanned geometry + registered images; reflective/transparent surfaces; access terms to accept. |
+| Replica | controlled synthetic | exact depth, vary overlap/fault parameters; research-only; release generator, not renderings. |
+| TUM RGB-D, Tanks & Temples | metric definitions | ATE/RPE and reconstruction metrics. |
 
-Gong & Fritsch: "Point Cloud and Digital Surface Model Generation from High Resolution Multiple View Stereo Satellite Imagery", ISPRS Archives XLII-2, 363–370, 2018 (abstract only seen). Pair selection is one step, not its title.
+Injected view-level faults on one estimator: smooth warp (inverse depth, amplitude ×{0.25,0.5,1,2} std), region failure (20–40% area), non-affine distortion (γ∈{0.8,0.9,1.1,1.25}); fraction of views p∈{10,20,40,60}%, scattered vs clustered, estimator-level; 1–2 faulted estimators per view, independent vs identical (common mode); controls: sparse outliers, clean. Seeds: `SeedSequence([master, hash(source id), fault id])`, ≥5 masters. **Fault injectors for v2 are not implemented** (v1 injectors in `src/sensorfault/faults/` cover depth bias/extrinsic drift on physical sensors).
 
-Satellite framing: say "multi-source DSM fusion", not sensor fusion. Pairs sharing an image share its RPC bias → not independent; one bad image faults several pairs. Treat as secondary; first to cut.
+Metrics: ATE (Sim(3)), RPE, pose AUC; fused-surface accuracy/completeness/F-score; depth AbsRel/δ1 after alignment; gate precision/recall, false exclusion on clean data, power at FER 5%, elimination-curve AUC; per-stage runtime/memory. Scene-level bootstrap; paired Wilcoxon.
 
-**Fault grid (hash-derived seeds, ≥5 master seeds, JSON manifest published)**
-- Rotation 0.5/1/2/5°, translation 1/2.5/5/10 cm; profile: step, ramp, or random walk.
-- Constant bias 1–5% of median range; range-proportional β = 1/2/3/5% (both signs).
-- Multipath surrogate: positive bias A·w(concavity), A = 2–10 cm tabletop, 5–30 cm rooms (heuristic, not physical).
-- Faulted fraction: 1/3, 1/4, 2/4 (independent and same-direction), plus 0-fault control; sweep which sensor.
-- Persistence: sensor-level persistent (onset 20%/40%) vs frame-level transient (10%/30% in bursts of 3–10); report separately.
-
-**Metrics:** accuracy, completeness, Chamfer, F-score (Skoltech3D τ = 1/2/5 mm; Replica 2/5/10 cm); detection precision/recall, time-to-detect (median/90th, censored), false alarms per 100 clean frames, clean-run accuracy loss; define "elimination AUC" explicitly (non-standard). DSM: RMSE/MAE/completeness@1 m. Scene-level bootstrap CIs, paired Wilcoxon, dev/test scene split.
+Compute risk: five estimators plus MASt3R-SfM/VGGT on 8 GB — cache depth maps offline, run reference points on subsets, check each model's memory **[UNVERIFIED]**.
 
 ---
 
@@ -157,51 +112,58 @@ Satellite framing: say "multi-source DSM fusion", not sensor fusion. Pairs shari
 
 | Wk | Work | Milestone |
 |---|---|---|
-| 1 | Read Sensors paper PDF; both-readings spec; derive entropy ↔ χ² relation; dataset licence checks; email IADF TC only if satellite stays; read YOGO + SenFuNet in full; pre-registration tag | M1 |
-| 2 | Sensor simulators + fault injectors, deterministic, unit-tested | M2 |
-| 3 | Multi-sensor depth-only fixed-N fit; alpha-mask loss; variance weighting. **OpenMVS adapter smoke test (dmap writer, `--geometric-iters 0`)** | M3 clean fit OK; OpenMVS fuses given depth |
-| 4 | Baselines: OpenMVS (filters 0/1/2), C1 TSDF, C2 median, C3 COLMAP-style voting, C4 Merrell, B3/B3b/B4; harness; residual-autocorrelation figure | M4 |
-| 5 | Elimination (both readings), visibility, grazing, null calibration, LOO warm start; first end-to-end | M5 |
-| 6 | **Gate 1** on 3 dev scenes × 3 fault types | go / pivot |
-| 7 | Full synthetic sweeps | H1 curves |
-| 8 | Ablations (fixed-N vs ADC, N sweep, visibility/grazing) | H3, H4 |
-| 9 | Breakdown experiments; **Gate 2** | honest negatives |
-| 10 | Skoltech3D real data with injected faults; **Gate 3** | real table |
-| 11 | **SenFuNet** (pretrained + fine-tuned clean + fine-tuned with bias), C5 TV-L1, B5; RoutedFusion/NeuralFusion; 3DGS-MCMC/2DGS secondary | learned-family table |
-| 12 | Satellite DSM section (only if licence approval in hand) else dynamics test | optional |
+| 1 | Re-read the Sensors PDF equations; verify datasets/licences; ensemble weights licences; prereg tag | M1 |
+| 2 | Estimator runner; cache ensemble depth on ETH3D dev scenes; per-estimator error vs laser | M2 |
+| 3 | Matches; geometry-only graph (provisional poses); metrics harness | M3 |
+| 4 | Depth-factor PGO; baselines: kernels, COLMAP filter, plain voting | M4 |
+| 5 | View-level fault injectors; chi-square gate | M5 |
+| **6** | **Gate 1:** H1 on dev scenes, 3 fault classes | go / pivot |
+| 7 | Evidence gate; H2, H3 | |
+| 8 | Sweeps; H4 placement; re-gate pass | |
+| 9 | Breakdown scenarios; **Gate 2** | honest negatives |
+| 10 | Natural failures; reference points (MASt3R-SfM, VGGT, COLMAP SfM) | |
+| 11 | ScanNet++ / Replica controlled sweeps (cut if behind) | |
+| 12 | Gaps, estimate-and-correct, runtime table | |
 | 13 | **Experiment freeze** | tag |
-| 14–16 | Draft, figures, related work, limitations, reproducibility package, AI-use disclosure | submission-ready |
+| 14–16 | Draft, figures, appendix, reproducibility package, AI-use disclosure | submission-ready |
 | 17–18 | Buffer | |
 
-**Gate 1 (wk 6):** Go if elimination beats B0, B1/B2 on coherent faults AND entropy beats LOO χ² in ≥1 regime by the H2 margin.
-- Pivot P1: entropy ≈ χ² → the paper is "sensor-level exclusion in splat space with visibility/grazing weighting"; entropy becomes an equivalence result.
-- Pivot P2: no win over voting in the H1 regimes → benchmark-and-analysis paper ("when does per-pixel voting fail").
-
-**Cut order:** satellite → dynamics → second real dataset → 3DGS-MCMC/2DGS secondary → C6 / TV-L1 → stereo sensor → B5 (discussion only). OpenMVS, one classical consistency baseline (C3/C4), and SenFuNet are core and never cut.
-**Never cut:** breakdown experiments, clean-run false-elimination, LOO χ² baseline, the Eq. 14/Alg. 1 fix.
+**Gate 1:** go if the gate beats all three baselines in the H1 regimes. Pivot P1: evidence ≈ chi-square → the gate uses the chi-square statistic; entropy relation becomes an equivalence result. Pivot P2: the gate does not beat the best baseline → analysis paper ("when do pixel filters and kernels suffice?").
+**Cut order:** ScanNet++/Replica sweeps → estimator-level CUSUM → estimate-and-correct → optional estimators. **Never cut:** breakdown scenarios, clean-data cost (H5), the chi-square gate, the Eq. 14/Alg. 1 fix.
 
 ---
 
-## 8. Paper outline (~9 pp + refs; IEEE Access recommends < 20)
-Abstract · 1 Intro · 2 Related work (multi-sensor splatting, robust splatting, depth fusion/voting, RAIM/Byzantine) · 3 Problem and fault model · 4 Method (shared surface, residuals, corrected criterion, elimination, persistence) · 5 Setup · 6 Results (H1–H4, breakdown, real data) · 7 Limitations and failure conditions · 8 Conclusion · Appendix (derivations, Eq. 14 fix, hyperparameters).
-Figures: F1 vote-vs-sensor-level error maps; F2 pipeline; F3 residual autocorrelation coherent vs sparse; F4 error vs magnitude; F5 power at fixed false-elimination, entropy vs χ²; F6 breakdown phase diagram; F7 K=2 non-identifiability; F8 real qualitative; F9 ablations.
+## 8. Paper outline (follows the author's own papers: Sensors 23(23):9309 and Sensors 24(23):7744)
+
+| Section | Follows | Says |
+|---|---|---|
+| I Introduction, with A Relevant Literature, B Challenges (C1–C5), C Baseline Study and Fundamental Differences, D Summary of Contributions (mapped to challenges), E Organization | 2023 (1.1 limitations, 1.2 baseline study, 1.3 contributions, 1.4 organization) and 2024 (1.1 literature, 1.2 challenges list, 1.3 contributions mapped to challenges) | monocular depth fails coherently per view; where each method decides; gate is the contribution |
+| II Method: A Definitions and Notation, B Forward Problem, C Inverse Problem (PGO), D View-Level Gate (requirements, consensus, corrected admission, output), E Test Bed | 2023 (Method with notation and BSE) and 2024 (forward/inverse problem) | the problem is set up inside the method, as in both papers |
+| III Experiments: A Experimental Setup (data, faults, baselines, metrics), B Hypotheses, C Implementation | 2023 (3.1 Setup, 3.2 Implementation) | what is run and what would falsify it |
+| IV Results | both | per hypothesis; placeholders |
+| V Conclusions and Future Work (incl. Limitations) | 2023 | no separate Discussion section, as in both papers |
+| Appendices | 2023 (theorems in appendix) | variance derivation; proof of Proposition 1 |
+
+Back matter in the author's papers (MDPI): author contributions, IRB, data availability, conflicts. For IEEE Access: Data and Code Availability (TODO), Acknowledgment with the AI-use disclosure, biography.
 
 ---
 
-## 9. IEEE Access facts (agent: venue)
+## 9. IEEE Access facts (verified on official pages 2026-11-13)
 Verified on official pages: gold OA; APC $2,160 (+ taxes; 5%/20% member discounts only); no page limit, <20 pp recommended; single-anonymised, ≥2 reviews, ~4–6 weeks submission-to-publication, acceptance ~20%; reviewers judge technical soundness, not necessarily high novelty; no formal data/code statement required; preprints allowed (arXiv named in IEEE-wide policy, not on Access pages); AI-assisted writing must be disclosed in Acknowledgments; fabricated references → rejection; public ORCID required.
 Not verified / yours to resolve: Virginia Tech–IEEE read-and-publish agreement (ask VT libraries; VT OASF announced closed Jul 2025); current IEEE copyright-form (eCF) wording and any publication-approval obligations that apply to you — check the live form. No Access conflict-of-interest page found. Not legal advice. Comparable-paper titles came from catalogue metadata only.
 
 ---
 
-## 10. Open items checklist
-- [ ] Re-read Sensors 23(23):9309 PDF equations to confirm ≤/≥ in Alg. 1 and the entropy normalisation.
-- [ ] Read YOGO, SenFuNet, arXiv 2306.11048 in full; IEEE Xplore/Scholar novelty pass.
-- [ ] Verify every citation (agent-from-memory refs especially) before use.
-- [ ] Skoltech3D licence text in the repo; Replica redistribution (generator-only release).
-- [ ] Decide whether satellite stays in scope given licence approval and analogy weakness.
-- [ ] VT APC route; read live IEEE copyright form; check employment IP/publication-review terms.
-- [ ] Smoke-test OpenMVS external-depth path; check `.dmap` field order in `ExportDepthDataRaw`; check AGPL obligations for the adapter.
-- [ ] SenFuNet: locate pretrained-weight URL, read full licence, confirm it runs on current CUDA/PyTorch; plan GT-SDF generation for fault-fine-tuning.
-- [ ] Verify all classical/learned licences and references (mostly from memory).
-- [ ] Reproducibility package: seeds, manifests, configs, tuning budgets, GPU-hours.
+---
+
+## 10. Open items
+- [ ] Re-read the Sensors 23(23):9309 PDF: Alg. 1 inequality directions, entropy normalisation (author to confirm).
+- [ ] Author to confirm the reading of "partly end-to-end".
+- [ ] Verify ETH3D scene names/licence, ScanNet++ terms, each estimator's weights licence and GPU memory.
+- [ ] Literature pass: depth-prior filtering in SfM/SLAM; uncertainty-aware monocular depth in pose graphs.
+- [ ] Implement: view-level fault injectors; pixel-wise gate; test bed pipeline; baselines; `data` download scripts for ETH3D.
+- [ ] Choose and cite the matcher and solver.
+- [ ] Affiliation / funding / AI-use disclosure in the manuscript (author's decision).
+
+## 11. Change log
+- 2026-11-13: v2 design. Gate is the contribution, pipeline the test bed; splat surface and physical depth sensors dropped; configs for v1 moved to `configs/legacy_sensor_faults/`; new configs, registry stubs and tests added.

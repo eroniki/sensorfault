@@ -1,0 +1,33 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: h1_view_level_gate_vs_baselines
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: H1
+  prediction: With M>=3 and one estimator corrupted by a view-level fault on a fraction of the views,
+    the gated pipeline reduces ATE and fused-surface error by >=25% vs the best tuned of {robust kernels,
+    COLMAP consistency filter, plain voting} and lands within 20% of the oracle gate. The advantage is
+    concentrated where faulty views are clustered or have few neighbours and the fault is smooth rather
+    than sparse; with sparse independent outliers the baselines tie or win (reported).
+  falsification_criterion: Falsified if the scene-level bootstrap 95% CI of the relative improvement over
+    the best tuned baseline includes 0 in the pre-declared regimes (clustered faulty views, few neighbours,
+    smooth fault), or median error is >20% above the oracle gate. The sparse-outlier tie is a predicted
+    null, not a falsifier.
+  independent_variables: [fault_class, fault_magnitude, fraction_of_views_p, layout_scattered_or_clustered,
+    views_per_neighbourhood, M]
+  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set, per_pixel_confidence]
+  levels:
+    M: [3, 4, 5]
+    p: [0.1, 0.2, 0.4, 0.6]
+    layout: [scattered, clustered]
+baselines: [rk_huber, rk_cauchy, rk_gm_gnc, colmap_geom_consistency, vote_median, vote_majority, no_gate,
+  gate_loo_chi2, gate_evidence, oracle_gate]
+metrics:
+  primary: [ate_rmse_sim3, fscore]
+  relative_reduction_threshold: 0.25
+  oracle_gap_threshold: 0.2
+implemented: false
+scenario_grid:
+  grid: faults/view_fault_grid.yaml
+  classes: [smooth_warp, region_failure, nonaffine_distortion]

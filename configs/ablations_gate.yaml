@@ -1,0 +1,26 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: ablations_gate
+status: preregistered_draft
+design: v2_view_level_gate
+note: A0..A7 reconstructed for design v2; not in the manuscript tables beyond H3.
+hypothesis:
+  id: H3
+  prediction: see h3_alignment_visibility.yaml
+  falsification_criterion: see h3
+  independent_variables: [variant]
+  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  levels: {}
+ablations:
+- {id: A0, name: full gate (evidence criterion)}
+- {id: A1, name: joint alignment (source under test included)}
+- {id: A2, name: no visibility mask}
+- {id: A3, name: no grazing gate}
+- {id: A4, name: chi-square statistic instead of evidence}
+- {id: A5, name: literal Algorithm 1 of the earlier BSE paper (bugs flagged)}
+- {id: A6, name: no cross-view supporting evidence (ensemble only)}
+- {id: A7, name: no estimator-level escalation (CUSUM off)}
+baselines: [gate_evidence, gate_loo_chi2]
+metrics:
+  primary: [false_exclusion_rate_clean, power_at_fer_0.05]
+implemented: false

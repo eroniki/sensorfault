@@ -1,6 +1,6 @@
 """Experiment runner.
 
-    python -m sensorfault.runner --config configs/h1_coherent_fault_regimes.yaml --dry-run
+    python -m sensorfault.runner --config configs/legacy_sensor_faults/h1_coherent_fault_regimes.yaml --dry-run
 
 Pipeline: load config (+ ``extends`` chain + overlays) -> build frames (synthetic generator;
 dataset loaders belong to the data scripts) -> inject faults -> run listed fusers from the

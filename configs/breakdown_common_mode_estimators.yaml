@@ -1,0 +1,18 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: breakdown_common_mode_estimators
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: breakdown
+  prediction: A majority of estimators fail in the same way on a view (estimators share training data).
+  falsification_criterion: Report the phase diagram; expect the gate to be no better than no gate and
+    to possibly exclude the healthy minority.
+  independent_variables: [fraction_of_estimators_failing_together, M]
+  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    identical_faults: [true]
+baselines: [no_gate, gate_evidence, rk_huber, vote_median, colmap_geom_consistency]
+metrics:
+  primary: [ate_rmse_sim3, fscore, precision, recall]
+implemented: false

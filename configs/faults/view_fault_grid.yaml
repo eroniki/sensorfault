@@ -1,0 +1,23 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+target: one estimator output (a depth source = estimator x view)
+seed_rule: SeedSequence([master, stable_hash(source_id), fault_id])
+classes:
+  smooth_warp:
+    space: inverse_depth
+    amplitude_x_std_inverse_depth: [0.25, 0.5, 1, 2]
+  region_failure:
+    area_fraction: [0.2, 0.4]
+    replace_with: [plane_fit_whole_view, blurred_copy]
+  nonaffine_distortion:
+    gamma: [0.8, 0.9, 1.1, 1.25]
+persistence:
+  fraction_of_views_p: [0.1, 0.2, 0.4, 0.6]
+  layout: [scattered, clustered]
+  estimator_level_all_views: true
+faulted_estimators_per_view:
+  count: [1, 2]
+  parameters: [independent, identical_common_mode]
+controls: [sparse_independent_outliers_same_corrupted_pixel_rate, fault_free]
+natural_failures: {label_rule: aligned error vs laser reference > threshold, threshold: TODO fix on dev
+    scenes}
+implemented: false

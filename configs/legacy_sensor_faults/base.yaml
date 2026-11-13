@@ -1,0 +1,45 @@
+# Shared defaults. Experiment configs `extends: base.yaml`; overlays (--overlay) merge last.
+# Lists REPLACE, dicts merge recursively.
+project: sensorfault
+status: preregistered_draft
+seeds:
+  master: [101, 102, 103, 104, 105]       # >= 5 master seeds (hash-derived per sensor/fault)
+scenes:
+  source: synthetic                       # synthetic | skoltech3d | replica_multisensor (see datasets/)
+  split_rule: "dev scenes are used for ALL threshold tuning; test scenes are touched only after git tag prereg-v1"
+  dev: [1001, 1002, 1003]
+  test: [2001, 2002, 2003, 2004, 2005, 2006]
+synthetic:
+  n_sensors: 4
+  n_frames: 24
+  height: 96
+  width: 128
+  fov_deg: 70.0
+  aim: center                             # center = high overlap, outward = no overlap
+  sensor_kinds: [kinect_sl, tof, lidar, stereo]
+  pose_jitter_m: 0.05
+  aim_jitter_deg: 4.0
+  room_size: [5.0, 4.0, 2.5]
+metrics:
+  fscore_thresholds_m: [0.02, 0.05, 0.10]   # Replica/rooms; Skoltech3D uses [0.001, 0.002, 0.005] (datasets/)
+  report: [accuracy, completeness, chamfer, fscore, detection_precision, detection_recall,
+           time_to_detect_median_p90_censored, false_alarms_per_100_clean_frames,
+           clean_run_accuracy_loss, elimination_curve_auc, runtime_s]
+stats:
+  bootstrap: scene_level
+  bootstrap_n: 10000
+  paired_test: wilcoxon_signed_rank
+  alpha: 0.05
+tuning:
+  dev_only: true
+  budget_reported: true
+  null_calibration: {target_false_elimination: 0.05, method: clean_run_permutation, n_permutations: 200}
+include_builtin_reference: true            # builtin_naive_union / builtin_oracle_exclusion (not paper baselines)
+fuser_defaults: {}
+output_dir: outputs
+latency_targets_ms_per_frame: {frame: 100, detection: 30, depth: 40, tsdf: 20}
+dry_run:                                    # overrides applied by --dry-run
+  n_scenes: 1
+  n_seeds: 1
+  max_scenarios: 2
+  synthetic: {n_frames: 4, height: 32, width: 40}

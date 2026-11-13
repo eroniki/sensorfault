@@ -1,0 +1,23 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: h3_alignment_visibility
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: H3
+  prediction: Fitting the alignment without the source under test and comparing only on pixels visible
+    in both views keeps clean-run false exclusion <=5%; fitting the alignment jointly lowers detection
+    power by >=10 points (the fit absorbs the fault), and removing the visibility mask at least doubles
+    the false-exclusion rate.
+  falsification_criterion: Falsified if the ablations leave false-exclusion rate and power unchanged.
+  independent_variables: [alignment_fit_includes_source_under_test, visibility_mask, grazing_gate]
+  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    alignment: [leave_one_out, joint]
+    visibility_mask: [true, false]
+    grazing_gate: [true, false]
+baselines: [gate_evidence, gate_loo_chi2]
+metrics:
+  primary: [false_exclusion_rate_clean, power_at_fer_0.05]
+implemented: false
+ablations: ablations_gate.yaml

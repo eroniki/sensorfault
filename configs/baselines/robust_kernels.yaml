@@ -1,0 +1,22 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+baselines:
+- id: rk_huber
+  family: robust_kernel
+  fuser: robust_kernel_pgo
+  params: {kernel: huber}
+- id: rk_cauchy
+  family: robust_kernel
+  fuser: robust_kernel_pgo
+  params: {kernel: cauchy}
+- id: rk_gm_gnc
+  family: robust_kernel
+  fuser: robust_kernel_pgo
+  params: {kernel: geman_mcclure_gnc}
+- id: rk_switchable
+  family: robust_kernel
+  fuser: robust_kernel_pgo
+  params: {kernel: switchable}
+- id: rk_dcs
+  family: robust_kernel
+  fuser: robust_kernel_pgo
+  params: {kernel: dcs}

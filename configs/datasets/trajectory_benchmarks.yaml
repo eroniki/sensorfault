@@ -1,0 +1,5 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+datasets:
+- {name: TUM RGB-D, ref: data_tum, use: metric definition for ATE/RPE}
+- {name: Tanks and Temples, ref: data_tnt, use: metric definition for reconstruction}
+role: optional

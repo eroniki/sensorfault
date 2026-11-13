@@ -1,0 +1,6 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+baselines:
+- id: colmap_geom_consistency
+  family: pixel_filter
+  fuser: colmap_consistency_filter
+  params: {min_consistent_views: 2, max_reproj_error_px: 2.0, max_rel_depth_error: 0.01}

@@ -1,0 +1,13 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+estimators:
+- {id: depth_anything_v2, output: affine_invariant_or_relative, ref: est_dav2, licence: TODO(verify per
+    checkpoint)}
+- {id: metric3d_v2, output: metric, ref: est_metric3dv2, licence: TODO(verify)}
+- {id: unidepth, output: metric, ref: est_unidepth, licence: TODO(verify)}
+- {id: depth_pro, output: metric, ref: est_depthpro, licence: TODO(verify)}
+- {id: moge, output: affine_invariant_point_map, ref: est_moge, licence: TODO(verify)}
+- {id: marigold, output: affine_invariant, ref: est_marigold, optional: true, licence: TODO(verify)}
+ensemble_sizes:
+  M3: [depth_anything_v2, unidepth, moge]
+  M4: [depth_anything_v2, metric3d_v2, unidepth, moge]
+  M5: [depth_anything_v2, metric3d_v2, unidepth, depth_pro, moge]

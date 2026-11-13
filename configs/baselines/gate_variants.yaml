@@ -1,0 +1,22 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+baselines:
+- id: no_gate
+  family: floor
+  fuser: no_gate
+  params: {}
+- id: oracle_gate
+  family: upper_bound
+  fuser: oracle_gate
+  params: {}
+- id: gate_loo_chi2
+  family: gate
+  fuser: view_gate
+  params: {statistic: chi2}
+- id: gate_evidence
+  family: gate
+  fuser: view_gate
+  params: {statistic: evidence}
+- id: estimate_and_correct
+  family: context
+  fuser: estimate_and_correct
+  params: {}

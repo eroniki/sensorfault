@@ -1,5 +1,9 @@
 # data/
 
+> **Design v2 note (2026-11-13):** the current design uses ETH3D (primary), ScanNet++ (optional) and Replica
+> (controlled synthetic); a download script for ETH3D is **not written yet** (TODO). The Skoltech3D, Replica-rig
+> and DFC2019/MVS3DM material below belongs to design v1 (physical depth sensors) and is kept for reference.
+
 Everything in this directory except this README is gitignored. Point the code at another
 location with `SENSORFAULT_DATA=/path` (default `./data`). **We release manifests and
 scripts only, never the data or derived renderings.**

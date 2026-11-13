@@ -17,6 +17,7 @@ for _m in (
     "tsdf_open3d",
     "openmvs",
     "_external",
+    "gate_testbed",
 ):
     try:
         __import__(f"{__name__}.{_m}")

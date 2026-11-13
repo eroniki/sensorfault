@@ -1,11 +1,14 @@
 # sensorfault
 
-Research scaffold for sensor-level fault elimination in a shared Gaussian-splat surface.
-Several depth sensors observe one scene; a consensus render of the shared surface is used to
-test whole sensors (or whole frames) against the rest and exclude coherent faults (calibration
-drift, range bias, multipath-like errors) before dense fusion. The repo also provides a
-multi-sensor depth fusion benchmark with deterministic fault injection and public baselines.
-See `PLAN.md` for the research plan.
+Research scaffold for a **view-level gate** that decides which monocular depth sources to trust
+before pose graph optimisation and fusion (design v2). The gate is the contribution; the pipeline
+(RGB images, an ensemble of monocular depth estimators, a partly end-to-end pose graph, fusion) is
+the test bed. Baselines the gate must beat: robust kernels in the pose graph, COLMAP's geometric
+consistency filter, plain voting; MASt3R-SfM and VGGT are reference points. See `PLAN.md`.
+
+**Status:** configs, registry stubs and tests exist; the test bed, view-level fault injectors and
+the gate itself are **not implemented yet**. Design v1 (sensor-level elimination on a splat surface)
+is kept in `configs/legacy_sensor_faults/`, with its implemented pieces still under `src/`.
 
 ## Layout
 
@@ -15,7 +18,8 @@ sensorfault/
   pyproject.toml          package metadata, extras, ruff/pytest config
   environment.yml         conda env (Python 3.10)
   Makefile                env / install / test / lint / data-help / clean
-  configs/                experiment configs, one family per hypothesis (H1-H5)
+  configs/                design-v2 experiment configs (H1-H5, breakdown, ablations, datasets, baselines)
+  configs/legacy_sensor_faults/   design-v1 configs (physical-sensor faults); still exercised by tests
   scripts/                data download helpers, third_party setup (nothing runs by default)
   src/sensorfault/
     types.py              DepthFrame, FusionResult, Fuser protocol
@@ -41,16 +45,17 @@ Optional extras: `pip install -e ".[tsdf]"` (Open3D), `".[gs]"` (torch, gsplat),
 
 ## Hypotheses and configs
 
-| Hypothesis | Claim (short) | Configs |
+| Hypothesis | Claim (short) | Config |
 |---|---|---|
-| H1 | Sensor-level elimination beats voting/filtering baselines under one coherent fault, K>=3 | `configs/h1_*.yaml` |
-| H2 | Entropy-based criterion beats leave-one-out chi-square only where Gaussian assumptions break | `configs/h2_*.yaml` |
-| H3 | Visibility + grazing weighting keep clean-run false elimination <=5% | `configs/h3_*.yaml` |
-| H4 | Fixed-N splat budget resists absorbing the faulty sensor vs adaptive densification | `configs/h4_*.yaml` |
-| H5 | Pretrained learned fusion degrades under smooth bias/drift; fine-tuning narrows, not closes, the gap | `configs/h5_*.yaml` |
+| H1 | The view-level gate beats robust kernels, the COLMAP filter and plain voting under coherent view-level faults | `configs/h1_view_level_gate_vs_baselines.yaml` |
+| H2 | The evidence criterion beats leave-one-source-out chi-square only where Gaussian assumptions break | `configs/h2_evidence_vs_chi2.yaml` |
+| H3 | Alignment fitted without the source under test and a visibility mask keep clean false exclusion <=5% | `configs/h3_alignment_visibility.yaml` |
+| H4 | Gating before pose graph optimisation beats gating after; gate + robust kernel >= either alone | `configs/h4_gate_placement.yaml` |
+| H5 | Price of gating on clean data <=5%; reference points (MASt3R-SfM, VGGT) are context only | `configs/h5_clean_cost_reference_points.yaml` |
 
-Exact config file names are owned by the configs/ directory; see PLAN.md section 5 for the full
-statements and the pre-registration.
+Breakdown scenarios: `configs/breakdown_*.yaml`; ablations: `configs/ablations_gate.yaml`. All are
+`preregistered_draft` and flagged `implemented: false`. The manuscript is in the private repo
+`sensorfault-manuscript`.
 
 ## Licence caveats
 

@@ -1,0 +1,10 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+baselines:
+- id: vote_median
+  family: voting
+  fuser: plain_voting
+  params: {rule: median}
+- id: vote_majority
+  family: voting
+  fuser: plain_voting
+  params: {rule: majority}

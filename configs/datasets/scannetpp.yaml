@@ -1,0 +1,3 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+{dataset: ScanNet++, role: secondary_real, ref: data_scannetpp, access: requires accepting dataset terms,
+  licence: TODO(verify), scenes: TODO}

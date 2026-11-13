@@ -26,7 +26,7 @@
   the generator and seeds instead.
 
 ## Dev / test scene split
-- Scenes are split once, by a fixed list committed under configs/, before any tuning.
+- Scenes are split once, by a fixed list committed under configs/ (base.yaml), before any tuning.
 - Hyperparameters and thresholds are tuned on dev scenes only. Test scenes are run once per
   final configuration; report scene-level bootstrap CIs and paired Wilcoxon tests.
 - Never tune on test results; if you must revisit, record it as a deviation from the prereg.

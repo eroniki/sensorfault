@@ -8,7 +8,7 @@ import yaml
 from sensorfault.runner import load_config, main, resolve_fusers
 
 ROOT = Path(__file__).resolve().parents[2]
-CFG = ROOT / "configs"
+CFG = ROOT / "configs" / "legacy_sensor_faults"
 HYP = [
     "h1_coherent_fault_regimes",
     "h2_entropy_vs_loo_chi2",

@@ -153,7 +153,9 @@ def test_grid_expand_and_scenarios():
     import yaml
 
     g = yaml.safe_load(
-        (Path(__file__).resolve().parents[2] / "configs/faults/grid.yaml").read_text()
+        (
+            Path(__file__).resolve().parents[2] / "configs/legacy_sensor_faults/faults/grid.yaml"
+        ).read_text()
     )
     cells = expand_cells(g)
     kinds = {c["kind"] for c in cells}
