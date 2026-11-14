@@ -15,7 +15,7 @@ HYP = [
     "h1_regime_map_subnoise_bias",
     "h2_consequence_vs_baselines",
     "h3_statistic_choice",
-    "h4_cross_fitting_alignment_support",
+    "h4_leave_view_out_alignment_support",
     "h5_placement_soft_downweighting",
     "h6_price_of_monitoring_reference_points",
     "h7_shared_surface_vs_pairwise",
@@ -32,6 +32,7 @@ BREAK = [
     "sparse_outliers_control",
     "low_overlap",
     "faulty_views_dominate_surface",
+    "association_failure",
     "large_false_loop_closures",
     "poor_provisional_poses",
 ]
@@ -144,9 +145,13 @@ def test_h9_protection_level_is_optional_and_conditional():
     assert "A1-A4" in c["hypothesis"]["prediction"]
 
 
-def test_h7_covers_efficiency_robustness_and_fixed_budget():
+def test_h7_covers_efficiency_robustness_and_mcmc_ablation():
     c = load_config(CFG / "h7_shared_surface_vs_pairwise.yaml")
-    assert {"gate_pairwise_evidence", "gate_surface_evidence", "gate_surface_adaptive"} <= set(
+    assert {
+        "gate_pairwise_evidence",
+        "gate_surface_evidence",
+        "gate_surface_mcmc_fixed_budget",
+    } <= set(
         c["baselines"]
     )
     assert c["metrics"]["speedup_threshold"] == 2.0
@@ -157,8 +162,17 @@ def test_h7_covers_efficiency_robustness_and_fixed_budget():
 def test_shared_surface_params_are_declared():
     c = load_config(CFG / "base.yaml")
     ss = c["shared_surface"]
-    assert ss["fixed_budget"] is True and ss["depth_only"] is True
-    assert ss["cross_fit"]["folds_K"] == [3, 4, 6]
+    assert ss["inputs"] == "depth_maps_only" and ss["colour"] == "out_of_scope"
+    assert ss["fusion"]["form"] == "information" and ss["fusion"]["folds"] == 0
+    assert ss["fusion"]["refits"] == 0
+    assert ss["densification"].startswith("none")
+    assert "fixed_budget" not in ss and "cross_fit" not in ss
+    assert ss["primitive"]["extent"]["used_for"] == "rendering_weights_only"
+    assert set(ss["region_outputs"]) == {
+        "posterior_mean_var",
+        "protection_level",
+        "n_views_availability",
+    }
     assert c["testbed"]["soft_downweighting_is_baseline"] is True
 
 

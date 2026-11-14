@@ -1,8 +1,9 @@
 # sensorfault
 
 Research scaffold for **view-level fault detection and exclusion (FDE), in the spirit of GNSS RAIM, for
-learned-depth reconstruction** (design v2.4). One metric depth model is applied to each image; the gate tests each
-depth map against a shared Gaussian-splat surface fitted from the other views (fixed budget, cross-fitted), excludes
+learned-depth reconstruction** (design v2.5). One metric depth model is applied to each image; the gate tests each
+depth map against a shared surface of Gaussian primitives built from depth maps only, in closed form, with the view
+itself removed by exact subtraction of its information (RAIM solution separation), and excludes
 faulty views before pose graph optimisation and fusion, and raises a no-consensus alarm. Core argument: a coherent
 view-level fault that the monocular scale/offset cannot absorb is sub-noise at each pixel (invisible to pixel filters
 and robust kernels) but large when aggregated over the view and whitened by an explicit residual covariance
@@ -55,10 +56,10 @@ Optional extras: `pip install -e ".[tsdf]"` (Open3D), `".[gs]"` (torch, gsplat),
 | H1 | Regime map: per-pixel bias vs fraction (f<=0.8) of the view, plus the affine control (f=1: absorbed, not a fault); gate wins sub-noise/coherent, pixel filters win sparse/large | `configs/h1_regime_map_subnoise_bias.yaml` |
 | H2 | Consequence for trajectory and fused surface vs robust kernels, soft weights, COLMAP filter, voting | `configs/h2_consequence_vs_baselines.yaml` |
 | H3 | Evidence vs chi-square only where Gaussian assumptions break; region scan vs energy by fault shape | `configs/h3_statistic_choice.yaml` |
-| H4 | Cross-fitting, alignment and a support mask keep clean false alarm <=5% | `configs/h4_cross_fitting_alignment_support.yaml` |
+| H4 | Leave-view-out subtraction, alignment and a support mask keep clean false alarm <=5% | `configs/h4_leave_view_out_alignment_support.yaml` |
 | H5 | Gate before PGO beats gating after and soft down-weighting; gate + kernel >= either | `configs/h5_placement_soft_downweighting.yaml` |
 | H6 | Adequacy of the measurement model; price of monitoring (false alarm <=5%, availability >=90%, error change <=5%); reference points are context | `configs/h6_price_of_monitoring_reference_points.yaml` |
-| H7 | Shared splat surface vs pairwise checks: cost, non-inferior power, fixed budget beats adaptive densification | `configs/h7_shared_surface_vs_pairwise.yaml` |
+| H7 | Closed-form shared surface vs pairwise checks and a fixed-budget MCMC surface: cost, non-inferior power, per-region outputs, view-order robustness | `configs/h7_shared_surface_vs_pairwise.yaml` |
 | H8 | Pose faults (spoofed prior, glitches, false loop closures); loop-closure baselines expected to match the gate on large ones | `configs/h8_pose_faults.yaml` |
 | H9 | Conditional protection level coverage (optional) | `configs/h9_protection_level.yaml` |
 | H10 | Ensemble ablation: shared failures; where cross-model voting breaks; value of the ensemble | `configs/h10_ensemble_ablation.yaml` |

@@ -279,3 +279,13 @@ def protection_level_ellipsoid(
     Si = np.linalg.inv(Sigma)
     Sproj = Sigma - A @ np.linalg.solve(A.T @ Si @ A, A.T)
     return float(math.sqrt(max(lam0 * float(s @ Sproj @ s), 0.0)) + z_q * sigma_q)
+
+
+def sigma_surf_diag(a: float, sigma2_comp: np.ndarray) -> np.ndarray:
+    """Diagonal Sigma_surf = a^2 diag(sigma^2(u)) from the composite variance of the closed-form
+    surface (leave-view-out), replacing the cross-fitted jackknife covariance.
+
+    Diagonal by assumption: spatial correlation of the surface error is ignored (stated limitation).
+    Pass the result as ``Sigma_surf`` to :func:`residual_covariance`.
+    """
+    return np.diag(a * a * np.asarray(sigma2_comp, dtype=float))

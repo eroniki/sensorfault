@@ -1,4 +1,4 @@
-# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.5: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 # Shared defaults. Experiment configs `extends: base.yaml`.
 project: sensorfault
@@ -38,10 +38,11 @@ measurement_model:
   pose_error: {xi: 'N(0, Sigma_q), 6x6', source: marginal covariances of the provisional pose graph, jacobian: 'J_q
       n x 6, analytic (tests/core/test_measurement_model.py), rotation row norm = r tan(theta)'}
   intrinsics_error: {zeta: 'N(0, Sigma_K), small', jacobian: J_K n x p}
-  surface_uncertainty: {Sigma_surf: 'delete-a-group jackknife over the K cross-fitted surfaces, rank <=
-      K-1, plus a floor', note: small K gives a noisy estimate; adequacy checked in H6}
+  surface_uncertainty: {Sigma_surf: 'a^2 diag(v_S(u)): composite variance of the closed-form surface (diagonal
+      by assumption)', note: ignores spatial correlation of surface error and shared per-view pose error;
+      information fusion treats observations as independent; adequacy checked in H6}
   sources_of_uncertainty: [U1 scale_offset_ambiguity, 'U2 heteroscedastic_noise_sigma(r,tau,theta)', U3
-      spatial_correlation_ell_nu, U4 pose_error, U5 intrinsics_error, U6 surface_spread]
+      spatial_correlation_ell_nu, U4 pose_error, U5 intrinsics_error, U6 surface_composite_variance]
   residual_covariance: Sigma_r = Sigma_eps + J_q Sigma_q J_q^T + J_K Sigma_K J_K^T + Sigma_surf
   nuisance_projection: M = Sigma_r^-1 - Sigma_r^-1 A (A^T Sigma_r^-1 A)^-1 A^T Sigma_r^-1 with A=[d,1];
     T = r0^T M r0 ~ chi2(n-2) under the nominal model
@@ -71,18 +72,41 @@ regime_map:
   detectability: 'kappa^2 = phi^T M phi; for iid pixels kappa^2 = n f (1-f) delta^2: peaks at f=1/2, zero
     at f=1'
 shared_surface:
-  representation: gaussian_splats
-  n_splats: TODO fix on dev scenes
-  fixed_budget: true
-  densification: none_relocation_only_3dgs_mcmc
-  depth_only: true
-  losses: [robust_depth, accumulated_alpha, anisotropy_cap, depth_distortion, normal_consistency]
-  cross_fit:
-    folds_K: [3, 4, 6]
-    fold_layout: contiguous_blocks_of_neighbouring_views
-  iterations_n_it: TODO
+  representation: gaussian_planar_primitives
+  inputs: depth_maps_only
+  colour: out_of_scope
+  why_not_sdf: closed form from a depth map, built-in uncertainty
+  primitive:
+    extent:
+      centre: mu
+      normal: n
+      tangent_halfwidths: [s_u, s_v]
+      used_for: rendering_weights_only
+      union_on_fusion: max_never_shrinks
+    uncertainty: {offset: h = n^T mu, variance: sigma_h^2 = n^T P n, information: lambda = 1/sigma_h^2,
+      P: J_d sigma_d^2 J_d^T + J_q Sigma_q J_q^T + J_K Sigma_K J_K^T, normal_uncertainty: ignored (stated
+        limitation)}
+    opacity: alpha
+  forward: {ray: 'r = K^-1 [u v 1]^T', centre: mu = R d r + t, normal: 'cross product of back-projected
+      image-axis tangents, oriented to camera', extent: 's = footprint * d/f, stretched by 1/cos(theta)'}
+  fusion: {form: information, lambda: sum lambda_i, h: sum lambda_i h_i / lambda, leave_view_out: 'exact
+      subtraction of lambda_j, h_j (= RAIM solution separation = leave-one-out innovation)', refits: 0,
+    folds: 0}
+  backward: {ray_plane_depth: d_k = (h_-j - n^T c_j)/(n^T R_j r_u), variance: sigma_h^2/(n^T R_j r)^2
+      + J_pose Sigma_q J_pose^T, composite: alpha compositing with extent-only weights w_k = alpha_k G(u;
+      Sigma_ext) T_k, composite_depth: sum w d_k / sum w, composite_variance: sum w sigma_k^2 / sum w
+      (+ optional between-primitive spread), gate_residual: 'r = d_hat - (a d(u) + b), Var = sigma_d^2
+      + a^2 sigma^2(u)'}
+  association: {rule: 'projective: render into new view, ray hits primitive within gate -> update, else
+      spawn', normal_cos_min: TODO fix on dev, offset_gate_tau_h: TODO, extent_gate_tau_ext: TODO, soft_weight: w_k
+      lambda_i, visibility: from transmittance, admission: render-and-compare gate decides entry}
+  densification: none (primitives added only by association failure; no adaptive densification)
+  fixed_budget_mcmc: ablation only (gate_surface_mcmc_fixed_budget), not the default
   support: {alpha_threshold: TODO, min_supported_fraction: TODO}
-  output: surface refitted on kept depth maps is the fused output; TSDF of same depth is a secondary check
+  region_outputs: [posterior_mean_var, protection_level, n_views_availability]
+  min_views_for_test: 3
+  output: surface re-fused from kept depth maps is the fused output; TSDF of same depth is a secondary
+    check
 testbed: {pose_graph: differentiable_renderable, soft_downweighting_is_baseline: true, render_based_constraint: optional}
 shared_inputs_for_all_methods: [images, matches, depth_maps, fault_realisations, pose_graph_solver]
 metrics:

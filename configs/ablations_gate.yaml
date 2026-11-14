@@ -1,11 +1,11 @@
-# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.5: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: ablations_gate
 status: preregistered_draft
 design: v2_view_level_gate
-note: A0..A18 for design v2.4 (explicit measurement model); not in the manuscript tables beyond H3, H4
-  and H7.
+note: A0..A18 for design v2.5 (closed-form Gaussian surface); not in the manuscript tables beyond H3,
+  H4 and H7.
 hypothesis:
   id: H4
   prediction: see h3, h4 and h7 configs
@@ -14,16 +14,17 @@ hypothesis:
   controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels: {}
 ablations:
-- {id: A0, name: 'full gate (shared surface, cross-fitted, fixed N_s, combined statistics, evidence criterion)'}
-- {id: A1, name: no cross-fitting (joint fit)}
+- {id: A0, name: 'full gate (closed-form Gaussian surface, leave-view-out by subtraction, combined statistics,
+    evidence criterion)'}
+- {id: A1, name: no leave-view-out (joint surface)}
 - {id: A2, name: no support mask}
 - {id: A3, name: no grazing gate}
 - {id: A4, name: chi-square (energy) statistic only}
 - {id: A5, name: literal Algorithm 1 of the earlier BSE paper (bugs flagged)}
 - {id: A6, name: pairwise consensus instead of shared surface}
-- {id: A7, name: adaptive densification at matched final size}
-- {id: A8, name: exact leave-one-view-out refit (reference)}
-- {id: A9, name: surface with photometric term (RGB) in the fit}
+- {id: A7, name: 'fixed-budget 3DGS-MCMC surface (optimised, explicit refits)'}
+- {id: A8, name: single covariance for extent and uncertainty (confident primitives shrink)}
+- {id: A9, name: soft association weight replaced by hard assignment}
 - {id: A10, name: no scene-level alarm}
 - {id: A11, name: cross-model voting (ensemble ablation)}
 - {id: A12, name: 'ensemble gate: M models per view tested against the same surface (ensemble ablation)'}
@@ -35,7 +36,7 @@ ablations:
 - {id: A17, name: Sigma_r without Sigma_surf}
 - {id: A18, name: confidence-covariate sigma(.) from a model that outputs confidence}
 baselines: [gate_surface_evidence, gate_surface_chi2, gate_surface_region_scan, gate_surface_joint_fit,
-  gate_pairwise_evidence, gate_surface_adaptive, gate_surface_exact_loo]
+  gate_pairwise_evidence, gate_surface_single_covariance, gate_surface_mcmc_fixed_budget]
 metrics:
   primary: [false_alarm_rate, detection_power_at_fa_0.05]
 implemented: false

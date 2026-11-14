@@ -20,11 +20,12 @@ _STUBS: dict[str, str] = {
         "The contribution: view-level fault detection and exclusion (integrity monitoring) derived from an explicit "
         "measurement model (Sigma_r, whitened nuisance-projected statistics); params: "
         "consensus in {shared_surface, pairwise}, statistic in {energy_whitened_projected, "
-        "region_scan_matched, combined_region_scan_energy, evidence}, cross_fit in {True, False, exact_leave_one_view_out}, "
-        "densification in {fixed_N, adaptive_matched_final_N}, sources in {one_model_per_view, "
+        "region_scan_matched, combined_region_scan_energy, evidence}, surface in {closed_form_gaussian_primitives, 3dgs_mcmc_fixed_budget}, "
+        "leave_view_out in {subtraction, none_joint_surface, explicit_refit}, densification in {none}, sources in {one_model_per_view, "
         "ensemble_M_models_per_view}. Admission test per PLAN.md section 2 and "
         "src/sensorfault/elim/admission.py (grid form); detection theory in "
-        "src/sensorfault/eval/detection_theory.py."
+        "src/sensorfault/eval/detection_theory.py; closed-form surface in "
+        "src/sensorfault/eval/surface_model.py."
     ),
     "robust_kernel_pgo": (
         "Robust kernels in the pose graph, no gate; params: kernel in "

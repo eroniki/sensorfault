@@ -1,4 +1,4 @@
-# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.5: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 baselines:
 - id: no_gate
@@ -12,19 +12,23 @@ baselines:
 - id: gate_surface_evidence
   family: gate
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: evidence, cross_fit: true, densification: fixed_N}
+  params: {consensus: shared_surface, statistic: evidence, surface: closed_form_gaussian_primitives, leave_view_out: subtraction,
+    densification: none}
 - id: gate_surface_chi2
   family: gate
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: energy_whitened_projected, cross_fit: true, densification: fixed_N}
+  params: {consensus: shared_surface, statistic: energy_whitened_projected, surface: closed_form_gaussian_primitives,
+    leave_view_out: subtraction, densification: none}
 - id: gate_surface_region_scan
   family: gate
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: region_scan_matched, cross_fit: true, densification: fixed_N}
+  params: {consensus: shared_surface, statistic: region_scan_matched, surface: closed_form_gaussian_primitives,
+    leave_view_out: subtraction, densification: none}
 - id: gate_surface_combined
   family: gate
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: combined_region_scan_energy, cross_fit: true, densification: fixed_N}
+  params: {consensus: shared_surface, statistic: combined_region_scan_energy, surface: closed_form_gaussian_primitives,
+    leave_view_out: subtraction, densification: none}
 - id: gate_pairwise_evidence
   family: gate
   fuser: view_gate
@@ -36,15 +40,18 @@ baselines:
 - id: gate_surface_joint_fit
   family: ablation
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: evidence, cross_fit: false, densification: fixed_N}
-- id: gate_surface_adaptive
+  params: {consensus: shared_surface, statistic: evidence, surface: closed_form_gaussian_primitives, leave_view_out: none_joint_surface,
+    densification: none}
+- id: gate_surface_single_covariance
   family: ablation
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: evidence, cross_fit: true, densification: adaptive_matched_final_N}
-- id: gate_surface_exact_loo
-  family: reference_expensive
+  params: {consensus: shared_surface, statistic: evidence, surface: closed_form_gaussian_primitives, leave_view_out: subtraction,
+    densification: none, extent_uncertainty_separated: false}
+- id: gate_surface_mcmc_fixed_budget
+  family: ablation
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: evidence, cross_fit: exact_leave_one_view_out, densification: fixed_N}
+  params: {consensus: shared_surface, statistic: evidence, surface: 3dgs_mcmc_fixed_budget, leave_view_out: explicit_refit,
+    densification: none_relocation_only}
 - id: estimate_and_correct
   family: context
   fuser: estimate_and_correct

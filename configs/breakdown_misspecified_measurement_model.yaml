@@ -1,4 +1,4 @@
-# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.5: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: breakdown_misspecified_measurement_model
@@ -7,16 +7,15 @@ design: v2_view_level_gate
 hypothesis:
   id: breakdown
   prediction: 'The nominal model is wrong: ell off by 2x, sigma(.) off by 1.5x, no nugget, heavy tails,
-    or a very small K for Sigma_surf.'
+    or an overconfident (independence) surface.'
   falsification_criterion: Report how the false-alarm rate and the empirical MDB move with each misspecification;
     the gate is only as good as Sigma_r (links to H6 adequacy).
-  independent_variables: [ell_error_factor, sigma_error_factor, nugget, tail_index, K]
+  independent_variables: [ell_error_factor, sigma_error_factor, nugget, tail_index]
   controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     ell_error_factor: [0.5, 1, 2]
     sigma_error_factor: [0.67, 1, 1.5]
     nugget: [0.0, 0.2]
-    K: [3, 4, 6]
 baselines: [no_gate, gate_surface_evidence, rk_huber, vote_median, colmap_geom_consistency, soft_view_weights]
 metrics:
   primary: [detection_power_at_fa_0.05, no_consensus_rate, ate_rmse_sim3, fscore]
