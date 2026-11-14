@@ -1,39 +1,86 @@
 \section{Introduction}
 \label{sec:intro}
 
-Monocular-depth reconstruction, that is, image-based 3D reconstruction that uses a depth
-estimator's prediction for each image as a geometric prior, is increasingly common. A depth map predicted from a single image constrains the relative
-pose of two views, fills in regions where feature matching fails, and provides the
-surface that is fused at the end. Strong metric estimators are now available
-\cite{est_metric3dv2,est_unidepth,est_depthpro}, but a single-image prediction carries
-no redundancy: nothing in the image says whether it is right, and its errors are not
-independent of the scene. A model may be accurate on most views of a scene and fail
-coherently on a few, for example on reflective or transparent surfaces, in textureless
-regions, or where its training data does not cover the scene type. Henceforth, a
-\emph{depth source} denotes the depth map that one model predicts for one view, and a
-\emph{view-level fault} denotes a source whose depth is wrong in a spatially structured way
-(a smooth warp, a failed region, an inconsistent scale), as opposed to sparse pixel noise.
+A satellite navigation receiver cannot trust every satellite it tracks. Receiver autonomous
+integrity monitoring (RAIM) therefore checks the redundant measurements against each
+other, detects that one of them is inconsistent, excludes it, and raises an alert when it
+cannot guarantee the solution
+\cite{flt_raim_parkinson,flt_raim_sturza,flt_raim_brown,flt_raim_pervan}. Monocular-depth
+reconstruction, that is, image-based 3D reconstruction that uses a depth estimator's
+prediction for each image as a geometric prior, has the same problem. Strong metric
+estimators are now available \cite{est_metric3dv2,est_unidepth,est_depthpro}, but a
+single-image prediction carries no redundancy, nothing in the image says whether it is right,
+and its errors are not independent of the scene: a model may be accurate on most views and
+fail coherently on a few, on glass and other reflective surfaces, on sky, in textureless
+regions, or in scenes outside its training distribution. The redundancy is supplied by the
+other views of the same scene, and the question is the one RAIM asks of satellites: which
+view should not be trusted, and can the system say so? Henceforth, a \emph{depth source}
+denotes the depth map that one model predicts for one view, and a \emph{view-level fault}
+denotes a fault that moves a whole view coherently: a bias or warp of its depth, or an error
+in its pose.
 
+\paragraph{Core argument.}
+A coherent view-level fault adds a small bias to \emph{every pixel} of one view. At a
+per-pixel magnitude below the noise, for example $0.3\sigma$, each pixel looks healthy:
+pixel-wise consistency filters, which test one pixel at a time against a threshold of
+several $\sigma$, see almost nothing, because the probability that a pixel crosses the
+threshold hardly changes. Aggregated over the $n$ co-visible pixels of the view, the same
+bias is a large test statistic, because a consistent shift of $\delta\sigma$ in each of $n_{\mathrm{eff}}$
+effectively independent pixels shifts their mean by $\delta\sqrt{n_{\mathrm{eff}}}$ standard
+errors (Section~\ref{sec:method:detection}). The gate therefore wins exactly when faults are
+sub-noise per pixel but coherent across a view, which is how monocular depth fails on glass,
+sky and out-of-distribution scenes, and it should not win, and is not expected to, when a
+fault is large but confined to a few pixels, where pixel filters are the right tool. Robust
+kernels, the other standard defence, only down-weight a constraint when its residual is
+large, so a sub-noise coherent bias passes through them, and even when they act they give no
+statement about trust: they neither exclude the view nor tell the user that the output should
+not be relied on. The gate excludes the view and can raise a \emph{no consensus} alarm,
+as RAIM does.
+
+\paragraph{Approach.}
 This paper proposes \emph{view-level fault rejection} for monocular-depth reconstruction: a
-\emph{gate} that decides which views' depth maps to keep and which to drop \emph{before} pose
-graph optimisation and fusion. The gate tests each depth map once against a single shared
-Gaussian surface (a set of Gaussian splats) that is fitted from the other views and rendered
-at that view, instead of against every overlapping
-view, so that its cost grows with the number of views rather than the number of view
-pairs, and the surface, refitted on the kept depth maps, doubles as the fused output. The
-gate, including this consensus, is the contribution.
+\emph{gate} that performs fault detection and exclusion (FDE) on views before pose graph
+optimisation and fusion. The gate tests each depth map once against a single shared Gaussian
+surface (a set of Gaussian splats) that is fitted from the other views and rendered at that
+view, instead of against every overlapping view, so that its cost grows with the number of
+views rather than the number of view pairs, and the surface, refitted on the kept depth maps,
+doubles as the fused output. The gate, including this consensus and its integrity statements,
+is the contribution.
 
 To make the setting concrete we embed the gate in a test bed in which one depth model is
-applied to each RGB image, poses come from a partly end-to-end pose graph optimisation,
-and the whole serves as an alternative to a classical structure-from-motion (SfM)
-pipeline. The pipeline is the test bed: it supplies the depth maps, the poses and the
-downstream task on which the gate is evaluated, and we do not claim it as a new
-reconstruction system. A multi-model ensemble is studied only as an ablation, which asks
-whether models that share training data fail on the same views, and whether cross-model
-voting breaks where the gate does not.
+applied to each RGB image and poses come from a differentiable, renderable pose graph
+optimisation, which serves as an alternative to a classical structure-from-motion (SfM)
+pipeline. The pipeline is the test bed, not the framing: it supplies the depth maps, the poses
+and the downstream task on which the gate is evaluated, soft down-weighting inside it is a
+baseline, and we do not claim it as a new reconstruction system. A multi-model ensemble is
+studied only as an ablation, which asks whether models that share training data fail on the
+same views, and whether cross-model voting breaks where the gate does not.
 
 \subsection{Relevant Literature}
 \label{sec:intro:lit}
+\runin{Integrity monitoring and fault detection and exclusion.}
+In satellite navigation, a consistency test on the residuals of redundant ranges detects a
+fault when its statistic exceeds a threshold set by the allowed false-alarm probability
+\cite{flt_raim_parkinson,flt_raim_sturza,flt_raim_brown}; the smallest fault that is detected
+with a given probability of missed detection is the minimum detectable bias, and the
+\emph{protection level} bounds the position error that an undetected fault of that size can
+cause. Solution-separation and multiple-hypothesis tests compare the solution with and without
+each measurement, which identifies the faulty one so that it can be excluded
+\cite{flt_raim_brenner,flt_raim_pervan,flt_raim_joerger}, and advanced RAIM extends this to
+several constellations and to protection levels after exclusion
+\cite{flt_araim_baseline,flt_araim_pl_exclusion}. Integrity monitoring has been applied to
+LiDAR-based navigation, to detect unwanted objects \cite{flt_integrity_lidar}. Byzantine fault
+tolerance \cite{flt_lamport}, interval-based fusion of continuous-valued sensors
+\cite{flt_marzullo,flt_brooksiyengar} and random-sample-consensus methods
+\cite{flt_ransac,flt_msac} select a consistent subset of sources. In our earlier work we
+eliminated Byzantine accelerometers from a vibration-based localisation by building a
+consensus of per-sensor PDFs \cite{flt_ambarkutuk}, and used a joint likelihood over several
+sensors for dispersive wave propagation \cite{flt_ambarkutuk2024}. Testing a unit against a
+model that was fitted without it is the idea behind cross-validation and the jackknife; the
+gate applies it to depth sources, with a splat surface as the model. To our knowledge,
+integrity monitoring of this kind has not been applied to the views of a learned-depth
+reconstruction; this statement rests on a limited literature search.
+
 \runin{Monocular depth estimators.}
 MiDaS learns depth that is invariant to range and scale by mixing datasets
 \cite{est_midas}; Depth Anything V2 reports finer and more robust predictions from
@@ -71,9 +118,10 @@ normal \cite{fus_colmap_mvs}, or when other views do not see free space in front
 Pose graph and factor-graph solvers \cite{opt_g2o,opt_factorgraphs} are made robust to
 bad constraints with robust cost functions \cite{flt_huber,rob_blackrangarajan,rob_barron,rob_mactavish},
 graduated non-convexity \cite{rob_gnc}, switchable constraints \cite{rob_switchable},
-dynamic covariance scaling \cite{rob_dcs} and max-mixture models \cite{rob_maxmix}. These
-act on the residual of each constraint, after the constraint has been built from the
-depth map.
+dynamic covariance scaling \cite{rob_dcs} and max-mixture models \cite{rob_maxmix}; the last
+three were designed for false loop closures. These act on the residual of each constraint,
+after the constraint has been built from the depth map or the match, and down-weight it
+without a statement about trust.
 
 \runin{Learned reconstruction and differentiable optimisation.}
 DUSt3R reconstructs image collections without calibration or poses
@@ -86,66 +134,53 @@ differentiable nonlinear least squares on PyTorch \cite{opt_theseus}. We use MAS
 VGGT as reference points rather than rivals: they replace the pipeline, whereas the
 gate is a component that can precede one.
 
-\runin{Source-level fault detection and exclusion.}
-Excluding a faulty source from a redundant set is a classical problem; here the redundancy
-is supplied by the other views of the same scene. Byzantine fault
-tolerance \cite{flt_lamport}, interval-based fusion of continuous-valued sensors
-\cite{flt_marzullo,flt_brooksiyengar}, and receiver autonomous integrity monitoring
-with residual-based, solution-separation and multiple-hypothesis tests
-\cite{flt_raim_parkinson,flt_raim_brown,flt_raim_joerger,flt_raim_pervan} detect and
-exclude a faulty source, and random-sample-consensus methods select a consistent subset
-\cite{flt_ransac,flt_msac}. In our earlier work we eliminated Byzantine accelerometers
-from a vibration-based localisation by building a consensus of per-sensor PDFs
-\cite{flt_ambarkutuk}, and used a joint likelihood over several sensors for dispersive
-wave propagation \cite{flt_ambarkutuk2024}. Testing a unit against a model that was
-fitted without it is the idea behind cross-validation and the jackknife; the gate applies
-it to depth sources, with a splat surface as the model.
-
 \runin{Positioning.}
 Pixel filters, robust kernels and voting decide at a different unit and stage from the
 gate: pixel filters per pixel and after poses are fixed, kernels per constraint and after
-the constraint exists, voting per pixel across views (or, in the ablation, across models). A coherent view-level fault is
-neither sparse nor independent across pixels, so none of these is designed to attribute
-it to a source, and comparing every view with every overlapping view makes the check cost
-grow with the number of view pairs. To our knowledge, a gate that decides trust per depth
-view before pose graph optimisation, against a shared splat surface, has not been studied
-in this setting; this statement rests on a
-limited literature search and will be re-checked before submission.
-\TODO{Final literature pass over IEEE Xplore and Google Scholar: depth-prior filtering in SfM or SLAM,
-  and uncertainty-aware use of monocular depth in pose graphs.}
+the constraint exists, voting per pixel across views (or, in the ablation, across models), and
+none of them excludes a view or states that the output is not trustworthy. A coherent
+view-level fault is neither sparse nor independent across pixels, so none of these is
+designed to attribute it to a view, and comparing every view with every overlapping view makes
+the check cost grow with the number of view pairs.
+\TODO{Final literature pass over IEEE Xplore and Google Scholar: integrity monitoring for
+  visual or learned-depth navigation, depth-prior filtering in SfM or SLAM, and
+  uncertainty-aware use of monocular depth in pose graphs.}
 
-\subsection{Challenges in Using Monocular Depth Before Pose Estimation}
+\subsection{Challenges in Monitoring the Integrity of Monocular Depth}
 \label{sec:intro:challenges}
 Several challenges limit current approaches.
 \begin{enumerate}
-  \item[\textbf{C1.}] \textbf{View-level faults are coherent.} When a model
-        fails on a view, its error is smooth or confined to a region, so most pixels
-        of the view still look plausible. Per-pixel consistency filters decide pixel
-        by pixel and can keep a warped depth map whose pixels agree with each other,
-        and a robust kernel only down-weights a constraint after the faulty depth has
-        entered the graph. Where the faulty view is covered by few neighbours, or
-        where several neighbouring views fail together, a vote over pixels has no
-        majority to rely on.
-  \item[\textbf{C2.}] \textbf{Monocular depth has no exact reference scale.} Even metric
+  \item[\textbf{C1.}] \textbf{Coherent faults are sub-noise per pixel.} A fault that moves a
+        whole view (a depth bias or warp, a pose prior error, a false loop closure) adds a
+        small shift to every pixel, so each pixel stays within its noise and a per-pixel
+        filter has almost no power. The evidence is in the aggregate over the view, and its
+        strength depends on the number of effectively independent pixels and on the fraction
+        of the view that is affected (Section~\ref{sec:method:detection}).
+  \item[\textbf{C2.}] \textbf{Down-weighting gives no trust statement.} Robust kernels and soft
+        view weights reduce the influence of a constraint with a large residual; they do not
+        exclude the view, do not state a false-alarm or missed-detection probability, and do not
+        tell the user when the output should not be relied on. An integrity monitor needs
+        detection, exclusion and an alarm.
+  \item[\textbf{C3.}] \textbf{Monocular depth has no exact reference scale.} Even metric
         models are only approximately metric, and some outputs are affine-invariant, so a
         view's depth can be compared with the others only after fitting a scale and shift.
         That fit can absorb part of a fault and make the faulty view look consistent, so
         the comparison must be made against a reference, and after an alignment, that were
         fitted without the view under test.
-  \item[\textbf{C3.}] \textbf{A single model gives no redundancy within a view.} Only
+  \item[\textbf{C4.}] \textbf{A single model gives no redundancy within a view.} Only
         other views can expose a failure, and an ensemble does not obviously help: models
         trained on overlapping data may fail on the same views, so a majority of an
         ensemble can be wrong together. A gate must therefore be able to answer \emph{no
         consensus}, for example when too few other views observe the region.
-  \item[\textbf{C4.}] \textbf{Disagreement is not always a fault.} Occlusion, low
+  \item[\textbf{C5.}] \textbf{Disagreement is not always a fault.} Occlusion, low
         overlap and moving content make views disagree for reasons unrelated to
         the quality of the depth, so residuals must be compared only on pixels that are
         visible at the view under test and supported by the reference.
-  \item[\textbf{C5.}] \textbf{The consensus criterion must detect disagreement.} A
+  \item[\textbf{C6.}] \textbf{The consensus criterion must detect disagreement.} A
         criterion that rewards the precision of the combined estimate, as the entropy
         test of our earlier work does as published, cannot distinguish an agreeing
         source from a sharp but biased one.
-  \item[\textbf{C6.}] \textbf{Pairwise checks do not scale with overlap.} Comparing every
+  \item[\textbf{C7.}] \textbf{Pairwise checks do not scale with overlap.} Comparing every
         view with every overlapping view costs in proportion to the number of view
         pairs, which grows faster than the number of views when overlap is dense. A
         single shared surface avoids this, but a surface fitted to the view under
@@ -156,8 +191,10 @@ Several challenges limit current approaches.
 \subsection{Baseline Study and Overview of the Fundamental Differences}
 \label{sec:intro:baseline}
 The gate must beat three families of baselines, which act at different units and
-stages and at different cost (Table~\ref{tab:diff}): robust kernels in the pose graph, the geometric
-consistency filter of COLMAP \cite{fus_colmap_mvs}, and plain voting. Cross-model voting is studied separately, in the ensemble ablation. MASt3R-SfM and
+stages (Table~\ref{tab:diff}): robust kernels in the pose graph (with soft per-view
+down-weighting inside the differentiable optimisation as their closest relative), the
+geometric consistency filter of COLMAP \cite{fus_colmap_mvs}, and plain voting.
+Cross-model voting is studied separately, in the ensemble ablation. MASt3R-SfM and
 VGGT are reference points. The consensus criterion adapted for the gate comes from our
 earlier Byzantine sensor elimination (BSE) \cite{flt_ambarkutuk}, which localised
 footsteps from the signal energies of floor-mounted accelerometers: each sensor gave a
@@ -166,63 +203,71 @@ greedily from the best pair under an entropy criterion. Here the sources are vie
 PDF of a source is a per-pixel depth distribution, the consensus is a rendered splat
 surface instead of a product of source PDFs, and the admission test is corrected
 (Section~\ref{sec:method:admission}); the earlier set-growing consensus survives only in
-the pairwise comparison variant (Appendix~\ref{app:pairwise}).
+the pairwise comparison variant (Appendix~\ref{app:pairwise}). The cost of the pairwise
+variant, and of the shared surface, is analysed in Section~\ref{sec:method:cost}.
 \begin{table}[t]
-\caption{\textbf{Where each method decides and what it costs.} $N$ views, mean co-visibility degree $\bar d$, $K$ folds.}
+\caption{\textbf{Where each method decides and what it states.}}
 \label{tab:diff}
 \centering
 \small
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{p{0.21\columnwidth}p{0.20\columnwidth}p{0.24\columnwidth}p{0.20\columnwidth}}
+\begin{tabular}{p{0.21\columnwidth}p{0.19\columnwidth}p{0.22\columnwidth}p{0.22\columnwidth}}
 \toprule
-Method & Decision unit & Stage & Cost \\
+Method & Decision unit & Stage & Excludes? Alarm? \\
 \midrule
-Robust kernel & Constraint (graph edge) & Inside the pose graph, after edges are built & Per edge \\
-COLMAP consistency filter & Pixel & After poses, before fusion & $\propto N\bar d$ \\
-Plain voting & Pixel, across views & Before or after fusion & $\propto N\bar d$ \\
-Gate, pairwise (variant) & Depth source (view) & Before the pose graph & $\propto N\bar d$ \\
-\textbf{Gate, shared surface (this work)} & \textbf{Depth source (view)} & \textbf{Before the pose graph and fusion} & $\propto N$, plus $K{+}1$ fits \\
+Robust kernel & Constraint (graph edge) & Inside the pose graph, after edges are built & Down-weights; no alarm \\
+Soft view weights & View & Inside the differentiable pose graph & Down-weights; no alarm \\
+COLMAP consistency filter & Pixel & After poses, before fusion & Drops pixels; no alarm \\
+Plain voting & Pixel, across views & Before or after fusion & Drops pixels; no alarm \\
+Gate, pairwise (variant) & View & Before the pose graph & Excludes; no consensus \\
+\textbf{Gate, shared surface (this work)} & \textbf{View} & \textbf{Before the pose graph and fusion} & \textbf{Excludes; no-consensus alarm} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Summary of the Contributions}
 \label{sec:intro:contrib}
-This paper presents a view-level gate for depth sources. The following points summarise
-the contributions.
+This paper presents view-level fault detection and exclusion for monocular-depth
+reconstruction. The following points summarise the contributions.
 \begin{itemize}
-  \item \textbf{A view-level gate for depth sources} (addresses C1 and C3): each view's
-        depth map is kept or dropped before pose graph optimisation and fusion, with
-        \emph{no consensus} as an explicit outcome (Section~\ref{sec:method:gate}).
-  \item \textbf{A shared Gaussian-splat surface as the consensus} (addresses C2 and C6):
-        every depth map is tested once against a fixed-budget surface fitted from the
-        other views and rendered at its view, by cross-fitting so that a view never meets
-        a surface fitted to it, at a cost that grows with the number of views, and refitted
-        on the kept depth maps as the fused output
-        (Sections~\ref{sec:method:surface} and~\ref{sec:method:cost}).
-  \item \textbf{Visibility-aware comparison with alignment} (addresses C2 and C4): depth is
+  \item \textbf{An integrity-monitoring formulation} (addresses C1 and C2): a view-level
+        test with a stated false-alarm rate, a minimum detectable bias that depends on the
+        number of effectively independent pixels and the affected fraction, exclusion of the
+        faulty view before pose graph optimisation and fusion, and a \emph{no consensus}
+        alarm; and, under stated assumptions, a conditional protection level on the fused
+        output (Sections~\ref{sec:method:detection},~\ref{sec:method:elim} and~\ref{sec:method:pl}).
+  \item \textbf{A shared Gaussian surface as the consensus} (addresses C3 and C7): every
+        depth map is tested once against a fixed-budget surface fitted from the other views
+        and rendered at its view, by cross-fitting so that a view never meets a surface fitted
+        to it, at a cost that grows with the number of views, and refitted on the kept depth
+        maps as the fused output (Sections~\ref{sec:method:surface} and~\ref{sec:method:cost}).
+  \item \textbf{Visibility-aware comparison with alignment} (addresses C3 and C5): depth is
         compared after a scale-and-shift fit, on pixels the surface supports and that are
         visible at the view (Section~\ref{sec:method:consensus}).
-  \item \textbf{A corrected admission criterion} (addresses C5): a Bayes-factor test
+  \item \textbf{A corrected admission criterion} (addresses C6): a Bayes-factor test
         with an analysis of when the entropy criterion reduces to a leave-one-out
         chi-square test and when it does not (Section~\ref{sec:method:admission}).
+  \item \textbf{Depth and pose fault models and a regime map}: coherent bias, warp and region
+        failures of depth, spoofed pose priors, intermittent pose glitches and false loop
+        closures, and a sweep of per-pixel bias against the fraction of the view affected that
+        shows where pixel filters and robust kernels fail and the gate does not, and where the
+        reverse holds (Sections~\ref{sec:method:forward} and~\ref{sec:setup:faults}).
   \item \textbf{A test bed and a pre-registered protocol}: one metric depth model per image
-        and a partly end-to-end pose graph, seven falsifiable hypotheses, injected and
-        natural view-level faults, explicit breakdown scenarios, the three baseline families
-        plus a pairwise gate, and an ensemble ablation that tests whether models fail on the
-        same views and whether cross-model voting breaks where the gate does not
+        and a differentiable, renderable pose graph, ten falsifiable hypotheses that test when
+        view-level gating helps and when it does not, explicit breakdown scenarios, the baseline
+        families plus a pairwise gate, and an ensemble ablation
         (Sections~\ref{sec:method:pipeline},~\ref{sec:method:ensemble} and~\ref{sec:setup}).
 \end{itemize}
-\TODO{Replace the preceding list by result-bearing contributions once H1--H7
+\TODO{Replace the preceding list by result-bearing contributions once H1--H10
   are evaluated; keep only claims supported by the final tables.}
 
 \subsection{Organization of the Paper}
 \label{sec:intro:org}
 The rest of the paper is organized as follows. Section~\ref{sec:method} presents the
-method: the notation, the forward model of a depth source, the inverse problem of pose
-graph optimisation with depth sources, the view-level gate with its shared-surface
-consensus, and the test-bed pipeline.
+method: the notation, the forward model of a (possibly faulty) view, the inverse problem of
+pose graph optimisation, the view-level gate with its detection theory, shared-surface
+consensus, exclusion and protection level, and the test-bed pipeline.
 Section~\ref{sec:setup} describes the experiments, and Section~\ref{sec:results} reports
 the results. Section~\ref{sec:conclusion} presents the conclusions, the limitations and
-future work. Derivations, the proof of the equivalence proposition, and the pairwise
-comparison variant of the gate are in the appendices.
+future work. Derivations, the proof of the equivalence proposition, the pairwise
+comparison variant of the gate, and the detection analysis are in the appendices.

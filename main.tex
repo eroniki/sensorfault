@@ -39,26 +39,25 @@
 
 \begin{abstract}
 Monocular-depth reconstruction uses a depth model's prediction for each image as a geometric
-prior, but a model can fail coherently on some views, producing a smooth warp or a failed
-region rather than sparse pixel noise. Pixel-wise consistency filters, robust kernels in the
-pose graph, and plain voting decide at the wrong unit or too late. This paper proposes
-view-level fault rejection: a gate that decides which views' depth maps to keep before pose
-graph optimisation and fusion. Each depth map, produced by one metric model per image, is
-tested once against a shared Gaussian surface that is fitted from the other views with a
-fixed number of splats and rendered at its view, so that the cost grows with the number of
-views rather than view pairs and the surface doubles as the fused output. A view is kept only
-if its mean log Bayes factor against the rendering passes a calibrated threshold; otherwise
-the gate returns no consensus. The test corrects an entropy criterion from earlier work on
-Byzantine sensor elimination, which cannot distinguish an agreeing source from a sharp but
-biased one. The gate is evaluated in a test bed with a partly end-to-end pose graph against
-robust kernels, the COLMAP geometric consistency filter, plain voting, and a pairwise gate;
-an ablation asks whether several models fail on the same views. A pre-registered protocol
-states seven falsifiable hypotheses and breakdown scenarios.
+prior, but a model can fail coherently on some views, as on glass, sky and out-of-distribution
+scenes. Such a fault adds a small bias to every pixel of a view: below the noise at each pixel,
+so pixel-wise consistency filters cannot see it, yet large when aggregated over the view's
+co-visible pixels. Robust kernels only down-weight a bad view and make no statement about
+trust. This paper proposes view-level fault rejection in the spirit of receiver autonomous
+integrity monitoring: a gate that detects a faulty view, excludes it before pose graph
+optimisation and fusion, and raises a no-consensus alarm when it cannot decide. Each depth map,
+produced by one metric model per image, is tested once against a shared Gaussian surface fitted
+from the other views with a fixed number of splats, so that the cost grows with the number of
+views and the surface doubles as the fused output. We state the minimum detectable bias and,
+under stated assumptions, a conditional protection level. The gate is evaluated in a
+differentiable, renderable pose-graph test bed against robust kernels, soft down-weighting, a
+COLMAP consistency filter, voting and a pairwise gate, under depth and pose faults. A
+pre-registered protocol states ten falsifiable hypotheses, including where gating does not help.
 \textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 
 \begin{keywords}
-3D reconstruction, Byzantine fault tolerance, fault rejection, Gaussian splatting,
+3D reconstruction, fault detection and exclusion, Gaussian splatting, integrity monitoring,
 monocular depth estimation, pose graph optimisation, robust estimation.
 \end{keywords}
 

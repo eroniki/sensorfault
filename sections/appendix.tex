@@ -64,3 +64,37 @@ and variance of $p_C$. Its cost is $C_{\mathrm{pair}}$ of Section~\ref{sec:metho
 \STATE Among admissible sets $C'$ with $|\mathcal{N}(i)|-|C'|\le F$, \textbf{return} $\argmin_{C'}H(C')$
 \end{algorithmic}
 \end{algorithm}
+
+\section{Detection Analysis}
+\label{app:detection}
+Let $\rho_u$, $u=1,\dots,n_{\mathrm{eff}}$, be standardised residuals, independent with unit variance.
+
+\emph{Mean-shift statistic.} Under a bias $\delta$ on a fraction $f$ of the pixels,
+$\mathbb{E}[\rho_u]=\delta$ on $f n_{\mathrm{eff}}$ pixels and $0$ elsewhere, so
+$z=n_{\mathrm{eff}}^{-1/2}\sum_u\rho_u\sim\mathcal{N}(f\delta\sqrt{n_{\mathrm{eff}}},1)$. A two-sided test
+at false-alarm probability $\alpha$ has power $\Phi(f\delta\sqrt{n_{\mathrm{eff}}}-z_\alpha)+\Phi(-f\delta\sqrt{n_{\mathrm{eff}}}-z_\alpha)$,
+which is at least $1-\beta$ when $f\delta\sqrt{n_{\mathrm{eff}}}\ge z_\alpha+z_\beta$, giving
+\eqref{eq:mdb}. A Monte Carlo check with $n_{\mathrm{eff}}=1000$, $\delta=0.3$, $f=0.5$ gives a
+false-alarm rate of 0.051 and a power of 0.997, as predicted.
+
+\emph{Energy statistic.} For a zero-mean field of rms amplitude $\delta$ on a fraction $f$ of
+the pixels, $\mathbb{E}[T]=1+f\delta^{2}$ and $\mathrm{Var}[T]\approx(2+4f\delta^{2})/n_{\mathrm{eff}}$, so to
+leading order the field is detected when $f\delta^{2}\sqrt{n_{\mathrm{eff}}/2}\ge z_\alpha+z_\beta$, that is
+$\delta_{\min}=\bigl(\sqrt2(z_\alpha+z_\beta)/(f\sqrt{n_{\mathrm{eff}}})\bigr)^{1/2}\propto n_{\mathrm{eff}}^{-1/4}$. For
+$\alpha=0.05$, $\beta=0.1$, $n_{\mathrm{eff}}=1000$ and $f=1$ this is $0.38$. The mean of such a field is
+zero, so the mean-shift statistic is blind to it: in a Monte Carlo check with an rms amplitude of
+$0.5\sigma$ and $n_{\mathrm{eff}}=1000$, the energy statistic has a power of 0.998 at 5\% false alarm,
+and the mean-shift statistic of 0.118, close to the false-alarm rate.
+
+\emph{Pixel-wise filter.} A pixel is flagged when $|\rho_u|>k$. The flagging probability is
+$g(\delta)=\Phi(\delta-k)+\Phi(-\delta-k)$ with $g(0)=2\Phi(-k)=P_{\mathrm{fa}}$, $g'(0)=0$ and
+$g''(0)=2k\phi(k)$, so $g(\delta)-P_{\mathrm{fa}}\approx k\phi(k)\delta^{2}$. For $k=3$ and $\delta=0.3$,
+$g=0.0040$ against $P_{\mathrm{fa}}=0.0027$. Counting the flagged pixels of the view gives the
+statistic $z_{\mathrm{cnt}}=f\,(g(\delta)-P_{\mathrm{fa}})\sqrt{n_{\mathrm{eff}}}/\sqrt{P_{\mathrm{fa}}(1-P_{\mathrm{fa}})}$.
+With $n_{\mathrm{eff}}=1000$ and $\delta=0.3$, $z_{\mathrm{cnt}}=0.76f$ against $z=9.5f$, a ratio of 12.4. The ratio
+$R(\delta)=(g(\delta)-P_{\mathrm{fa}})/(\delta\sqrt{P_{\mathrm{fa}}(1-P_{\mathrm{fa}})})$ of the count
+statistic to the mean-shift statistic is below one for small $\delta$ and reaches one at
+$\delta\approx1.65$ for $k=3$, so the count is the better statistic only for larger bias, and
+the unaggregated filter, which makes a decision per pixel, is weaker still. The first-order
+sensitivity of the mean-shift statistic ($\propto\delta$) against the second-order sensitivity of
+the count ($\propto\delta^{2}$) is the reason for the sub-noise advantage of the gate.

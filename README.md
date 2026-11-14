@@ -16,11 +16,13 @@ latexmk -pdf main.tex        # output: build/main.pdf (needs TeX Live; uses ./la
 `draft_v0.pdf` is the last committed build.
 
 ## Outline (follows the section pattern of the author's Sensors 23(23):9309 and 24(23):7744; IEEE Access mandates none)
-Abstract + Index Terms; I Introduction (A Relevant Literature, B Challenges (C1-C6), C Baseline Study and
-Fundamental Differences, D Summary of the Contributions, E Organization); II Method (A Definitions and
-Notation, B Forward Problem, C Inverse Problem, D View-Level Gate (shared-surface consensus by cross-fitting), E Test Bed); III Experiments
-(A Experimental Setup, B Hypotheses and Breakdown Scenarios, C Implementation); IV Results;
-V Conclusions and Future Work (with Limitations); Appendices A-B.
+Abstract + Index Terms; I Introduction (RAIM-style integrity-monitoring framing and core argument; A Relevant Literature,
+B Challenges C1-C7, C Baseline Study and Fundamental Differences, D Summary of the Contributions, E Organization);
+II Method (A Definitions and Notation, B Forward Problem with depth and pose faults, C Inverse Problem, D View-Level Gate:
+surface consensus, detection statistics and minimum detectable bias, corrected admission, cost, exclusion and alarms,
+conditional protection level; E Ensemble Variant; F Test Bed); III Experiments (A Experimental Setup, B Hypotheses H1-H10
+and Breakdown Scenarios, C Implementation); IV Results (regime map first); V Conclusions and Future Work (with
+Limitations); Appendices A-D.
 
 ## Layout
 - `main.tex` front matter, abstract, section includes

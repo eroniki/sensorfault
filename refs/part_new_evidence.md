@@ -31,3 +31,10 @@ rec_droidslam | arXiv 2108.10869 (venue from the arXiv comment field; no DOI/pag
 opt_theseus | arXiv 2207.09442 (venue from the arXiv comment field; no DOI/pages seen) | {Theseus}: A Library for Differentiable Nonlinear Optimization
 ens_deepensembles | arXiv 1612.01474 (venue from the arXiv comment field; no DOI/pages seen) | Simple and Scalable Predictive Uncertainty Estimation using Deep Ensem
 flt_ambarkutuk2024 | https://api.crossref.org/works/10.3390/s24237744 (also author site bib, EuropePMC PMC11644851)
+
+# RAIM / integrity references added for the integrity-monitoring framing (2026-11-14)
+flt_raim_sturza | https://api.crossref.org/works/10.1002/j.2161-4296.1988.tb00975.x | Mark A. Sturza | Navigation System Integrity Monitoring Using Redundant Measu | Navigation 1988
+flt_raim_brenner | https://api.crossref.org/works/10.1002/j.2161-4296.1996.tb01920.x | Mats Brenner | Integrated {GPS}/Inertial Fault Detection Availability | Navigation 1996
+flt_araim_baseline | https://api.crossref.org/works/10.1109/taes.2014.130739 | Juan Blanch and Todd Walter and Per Enge and Young Lee and B | Baseline advanced {RAIM} user algorithm and possible improve | IEEE Transactions on Aerospace and Elect 2015
+flt_araim_pl_exclusion | https://api.crossref.org/works/10.1002/navi.210 | Juan Blanch and Todd Walter and Per Enge | Protection Levels after Fault Exclusion for Advanced {RAIM} | Navigation 2017
+flt_integrity_lidar | https://api.crossref.org/works/10.3390/s18082740 | Mathieu Joerger and Guillermo Duenas Arana and Matthew Spenk | A New Approach to Unwanted-Object Detection in {GNSS}/{LiDAR | Sensors 2018
