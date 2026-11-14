@@ -15,7 +15,7 @@ hypothesis:
   levels:
     gate_placement: [none, before_pgo, after_pgo]
     robust_kernel: [none, huber, geman_mcclure_gnc]
-baselines: [no_gate, gate_evidence, rk_huber, rk_gm_gnc]
+baselines: [no_gate, gate_surface_evidence, rk_huber, rk_gm_gnc]
 metrics:
   primary: [ate_rmse_sim3, rpe]
 implemented: false

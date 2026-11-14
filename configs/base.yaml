@@ -25,6 +25,20 @@ tuning:
   dev_only: true
   budget_reported: true
   null_calibration: {target_false_exclusion: 0.05, method: clean_run_permutation, n_permutations: 200}
+shared_surface:
+  representation: gaussian_splats
+  n_splats: TODO fix on dev scenes
+  fixed_budget: true
+  densification: none_relocation_only_3dgs_mcmc
+  depth_only: true
+  losses: [robust_depth, accumulated_alpha, anisotropy_cap, depth_distortion, normal_consistency]
+  cross_fit:
+    folds_K: [3, 4, 6]
+    fold_layout: contiguous_blocks_of_neighbouring_views
+  iterations_n_it: TODO
+  support: {alpha_threshold: TODO, min_supported_fraction: TODO}
+  output: surface refitted on admitted sources is the fused output; TSDF of same depth is a secondary
+    check
 shared_inputs_for_all_methods: [images, matches, depth_ensemble, fault_realisations, pose_graph_solver]
 implemented: {configs: true, fault_injectors: false, view_gate: false, testbed_pipeline: false, note: 'Only
     configs, registry stubs (baselines/gate_testbed.py) and the grid-form admission test (elim/admission.py)

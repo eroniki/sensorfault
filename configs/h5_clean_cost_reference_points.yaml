@@ -14,7 +14,7 @@ hypothesis:
   controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
   levels:
     data_kind: [clean, natural_failures]
-baselines: [no_gate, gate_evidence, mast3r_sfm, vggt, colmap_sfm]
+baselines: [no_gate, gate_surface_evidence, mast3r_sfm, vggt, colmap_sfm]
 metrics:
   primary: [ate_rmse_sim3, fscore, pose_auc_at_5_10_30deg]
   clean_cost_threshold: 0.05

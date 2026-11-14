@@ -14,9 +14,10 @@ CFG = Path(__file__).resolve().parents[2] / "configs"
 HYP = [
     "h1_view_level_gate_vs_baselines",
     "h2_evidence_vs_chi2",
-    "h3_alignment_visibility",
+    "h3_cross_fitting_alignment_support",
     "h4_gate_placement",
     "h5_clean_cost_reference_points",
+    "h6_shared_surface_vs_pairwise",
 ]
 BREAK = [
     "common_mode_estimators",
@@ -24,6 +25,7 @@ BREAK = [
     "sub_noise",
     "sparse_outliers_control",
     "low_overlap",
+    "faulty_views_dominate_surface",
     "poor_provisional_poses",
 ]
 
@@ -68,7 +70,25 @@ def test_hypotheses_match_the_manuscript_ids():
         "H3",
         "H4",
         "H5",
+        "H6",
     ]
+
+
+def test_h6_covers_efficiency_robustness_and_fixed_budget():
+    c = load_config(CFG / "h6_shared_surface_vs_pairwise.yaml")
+    assert {"gate_pairwise_evidence", "gate_surface_evidence", "gate_surface_adaptive"} <= set(
+        c["baselines"]
+    )
+    assert c["metrics"]["speedup_threshold"] == 2.0
+    ids = baseline_ids()
+    assert all(ids[b] == "view_gate" for b in c["baselines"])
+
+
+def test_shared_surface_params_are_declared():
+    c = load_config(CFG / "base.yaml")
+    ss = c["shared_surface"]
+    assert ss["fixed_budget"] is True and ss["depth_only"] is True
+    assert ss["cross_fit"]["folds_K"] == [3, 4, 6]
 
 
 def test_fault_grid_and_ensemble_files_exist():

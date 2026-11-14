@@ -3,7 +3,8 @@
 Research scaffold for a **view-level gate** that decides which monocular depth sources to trust
 before pose graph optimisation and fusion (design v2). The gate is the contribution; the pipeline
 (RGB images, an ensemble of monocular depth estimators, a partly end-to-end pose graph, fusion) is
-the test bed. Baselines the gate must beat: robust kernels in the pose graph, COLMAP's geometric
+the test bed. The gate tests each source once against a single shared Gaussian-splat surface
+(cross-fitted, fixed budget) that also serves as the fused output. Baselines the gate must beat: robust kernels in the pose graph, COLMAP's geometric
 consistency filter, plain voting; MASt3R-SfM and VGGT are reference points. See `PLAN.md`.
 
 **Status:** configs, registry stubs and tests exist; the test bed, view-level fault injectors and
@@ -49,9 +50,10 @@ Optional extras: `pip install -e ".[tsdf]"` (Open3D), `".[gs]"` (torch, gsplat),
 |---|---|---|
 | H1 | The view-level gate beats robust kernels, the COLMAP filter and plain voting under coherent view-level faults | `configs/h1_view_level_gate_vs_baselines.yaml` |
 | H2 | The evidence criterion beats leave-one-source-out chi-square only where Gaussian assumptions break | `configs/h2_evidence_vs_chi2.yaml` |
-| H3 | Alignment fitted without the source under test and a visibility mask keep clean false exclusion <=5% | `configs/h3_alignment_visibility.yaml` |
+| H3 | Surface fitted without the source's view (cross-fitting), alignment and a support mask keep clean false exclusion <=5% | `configs/h3_cross_fitting_alignment_support.yaml` |
 | H4 | Gating before pose graph optimisation beats gating after; gate + robust kernel >= either alone | `configs/h4_gate_placement.yaml` |
 | H5 | Price of gating on clean data <=5%; reference points (MASt3R-SfM, VGGT) are context only | `configs/h5_clean_cost_reference_points.yaml` |
+| H6 | Shared splat surface vs pairwise checks: cost grows with views not view pairs (dense overlap), non-inferior power, fixed budget beats adaptive densification | `configs/h6_shared_surface_vs_pairwise.yaml` |
 
 Breakdown scenarios: `configs/breakdown_*.yaml`; ablations: `configs/ablations_gate.yaml`. All are
 `preregistered_draft` and flagged `implemented: false`. The manuscript is in the private repo

@@ -8,14 +8,34 @@ baselines:
   family: upper_bound
   fuser: oracle_gate
   params: {}
-- id: gate_loo_chi2
+- id: gate_surface_evidence
   family: gate
   fuser: view_gate
-  params: {statistic: chi2}
-- id: gate_evidence
+  params: {consensus: shared_surface, statistic: evidence, cross_fit: true, densification: fixed_N}
+- id: gate_surface_chi2
   family: gate
   fuser: view_gate
-  params: {statistic: evidence}
+  params: {consensus: shared_surface, statistic: chi2, cross_fit: true, densification: fixed_N}
+- id: gate_pairwise_evidence
+  family: gate
+  fuser: view_gate
+  params: {consensus: pairwise, statistic: evidence}
+- id: gate_pairwise_chi2
+  family: gate
+  fuser: view_gate
+  params: {consensus: pairwise, statistic: chi2}
+- id: gate_surface_joint_fit
+  family: ablation
+  fuser: view_gate
+  params: {consensus: shared_surface, statistic: evidence, cross_fit: false, densification: fixed_N}
+- id: gate_surface_adaptive
+  family: ablation
+  fuser: view_gate
+  params: {consensus: shared_surface, statistic: evidence, cross_fit: true, densification: adaptive_matched_final_N}
+- id: gate_surface_exact_loo
+  family: reference_expensive
+  fuser: view_gate
+  params: {consensus: shared_surface, statistic: evidence, cross_fit: exact_leave_one_view_out, densification: fixed_N}
 - id: estimate_and_correct
   family: context
   fuser: estimate_and_correct

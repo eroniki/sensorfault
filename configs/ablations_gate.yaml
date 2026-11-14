@@ -3,24 +3,29 @@ extends: base.yaml
 id: ablations_gate
 status: preregistered_draft
 design: v2_view_level_gate
-note: A0..A7 reconstructed for design v2; not in the manuscript tables beyond H3.
+note: A0..A10 for design v2 with the shared-surface consensus; not in the manuscript tables beyond H3
+  and H6.
 hypothesis:
   id: H3
-  prediction: see h3_alignment_visibility.yaml
-  falsification_criterion: see h3
+  prediction: see h3_cross_fitting_alignment_support.yaml and h6
+  falsification_criterion: see h3 / h6
   independent_variables: [variant]
   controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
   levels: {}
 ablations:
-- {id: A0, name: full gate (evidence criterion)}
-- {id: A1, name: joint alignment (source under test included)}
-- {id: A2, name: no visibility mask}
+- {id: A0, name: 'full gate (shared surface, cross-fitted, fixed N_s, evidence criterion)'}
+- {id: A1, name: no cross-fitting (joint fit)}
+- {id: A2, name: no support mask}
 - {id: A3, name: no grazing gate}
 - {id: A4, name: chi-square statistic instead of evidence}
 - {id: A5, name: literal Algorithm 1 of the earlier BSE paper (bugs flagged)}
-- {id: A6, name: no cross-view supporting evidence (ensemble only)}
-- {id: A7, name: no estimator-level escalation (CUSUM off)}
-baselines: [gate_evidence, gate_loo_chi2]
+- {id: A6, name: pairwise consensus instead of shared surface}
+- {id: A7, name: adaptive densification at matched final size}
+- {id: A8, name: exact leave-one-view-out refit (reference)}
+- {id: A9, name: surface with photometric term (RGB) in the fit}
+- {id: A10, name: no estimator-level escalation (CUSUM off)}
+baselines: [gate_surface_evidence, gate_surface_chi2, gate_surface_joint_fit, gate_pairwise_evidence,
+  gate_surface_adaptive, gate_surface_exact_loo]
 metrics:
   primary: [false_exclusion_rate_clean, power_at_fer_0.05]
 implemented: false

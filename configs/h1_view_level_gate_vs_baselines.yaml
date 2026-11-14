@@ -22,7 +22,7 @@ hypothesis:
     p: [0.1, 0.2, 0.4, 0.6]
     layout: [scattered, clustered]
 baselines: [rk_huber, rk_cauchy, rk_gm_gnc, colmap_geom_consistency, vote_median, vote_majority, no_gate,
-  gate_loo_chi2, gate_evidence, oracle_gate]
+  gate_surface_chi2, gate_surface_evidence, gate_pairwise_evidence, oracle_gate]
 metrics:
   primary: [ate_rmse_sim3, fscore]
   relative_reduction_threshold: 0.25

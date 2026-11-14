@@ -11,7 +11,7 @@ hypothesis:
   controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
   levels:
     overlap_fraction: [0.1, 0.3, 0.5]
-baselines: [no_gate, gate_evidence, rk_huber, vote_median, colmap_geom_consistency]
+baselines: [no_gate, gate_surface_evidence, rk_huber, vote_median, colmap_geom_consistency]
 metrics:
   primary: [ate_rmse_sim3, fscore, precision, recall]
 implemented: false

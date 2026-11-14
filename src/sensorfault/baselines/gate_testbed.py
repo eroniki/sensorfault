@@ -17,8 +17,10 @@ _STUBS: dict[str, str] = {
     "no_gate": "Test bed with every depth source trusted and a quadratic pose-graph cost.",
     "oracle_gate": "Upper bound: excludes exactly the faulty sources (manifest or laser reference).",
     "view_gate": (
-        "The contribution: view-level gate; params: statistic in {chi2, evidence}. "
-        "Admission test per PLAN.md section 2 and src/sensorfault/elim/admission.py (grid form)."
+        "The contribution: view-level gate; params: consensus in {shared_surface, pairwise}, "
+        "statistic in {chi2, evidence}, cross_fit in {True, False, exact_leave_one_view_out}, "
+        "densification in {fixed_N, adaptive_matched_final_N}. Admission test per PLAN.md section 2 "
+        "and src/sensorfault/elim/admission.py (grid form)."
     ),
     "robust_kernel_pgo": (
         "Robust kernels in the pose graph, no gate; params: kernel in "
