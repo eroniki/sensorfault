@@ -61,8 +61,8 @@ For a healthy source, the aligned depth equals the true depth $d_i(u)$ up to noi
 spread grows with depth,
 $\tilde D_{m,i}(u)=d_i(u)+\varepsilon$, $\varepsilon\sim\mathcal{N}\bigl(0,\sigma_m^{2}(d_i(u))\bigr)$,
 with $\sigma_m(d)=\sigma_{0,m}+\kappa_m d$ fitted per estimator on clean development
-data. When a point of view $i$ is compared with view $j$, the pose uncertainty adds a
-pointing error to the ray. For a ray of length $r$ that meets a locally planar surface at
+data. When a source is compared with the surface rendered at its view, the uncertainty of
+the pose used for rendering adds a pointing error to the ray. For a ray of length $r$ that meets a locally planar surface at
 incidence angle $\theta$ (the angle between ray and surface normal), a range noise
 $\sigma_r=\sigma_m(r)$ and a pointing noise $\sigma_\varphi$ taken from the rotational
 covariance of the pose give a depth \emph{residual} variance
@@ -92,7 +92,7 @@ its component along the surface normal,
 \end{equation}
 stays bounded as $\theta\to\pi/2$. We therefore use \eqref{eq:vres} to weight depth
 residuals and \eqref{eq:vn} to initialise splat covariances and to floor their scale
-(Section~\ref{sec:method:gate}). Pixels that are not visible in the rendered view, or whose
+(Section~\ref{sec:method:surface}). Pixels that are not visible in the rendered view, or whose
 incidence angle exceeds the gate, do not enter any comparison. Natural failures of estimators (reflective or transparent
 surfaces, sky, textureless regions) are not variance but structured errors, and are the
 faults the gate is designed to catch.
@@ -122,7 +122,9 @@ $j$, and compares its depth there with the depth of source $(m,j)$:
   \label{eq:rdep}
 \end{equation}
 The weights $g_{m,i}g_{m,j}$ are where the gate acts: a depth constraint is built only
-from two trusted sources. The problem is \emph{partly end-to-end} in the following
+from two trusted sources. These constraints are pairwise because the pose graph is, but
+they are built after the gate, only from admitted sources, and they are not part of the
+gate's cost (Section~\ref{sec:method:cost}). The problem is \emph{partly end-to-end} in the following
 sense: the matcher and the depth ensemble are learned and kept fixed, while the
 back-end is a differentiable least-squares solver \cite{opt_theseus}, so that residual
 weights or the gate itself could be trained through it; in this paper the gate is

@@ -20,7 +20,9 @@ to trust \emph{before} pose graph optimisation and fusion. The gate tests each s
 against a single shared Gaussian-splat surface rendered at that view, instead of against
 every overlapping view, so that its cost grows with the number of views rather than the
 number of view pairs, and the surface, refitted on the admitted sources, doubles as the
-fused output. The gate, including this consensus, is the contribution. To make the setting concrete we embed it in a test bed whose depth maps
+fused output. The gate, including this consensus, is the contribution.
+
+To make the setting concrete we embed the gate in a test bed whose depth maps
 come from an ensemble of monocular estimators applied to RGB images, whose poses come
 from a partly end-to-end pose graph optimisation, and which serves as an alternative to
 a classical structure-from-motion (SfM) pipeline. The pipeline is the test bed: it
@@ -91,7 +93,9 @@ exclude a faulty source, and random-sample-consensus methods select a consistent
 \cite{flt_ransac,flt_msac}. In our earlier work we eliminated Byzantine accelerometers
 from a vibration-based localisation by building a consensus of per-sensor PDFs
 \cite{flt_ambarkutuk}, and used a joint likelihood over several sensors for dispersive
-wave propagation \cite{flt_ambarkutuk2024}.
+wave propagation \cite{flt_ambarkutuk2024}. Testing a unit against a model that was
+fitted without it is the idea behind cross-validation and the jackknife; the gate applies
+it to depth sources, with a splat surface as the model.
 
 \runin{Positioning.}
 Pixel filters, robust kernels and voting decide at a different unit and stage from the
@@ -122,16 +126,16 @@ Several challenges limit current approaches.
         output affine-invariant depth, and even metric ones are only approximately
         metric, so a source can be compared with others only after fitting a scale and
         shift per view. That fit can absorb part of a fault and make the faulty source
-        look consistent, so the comparison must be made after a fit that excludes the
-        source under test.
+        look consistent, so the comparison must be made against a reference, and after an
+        alignment, that were fitted without the source under test.
   \item[\textbf{C3.}] \textbf{Estimators share failure modes.} Estimators trained on
         overlapping data tend to fail on the same content, so a majority of an
         ensemble can be wrong together, and with fewer than three sources attribution
         is not identifiable. A gate must be able to answer \emph{no consensus}.
   \item[\textbf{C4.}] \textbf{Disagreement is not always a fault.} Occlusion, low
         overlap and moving content make sources disagree for reasons unrelated to
-        their quality, so residuals must be compared only on pixels that are visible
-        in both views and have enough support.
+        their quality, so residuals must be compared only on pixels that are visible at
+        the view under test and supported by the reference.
   \item[\textbf{C5.}] \textbf{The consensus criterion must detect disagreement.} A
         criterion that rewards the precision of the combined estimate, as the entropy
         test of our earlier work does as published, cannot distinguish an agreeing
@@ -154,8 +158,10 @@ earlier Byzantine sensor elimination (BSE) \cite{flt_ambarkutuk}, which localise
 footsteps from the signal energies of floor-mounted accelerometers: each sensor gave a
 PDF of the location over a grid, the PDFs were multiplied, and a consensus set was grown
 greedily from the best pair under an entropy criterion. Here the sources are
-estimator--view pairs, the PDFs are per-pixel depth distributions, and the admission
-test is corrected (Section~\ref{sec:method:admission}).
+estimator--view pairs, the PDF of a source is a per-pixel depth distribution, the
+consensus is a rendered splat surface instead of a product of source PDFs, and the
+admission test is corrected (Section~\ref{sec:method:admission}); the earlier set-growing
+consensus survives only in the pairwise comparison variant (Appendix~\ref{app:pairwise}).
 \begin{table}[t]
 \caption{\textbf{Where each method decides and what it costs.} $N$ views, mean co-visibility degree $\bar d$, $K$ folds.}
 \label{tab:diff}
@@ -201,7 +207,7 @@ the contributions.
         and the three baseline families plus a pairwise gate
         (Sections~\ref{sec:method:pipeline} and~\ref{sec:setup}).
 \end{itemize}
-\TODO{Replace the preceding list by result-bearing contributions once H1--H5
+\TODO{Replace the preceding list by result-bearing contributions once H1--H6
   are evaluated; keep only claims supported by the final tables.}
 
 \subsection{Organization of the Paper}
@@ -212,4 +218,5 @@ graph optimisation with depth sources, the view-level gate with its shared-surfa
 consensus, and the test-bed pipeline.
 Section~\ref{sec:setup} describes the experiments, and Section~\ref{sec:results} reports
 the results. Section~\ref{sec:conclusion} presents the conclusions, the limitations and
-future work. Derivations and proofs are in the appendices.
+future work. Derivations, the proof of the equivalence proposition, and the pairwise
+comparison variant of the gate are in the appendices.

@@ -32,6 +32,13 @@ monocular estimators are expected to fail. Access requires accepting the dataset
 varied. Its terms do not clearly permit redistributing renderings, so only the
 generator, seeds and configurations are released.
 
+\runin{View counts for the cost study (H6).} The scaling study needs scenes with tens to
+hundreds of views and a controllable co-visibility degree $\bar d$. It uses Replica
+renderings, where the number of views and the overlap are set by the trajectory,
+frames subsampled from ScanNet++ capture sequences, and the multi-camera videos of ETH3D,
+whose view counts are to be checked. \TODO{Verify the number of views per scene and the
+achievable $\bar d$ in each dataset before fixing the grid of $N$ and $\bar d$.}
+
 \runin{Trajectory benchmarks (optional).} The TUM RGB-D protocol \cite{data_tum} and
 the Tanks and Temples benchmark \cite{data_tnt} define trajectory and reconstruction
 metrics that are used as the metric definition when a scene lacks a laser reference.
@@ -66,7 +73,8 @@ stable hash and at least five master seeds. The grid is:
 Natural failures need no injection: sources are labelled faulty when, after robust affine
 alignment, their error against the laser reference exceeds a threshold fixed on
 development scenes. \TODO{Fix the labelling threshold on development scenes.}
-Overlap between views and the clustering of faulty views are controlled variables, because
+Overlap between views, the clustering of faulty views, and the fold layout relative to the
+clusters are controlled variables, because
 a pixel filter or a kernel does not fail merely because a fault is coherent: it is
 expected to fail when faulty views have few neighbours, when neighbouring views fail
 together, or when the fault is below the per-pixel noise but detectable by aggregating
