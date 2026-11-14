@@ -102,6 +102,7 @@ Mapping from design v1: old H1 (sensor-level vs per-pixel) → new H1; old H2 �
 | ScanNet++ | secondary | laser-scanned geometry + registered images; reflective/transparent surfaces; access terms to accept. |
 | Replica | controlled synthetic | exact depth, vary overlap/fault parameters; research-only; release generator, not renderings. |
 | TUM RGB-D, Tanks & Temples | metric definitions | ATE/RPE and reconstruction metrics. |
+| H6 scaling study | view counts N∈{25,50,100,200}, mean co-visibility degree d̄∈{2,5,10,20} | Replica renderings (trajectory sets N and overlap), subsampled ScanNet++ sequences, ETH3D multi-camera videos. **[UNVERIFIED]** views per scene and achievable d̄ — check before fixing the grid. |
 
 Injected view-level faults on one estimator: smooth warp (inverse depth, amplitude ×{0.25,0.5,1,2} std), region failure (20–40% area), non-affine distortion (γ∈{0.8,0.9,1.1,1.25}); fraction of views p∈{10,20,40,60}%, scattered vs clustered, estimator-level; 1–2 faulted estimators per view, independent vs identical (common mode); controls: sparse outliers, clean. Seeds: `SeedSequence([master, hash(source id), fault id])`, ≥5 masters. **Fault injectors for v2 are not implemented** (v1 injectors in `src/sensorfault/faults/` cover depth bias/extrinsic drift on physical sensors).
 
@@ -163,6 +164,7 @@ Not verified / yours to resolve: Virginia Tech–IEEE read-and-publish agreement
 - [ ] Re-read the Sensors 23(23):9309 PDF: Alg. 1 inequality directions, entropy normalisation (author to confirm).
 - [ ] Author to confirm the reading of "partly end-to-end".
 - [ ] Verify ETH3D scene names/licence, ScanNet++ terms, each estimator's weights licence and GPU memory.
+- [ ] Verify the number of views per scene and the achievable co-visibility degree in ETH3D / ScanNet++ for the H6 scaling grid.
 - [ ] Literature pass: depth-prior filtering in SfM/SLAM; uncertainty-aware monocular depth in pose graphs.
 - [ ] Implement: view-level fault injectors; pixel-wise gate; test bed pipeline; baselines; `data` download scripts for ETH3D.
 - [ ] Choose and cite the matcher, solver and splat rasteriser; fix N_s, n_it, τ_α, s_min on dev scenes.
