@@ -1,0 +1,136 @@
+\section{Gate Details, Test Bed and Ensemble Variant}
+\label{sup:testbed}
+\subsection{Inverse Problem: Pose Graph Optimisation with Depth Maps}
+\label{sec:method:inverse}
+The poses and the alignments are estimated jointly,
+\begin{equation}
+\begin{split}
+  \min_{\{\mathbf{T}_i\},\{\mathbf{a}_{i}\}}\;
+  \sum_{(i,j)\in\mathcal{E}}\Bigl[&\rho_{g}\bigl(\|\mathbf{r}^{\mathrm{geo}}_{ij}\|^{2}_{\Sigma_g}\bigr)\\
+  &+g_{i}\,g_{j}\,
+  \rho_{d}\bigl(\|\mathbf{r}^{\mathrm{dep}}_{ij}\|^{2}_{\Sigma_d}\bigr)\Bigr],
+\end{split}
+  \label{eq:pgo}
+\end{equation}
+where $\mathbf{r}^{\mathrm{geo}}_{ij}$ are epipolar or reprojection residuals of the
+feature matches between views $i$ and $j$, $\rho_g$ and $\rho_d$ are robust kernels
+(a quadratic kernel when no robust baseline is used), and the depth-induced residual
+back-projects a pixel $u$ of view $i$ with its aligned depth, transforms it into view
+$j$, and compares its depth there with the depth of view $j$:
+\begin{equation}
+\begin{split}
+  r^{\mathrm{dep}}_{ij}(u)&=\tilde D_{j}\bigl(\pi_j(\mathbf{q})\bigr)-q_z,\\
+  \mathbf{q}&=\mathbf{T}_j^{-1}\mathbf{T}_i\,\pi_i^{-1}\bigl(u,\tilde D_{i}(u)\bigr).
+\end{split}
+  \label{eq:rdep}
+\end{equation}
+The weights $g_ig_j$ are where the gate acts: a depth constraint is built only from two
+kept depth maps. These constraints are pairwise because the pose graph is, but they are
+built after the gate, only from kept depth maps, and they are not part of the gate's cost
+(Section~\ref{sec:method:cost}). The back-end is a differentiable least-squares solver \cite{opt_theseus} and the surface is
+renderable, so the depth residual of a view against the rendered surface,
+$\tilde D_i-\hat S_i(\mathbf{T}_i)$, can serve as an additional, linear-cost constraint on
+$\mathbf{T}_i$; in this paper the gate is training-free and the back-end is used as an ordinary
+solver \cite{opt_g2o,opt_factorgraphs}. The differentiable, renderable optimiser is
+the test bed the gate plugs into, not the framing. Its closest relative of the gate is
+\emph{soft down-weighting}: replacing $g_i\in\{0,1\}$ by a weight $w_i\in[0,1]$ estimated
+inside the optimisation from the view's residual. This is a baseline (H5): it reduces the
+influence of a view but neither excludes it nor states a false-alarm or missed-detection
+probability. 
+
+
+\subsection{Test Bed: Differentiable, Renderable Pose Graph}
+\label{sec:method:pipeline}
+The test bed runs five steps. (i)~\emph{Depth and matches:} each view is processed by the
+depth model, and feature matches are computed for view pairs. (ii)~\emph{Provisional poses:}
+a pose graph with the geometric constraints only is solved with a robust kernel, to give
+poses that are good enough to render a surface at each view. (iii)~\emph{Gate:}
+Section~\ref{sec:method:gate}: fuse the shared surface in information form, subtract each view, and test every depth map against
+its rendering. (iv)~\emph{Pose graph optimisation:} \eqref{eq:pgo}, with gated depth
+constraints and, optionally, a robust kernel, a soft per-view weight (baseline) or the
+render-based constraint of Section~\ref{sec:method:inverse}. (v)~\emph{Fused output:} the primitives are
+re-fused from the kept depth maps at the refined poses; its rendered depth is the fused depth,
+and a truncated signed distance function \cite{fus_curless,fus_kinectfusion} of the same
+kept depth is a secondary check. The gate may be repeated once with the refined poses.
+Because the gate relies on provisional poses, errors in those poses can corrupt both the
+surface and the gate; the repetition, and the comparison of gating before versus after the
+pose graph (H5), test this. The baseline families replace or complement step (iii)
+(Section~\ref{sec:setup:baselines}).
+
+\subsection{Ensemble Variant (Ablation)}
+\label{sec:method:ensemble}\label{sup:ensemble}
+The ensemble ablation gives each view $M$ depth maps $D_{m,i}$ from $M$ models and asks two
+questions: whether models that share training data fail on the same views, and whether
+voting across models breaks where the gate does not. Cross-model voting takes, at each
+pixel, the median (or majority) of the $M$ aligned depth maps and flags a view when the
+models disagree beyond their noise; it needs no other view. The ensemble gate tests each of
+the $M$ depth maps of a view against the same surface rendered at the view, so that
+$g_{m,i}$ is defined per model and a view is dropped when every model is rejected or when
+the kept models disagree. Both are evaluated by H10 (Section~\ref{sec:setup:hyp}): they
+should differ most on views where several models fail together, since cross-model voting then
+agrees with itself, whereas the surface is built from other views.
+
+
+\subsection{Cost of the Gate}
+\label{sup:cost}
+A pairwise gate warps the depth maps of the neighbouring views into the view under test
+(Appendix~\ref{app:pairwise}). With $P$ pixels per view, mean co-visibility degree $\bar d$
+and a warp cost $c_w$ per pixel, its cost is $C_{\mathrm{pair}}\approx N\bar d\,P\,c_w$,
+which grows with the number of view pairs when overlap is dense ($\bar d\propto N$). The
+shared-surface gate builds the primitives of each view once, at a cost $c_b$ per pixel, and
+renders every view once at a cost $c_r$ per pixel; the leave-view-out is an $O(1)$
+subtraction per primitive. Its cost is $C_{\mathrm{surf}}\approx N\,P\,(c_b+c_r)$, linear in $N$,
+with no optimisation iterations and no refit per fold. Association adds a lookup per pixel. The
+surface therefore wins when overlap is dense: the break-even degree is
+$\bar d^{*}\approx(c_b+c_r)/c_w$, and for sparse view graphs the pairwise gate can be cheaper.
+The primitive count grows with the scene rather than being fixed, which is the price of dropping
+a fixed budget. Depth inference adds $N$ model evaluations per scene, which
+can be cached and which do not depend on the gate; with $M$ models the ensemble ablation
+multiplies this term by $M$. H7 measures the scaling and the break-even point.
+
+
+\subsection{Minimum Detectable Bias Table}
+\begin{table}[t]
+\caption{\textbf{Minimum detectable bias} (in $\sigma$) for a bias on a fraction $f$ of $n=1000$
+independent pixels, $\alpha=0.05$, $\beta_{\mathrm{md}}=0.1$. Matched: region known; energy: unknown. $f=1$ is absorbed by the offset.}
+\label{tab:mdb}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccc}
+\toprule
+$f$ & Matched & Scan, $R{=}100$ & Energy \\
+\midrule
+0.05 & 0.47 & 0.69 & 1.71 \\
+0.2  & 0.26 & 0.38 & 0.93 \\
+0.5  & 0.21 & 0.30 & 0.75 \\
+1    & $\infty$ & $\infty$ & $\infty$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Relation to Leave-One-Out and Solution-Separation Tests}
+\begin{proposition}[Relation to leave-one-out and solution-separation tests]
+\label{prop:loo}
+Let source $k$ measure a state $x$ directly with noise covariance $R_k$, let
+$\hat x_{-k}$ be the estimate without it with covariance $P_{-k}$, and let
+$\nu=z_k-\hat x_{-k}$ with $S=R_k+P_{-k}$. Then the solution-separation statistic
+$d^{\top}\mathrm{Cov}(d)^{-1}d$, with $d=\hat x_{\mathrm{all}}-\hat x_{-k}$,
+equals the leave-one-out innovation statistic $\nu^{\top}S^{-1}\nu$. For Gaussian
+PDFs the negative log-evidence of $k$ under the consensus,
+$-\log\!\int p_C f_k=\tfrac12\nu^{\top}S^{-1}\nu+\tfrac12\log\det(2\pi S)$, is the
+leave-one-out statistic plus a covariance-volume term.
+\end{proposition}
+(Proof in Appendix~\ref{app:proof}.)
+\begin{remark}
+Under equal covariances and Gaussian residuals, ranking depth maps by this evidence is
+therefore the same as ranking by the leave-one-out chi-square statistic, and the
+evidence criterion can add value only where noise is heteroscedastic (as depth noise is),
+residuals are non-Gaussian or multimodal, or occlusion and grazing geometry break the
+chi-square assumptions. We test exactly this in H3 (Section~\ref{sec:setup:hyp}) and treat
+a tie as a reportable outcome.
+\end{remark}
+
+
+\todofig{pipeline}{Test bed: RGB images; one metric depth model per image and feature matches; provisional poses; shared Gaussian surface fused in information form, with leave-view-out by subtraction; \emph{view-level gate} against the rendered surface (contribution); pose graph optimisation with gated depth factors; surface of the kept depth maps as the fused output (posterior, protection level, view count).}
+

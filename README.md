@@ -1,34 +1,34 @@
 # sensorfault-manuscript
 
 Draft v0 of *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian
-Surface*, for IEEE Access (official LaTeX template). Companion code and plan: `eroniki/sensorfault`.
+Surface*, in the Elsevier `elsarticle` template (preprint first; no pay-to-publish venue). Companion code and plan: `eroniki/sensorfault`.
 The gate is the contribution; the monocular-depth pipeline is the test bed.
 
 **Status: pre-experiment draft.** No experiment has been run. Every result table and figure is a
-placeholder marked `TODO` in red; the hypotheses H1-H5 in Sec. IV are pre-registered *predictions*,
+placeholder marked `TODO` in red; the hypotheses H1-H10 in Sec. 3 are pre-registered *predictions*,
 not findings. Do not submit before the TODOs are resolved.
 
 ## Build
 ```
 latexmk -pdf main.tex        # output: build/main.pdf (needs TeX Live; uses ./latexmkrc)
 ```
-`latexmkrc` points TeX at `template/` for the class, fonts and `IEEEtran.bst`.
+The class is `elsarticle` (TeX Live) with `elsarticle-num`; the layout is `5p,twocolumn`, and changing the class option to `preprint` gives the single-column preprint format.
+The main text (title to Future Work) is 8 pages; the declarations and references follow, then the Supplementary Material (S1--S10, same PDF).
 `draft_v0.pdf` is the last committed build.
 
-## Outline (follows the section pattern of the author's Sensors 23(23):9309 and 24(23):7744; IEEE Access mandates none)
-Abstract + Index Terms; I Introduction (RAIM-style integrity-monitoring framing and core argument; A Relevant Literature,
-B Challenges C1-C7, C Baseline Study and Fundamental Differences, D Summary of the Contributions, E Organization);
-II Method (A Definitions and Notation, B Measurement Model: nominal measurement, six uncertainty sources, residual covariance, whitening and n_eff, faults as unexplained deviations, calibration; C Inverse Problem, D View-Level Gate:
-surface consensus, whitened statistics, detection theory and minimum detectable bias, corrected admission, cost, exclusion and alarms,
-conditional protection level; E Ensemble Variant; F Test Bed); III Experiments (A Experimental Setup, B Hypotheses H1-H10
-and Breakdown Scenarios, C Implementation); IV Results (regime map first); V Conclusions and Future Work (with
-Limitations); Appendices A-D.
+## Outline
+Main text (8 pages): Abstract, Keywords; 1 Introduction (core argument, approach, related work in brief, contributions);
+2 Method (notation, measurement model, view-level gate: shared Gaussian surface, statistics, detection theory, admission,
+cost, exclusion and alarms, conditional protection level); 3 Experimental Design and Hypotheses (H1-H10, breakdown
+scenarios); 4 Results (status); 5 Conclusions, Limitations, Future Work. Then Declarations, References.
+Supplementary Material: S1 related work, challenges, baseline study; S2 gate details, test bed, ensemble, cost, MDB table,
+leave-one-out proposition; S3 experimental setup in full and hypotheses in full; S4 planned tables and figures;
+S5-S8 derivations (pose Jacobian and variance, proofs including the protection level, pairwise gate, detection analysis).
 
 ## Layout
 - `main.tex` front matter, abstract, section includes
-- `sections/` intro, method, setup (Experiments), results (placeholders), conclusion, appendix
+- `sections/` intro, method, setup, results, conclusion (main text); `supplement.tex` includes `supp_*.tex`
 - `refs/references.bib` merged bibliography (`refs/part_*.bib` + `part_*_evidence.md` are the sources and the evidence log)
-- `template/` IEEE Access template files (see licence note)
 - `figures/` (empty; placeholders are drawn by `\todofig` in `sections/macros.tex`)
 
 ## Citation verification
@@ -40,13 +40,9 @@ record, not an abstract; `fus_zach08` (Zach 2008) could not be verified and is n
 arXiv-only and only its abstract was read. Re-check all entries before submission.
 
 ## Licence note
-`template/` is IEEE's distributed template. Only `IEEEtran.cls` states a licence (LPPL 1.3); the
-other class files and the embedded fonts state none, and some fonts are commercial. **Keep this
-repository private**; do not publish `template/` or `draft_v0.pdf` without checking IEEE's terms.
+`elsarticle` is distributed with TeX Live (LPPL). Keep this repository private until the preprint is released.
 Original text in `sections/` and `main.tex` is the author's.
 
-## Open items before submission
-Author/affiliation/funding; AI-use disclosure in the Acknowledgment (IEEE Access requires it);
-confirm Algorithm 1 inequality directions against the typeset equations of the cited source paper;
-read YOGO in full; final literature pass; results, figures and tables from the experiment code;
-satellite section decision.
+## Open items before the preprint
+AI-use declaration and the code/data statement (marked TODO in `main.tex`); read YOGO in full; final literature pass;
+results, figures and tables from the experiment code; satellite section decision; choice of a subscription (no-APC) Elsevier journal.

@@ -1,88 +1,48 @@
-\section{Conclusions and Future Work}
+\section{Conclusions, Limitations and Future Work}
 \label{sec:conclusion}
 We have proposed view-level fault detection and exclusion, in the spirit of receiver autonomous
-integrity monitoring, for monocular-depth reconstruction. A coherent view-level fault adds a
-small, spatially structured bias that the monocular scale and offset cannot absorb; below the
-noise at each pixel it is invisible to pixel-wise filters and to robust kernels, but aggregated
-over the view's co-visible pixels, whitened by the covariance of an explicit measurement model and
-projected orthogonally to the scale and offset, it is a large test statistic, with a minimum
-detectable bias that falls as $1/\sqrt{n_{\mathrm{eff}}f(1-f)}$ and an effective number of pixels
-that follows from the correlation of the residual. One metric depth model is
-applied to each image, and the gate tests each depth map once against a single shared Gaussian
-surface of Gaussian primitives, built from the depth maps in closed form, with the view
-itself removed by an exact subtraction of its information and rendered at its view, at
-a cost that grows with the number of views rather than the number of view pairs. A depth map is
-excluded when its statistic exceeds a calibrated threshold, a no-consensus alarm is raised when
-the other views cannot test it, and the surface of the kept depth maps is the fused
-output, with a posterior, a protection level and a view count per region. The admission test corrects the entropy criterion of our earlier Byzantine sensor
-elimination, which could not distinguish an agreeing source from a sharp but biased one, and a
-conditional protection level bounds the error of the output under stated assumptions. A
-differentiable, renderable pose graph is the test bed, soft down-weighting inside it is a
-baseline, MASt3R-SfM and VGGT are reference points, and a multi-model ensemble is an ablation.
-The empirical case rests on hypotheses H1--H10, which test when view-level gating helps and
-when it does not, and none of which has been tested in this version. \TODO{Rewrite the
-conclusion around the measured results; if H1b fails, there is no sub-noise regime in which
-the gate beats the baselines and the paper should be reframed as an analysis; if H3a fails,
-reframe around the chi-square statistic and keep the entropy relation as an equivalence result;
-if H5 fails because soft down-weighting suffices, say so.}
-
-\TODO{Interpretation of the results, to write after the experiments: for each of H1--H10
-state whether it was supported, partly supported or falsified, and why; state from H2
-whether the evidence criterion adds anything beyond the leave-one-out chi-square test
-(Proposition~\ref{prop:loo}); and from H1 where the regime map separates the gate from pixel filters and robust kernels
-and where it ties or loses; and from H7 at which overlap
-degree the closed-form surface becomes cheaper than pairwise checks and what it costs in power, and whether the fixed-budget MCMC surface is better or worse; and from H10 whether models share failures and where cross-model voting and the gate complement each other.}
+integrity monitoring, for monocular-depth reconstruction. A coherent view-level fault adds a small,
+spatially structured bias that the monocular scale and offset cannot absorb; it is sub-noise at
+each pixel, so pixel filters and robust kernels do not see it, but it is a large statistic once the
+view's residual is whitened by the covariance of an explicit measurement model and projected
+orthogonally to the scale and offset. The gate tests each depth map once against a closed-form
+shared surface of Gaussian primitives from which the view's information is subtracted exactly,
+excludes it when its statistic exceeds a calibrated threshold, raises a no-consensus alarm when the
+other views cannot test it, and returns the fused surface with a posterior, a conditional
+protection level and a view count per region. The empirical case rests on hypotheses H1--H10,
+none of which has been tested in this version.
+\TODO{Rewrite around the measured results: if H1b fails, there is no sub-noise regime in which the
+gate beats the baselines and the paper should be reframed as an analysis; if H3a fails, reframe
+around the chi-square statistic; if H5 fails because soft down-weighting suffices, say so; report
+for each of H1--H10 whether it was supported, partly supported or falsified.}
 
 \subsection{Limitations and Failure Conditions}
 \label{sec:disc:limits}
-The gate is an integrity monitor built on a consensus of views, and it fails where the consensus
-is wrong or not identifiable. First, it needs the other views to expose a faulty one: a
-model-level fault, where all views are wrong in the same way, makes the surface agree with the
-faulty depth and is undetectable from depth alone, and a minority assumption is needed in every
-region. Second, with very few views, or in regions that few other views observe, the surface
-cannot test a view and the gate can only raise a no-consensus alarm. Third, the detection floor
-is $\beta_{\min}=(z_\alpha+z_{\beta_{\mathrm{md}}})/\kappa$, and the whole analysis is only as good
-as the measurement model: the residuals of learned depth are heteroscedastic, spatially
-correlated, possibly heavy-tailed, and perturbed by pose, intrinsics and surface errors, so
-$\sigma(\cdot)$, $\ell$, $\nu$ and $\Sigma_{\mathrm{surf}}$ must be calibrated on clean data and
-their adequacy checked (H6); a misspecified $\ell$ or tail changes the floor and the false-alarm
-rate. The surface covariance is estimated from a small number $K$ of surfaces and is noisy. A
-smooth, textureless scene has a small $n_{\mathrm{eff}}$ and a high floor for diffuse faults, and a
-uniform bias is not a fault at all, because the scale and offset absorb it, which also means that
-a view whose true fault is nearly affine is neither detected nor, by the same token, harmful. Fourth, the
-protection level is conditional on a fault being present and rests on four assumptions
-(a single faulty view, calibrated noise, a linear response, an uncorrupted surface) that fail
-exactly in the regimes where detection is hardest; unlike RAIM, we have no prior fault
-probabilities and cannot allocate an integrity risk. Fifth, the gate targets structure that the
-scale-and-shift alignment cannot remove; a pure scale or shift error is absorbed by the
-alignment, in the gate and in the pose graph, and is not detected. Sixth, a depth bias and a pose
-fault look alike to the gate, since both shift the residual of a whole view; the gate excludes
-the view but does not isolate which of the two is at fault, which would need a rigid
-re-alignment of the view to the surface and is left to future work. Seventh, the gate uses
-provisional poses to render the surface, so poor provisional poses can corrupt both the surface
-and the gate. The surface can also be corrupted by faulty depth maps: leaving a view out is exact, but
-several faulty views that support the same fault, or faulty views that supply most of the
-coverage of a region, can make the surface follow the fault and mask it. Association is
-order dependent at the cold start, and a faulty view with a large offset may spawn separate
-primitives that no other view can test, which the render-and-compare gate must catch. Planar
-primitives fit thin or curved structures poorly, information-form fusion treats observations as
-independent and so is overconfident under correlated depth error and shared pose error, the
-offset variance omits the normal uncertainty, and the surface variance is diagonal. Eighth, the cost advantage holds only for dense
-overlap; for sparse view graphs the pairwise gate is cheaper, and for large false loop closures
-the loop-closure baselines are the right tool. Ninth, excluding too much is also a failure: the
-false-alarm rate and the availability are reported, and dropping a view lowers completeness
-wherever only that view covered a region. Tenth, the injected faults are controlled surrogates
-of natural failures; natural failures are scored against a laser reference on a small number of
-scenes, and the scenes are static. Eleventh, a single default model was chosen on development
-scenes, and the conclusions are for that model; the ensemble ablation tests whether they carry
-over. Finally, the surface fits and the depth model cost memory and time; the test bed is an
-offline pipeline.
-\TODO{Update with observed failures once experiments run.}
+The gate is a monitor built on a consensus of views, and it fails where the consensus is wrong or
+not identifiable. (1)~A model-level fault, where all views are wrong alike, makes the surface agree
+with the faulty depth and is undetectable from depth alone; a minority of faulty views in every
+region is assumed. (2)~With very few views, or in regions that few other views observe, the gate
+can only raise a no-consensus alarm. (3)~The detection floor $(z_\alpha+z_{\beta_{\mathrm{md}}})/\kappa$ and the
+false-alarm rate are only as good as the measurement model, which is calibrated on clean data and
+checked by H6; a smooth, textureless scene has a small $n_{\mathrm{eff}}$ and a high floor for
+diffuse faults. (4)~The protection level is conditional on a fault being present and rests on a
+single faulty view, calibrated noise, a linear response and an uncorrupted surface; unlike RAIM we
+have no prior fault probabilities. (5)~A pure scale or shift error is absorbed by the alignment and
+is neither detected nor harmful. (6)~A depth bias and a pose fault look alike to the gate, which
+does not isolate which is at fault. (7)~Provisional poses render the surface, so poor poses can
+corrupt both. (8)~Several faulty views supporting the same fault, or faulty views supplying most of
+a region's coverage, can make the surface follow the fault. (9)~Association is order dependent at
+the cold start, and a faulty view with a large offset may spawn primitives that no other view can
+test. (10)~Planar primitives fit thin or curved structure poorly; information-form fusion treats
+observations as independent and is overconfident under correlated depth error and shared pose
+error; the offset variance omits normal uncertainty; the surface variance is diagonal.
+(11)~The cost advantage holds only for dense overlap, and loop-closure baselines are the right
+tool for large false loops. (12)~Injected faults are surrogates of natural failures, scored on a
+few static scenes for one default model.
 
 \subsection{Future Work}
 \label{sec:disc:future}
-Planned extensions, none yet started, are: isolating whether a faulty view is a depth fault or a pose fault by a rigid re-alignment to the surface; allocating an integrity risk from measured fault frequencies; a source of evidence that does not come from the depth model, which could help against model-level failures, although colour is out of scope here; training the gate through the differentiable back-end; running it online on video under a per-frame latency budget; handling dynamic
-scenes; and applying the same gate to depth from physical sensors (LiDAR, time-of-flight,
-active stereo), where the sources are sensors rather than views of one model and the fault
-classes include extrinsic drift and multipath. \TODO{Confirm which of these remain in
-scope.}
+Planned, none started: separating depth from pose faults by re-alignment to the surface;
+allocating an integrity risk from measured fault frequencies; training the gate through the
+differentiable back-end; online and dynamic-scene operation; and the same gate for physical depth
+sensors (LiDAR, time of flight), where extrinsic drift and multipath are fault classes.

@@ -1,41 +1,30 @@
-\documentclass{ieeeaccess}
-\usepackage{cite}
+\documentclass[5p,times,twocolumn]{elsarticle}
 \usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{xcolor}
 \usepackage{algorithmic}
 \usepackage{algorithm}
 \usepackage{graphicx}
-\usepackage{textcomp}
 \usepackage{booktabs}
 \usepackage{bm}
-\makeatletter
-\AtBeginDocument{\DeclareMathVersion{bold}
-\SetSymbolFont{operators}{bold}{T1}{times}{b}{n}
-\SetSymbolFont{NewLetters}{bold}{T1}{times}{b}{it}
-\SetMathAlphabet{\mathrm}{bold}{T1}{times}{b}{n}
-\SetMathAlphabet{\mathit}{bold}{T1}{times}{b}{it}
-\SetMathAlphabet{\mathbf}{bold}{T1}{times}{b}{n}
-\SetMathAlphabet{\mathtt}{bold}{OT1}{pcr}{b}{n}
-\SetSymbolFont{symbols}{bold}{OMS}{cmsy}{b}{n}
-\renewcommand\boldmath{\@nomath\boldmath\mathversion{bold}}}
-\makeatother
+\usepackage{url}
+\DeclareUrlCommand\path{\urlstyle{rm}}
+\providecommand{\href}[2]{#2}
 
 \input{sections/macros}
 
-%Your document starts from here ___________________________________________________
+\journal{Preprint}
+
 \begin{document}
-\history{Draft v0 --- not submitted. Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.}
-\doi{10.1109/ACCESS.2026.XXXXXXX}
+\begin{frontmatter}
 
 \title{View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface}
-\author{\uppercase{Murat Ambarkutuk}\authorrefmark{1}}
-\address[1]{\textcolor{red}{[TODO: affiliation, city, country] (e-mail: [TODO])}}
-\tfootnote{\textcolor{red}{[TODO: funding / support statement, or delete.]}}
 
-\markboth
-{Ambarkutuk: View-Level Fault Rejection via a Shared Gaussian Surface}
-{Ambarkutuk: View-Level Fault Rejection via a Shared Gaussian Surface}
-
-\corresp{Corresponding author: \textcolor{red}{[TODO: name (e-mail)]}.}
+\author{Murat Ambarkutuk}
+\ead{murat@ambarkutuk.com}
+\affiliation{organization={Independent Researcher},
+            city={Shelton},
+            state={CT},
+            country={USA}}
 
 \begin{abstract}
 Monocular-depth reconstruction uses a depth model's prediction for each image as a geometric
@@ -58,35 +47,27 @@ states ten falsifiable hypotheses, including where gating does not help.
 \textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 
-\begin{keywords}
-3D reconstruction, fault detection and exclusion, Gaussian surfaces, integrity monitoring,
-monocular depth estimation, pose graph optimisation, robust estimation.
-\end{keywords}
+\begin{keyword}
+3D reconstruction \sep fault detection and exclusion \sep Gaussian surfaces \sep integrity monitoring \sep monocular depth estimation \sep pose graph optimisation \sep robust estimation
+\end{keyword}
 
-\titlepgskip=-21pt
-\maketitle
+\end{frontmatter}
 
 \input{sections/intro}
 \input{sections/method}
 \input{sections/setup}
 \input{sections/results}
 \input{sections/conclusion}
-\input{sections/appendix}
+\label{endmaintext}
 
-\section*{Data and Code Availability}
-\textcolor{red}{[TODO: the code, configurations, seeds and fault manifests are to be released; add the repository URL when it is public. Restricted datasets are not redistributed.]}
+\section*{Declarations}
+\textbf{Funding.} This research received no external funding.
+\textbf{Data and code availability.} \textcolor{red}{[TODO: the code, configurations, seeds and fault manifests are to be released; add the repository URL when public. Restricted datasets are not redistributed.]}
+\textbf{Use of AI tools.} \textcolor{red}{[TODO: author to state whether and how generative AI tools assisted the writing; Elsevier asks for a declaration.]}
 
-\section*{Acknowledgment}
-\textcolor{red}{[TODO: acknowledgments. If AI tools assisted drafting, IEEE Access
-requires disclosure here: name the system, the sections affected, and how it was
-used.]}
-
-\bibliographystyle{IEEEtran}
+\bibliographystyle{elsarticle-num}
 \bibliography{refs/references}
 
-\begin{IEEEbiographynophoto}{[TODO: Author name]}
-\textcolor{red}{[TODO: short biography; IEEE Access asks for biographies of all authors below the references.]}
-\end{IEEEbiographynophoto}
+\input{sections/supplement}
 
-\EOD
 \end{document}
