@@ -1,94 +1,53 @@
 \section{Introduction}
 \label{sec:intro}
 
-A satellite navigation receiver cannot trust every satellite it tracks. Receiver autonomous
-integrity monitoring (RAIM) therefore checks the redundant measurements against each
-other, detects that one of them is inconsistent, excludes it, and raises an alert when it
-cannot guarantee the solution
-\cite{flt_raim_parkinson,flt_raim_sturza,flt_raim_brown,flt_raim_pervan}. Monocular-depth
-reconstruction, that is, image-based 3D reconstruction that uses a depth estimator's
-prediction for each image as a geometric prior, has the same problem. Strong metric
-estimators are now available \cite{est_metric3dv2,est_unidepth,est_depthpro}, but a
-single-image prediction carries no redundancy, nothing in the image says whether it is right,
-and its errors are not independent of the scene: a model may be accurate on most views and
-fail coherently on a few, on glass and other reflective surfaces, on sky, in textureless
-regions, or in scenes outside its training distribution. The redundancy is supplied by the
-other views of the same scene, and the question is the one RAIM asks of satellites: which
-view should not be trusted, and can the system say so? Henceforth, a \emph{depth source}
-denotes the depth map that one model predicts for one view, and a \emph{view-level fault}
-denotes a fault that moves a whole view coherently: a bias or warp of its depth, or an error
-in its pose.
+Monocular metric depth models \cite{est_metric3dv2,est_unidepth,est_depthpro} are now accurate
+enough to supervise 3D reconstruction from images: depth-supervised Gaussian splatting
+\cite{gs_3dgs,gs_2dgs,gs_dnsplatter} uses one predicted depth map per image as a geometric prior.
+The predictions fail in a characteristic way. The failures are \emph{regional} and
+\emph{appearance-driven}: on a reflective or glass surface the model predicts the depth of the
+reflection, and on a textureless wall it has no cue and predicts a smooth guess. Inside such a
+region the error is large, often many times the nominal noise, and outside it the same depth map
+is good. Depth supervision bakes these regions into the surface, and nothing in a single image says
+which depth map, or which part of it, to distrust.
 
-\paragraph{Core argument.}
-A coherent view-level fault adds a small, spatially structured bias across a view: a shift of the
-depth over part of it, a warp, or a pose error that moves the whole rendering. None of these is
-explained by the monocular scale and offset, which the alignment absorbs; a bias that is
-uniform over the whole view is only an offset, and not a fault at all. At a per-pixel magnitude
-below the noise, for example $0.3\sigma$, each pixel still looks healthy: pixel-wise
-consistency filters, which test one pixel at a time against a threshold of several $\sigma$, see
-almost nothing, because the probability that a pixel crosses the threshold hardly changes.
-Aggregated over the view's co-visible pixels, whitened by the covariance that an explicit
-measurement model predicts and projected orthogonally to the scale and offset, the same
-pattern is a large test statistic. For a bias on a fraction $f$ of $n_{\mathrm{eff}}$ effectively
-independent pixels its non-centrality grows as $n_{\mathrm{eff}}f(1-f)\delta^{2}$, so the minimum
-detectable bias is $\propto1/\sqrt{n_{\mathrm{eff}}f(1-f)}$ (Section~\ref{sec:method:detection}),
-about $0.2\sigma$ at $f=\tfrac12$ for $n_{\mathrm{eff}}=10^{3}$. The gate therefore wins exactly
-when faults are sub-noise per pixel but coherent across part of a view, which is how monocular
-depth fails on glass, sky and out-of-distribution scenes, and it should not win, and is not
-expected to, when a fault is large but confined to a few pixels, where pixel filters are the right
-tool. Robust kernels, the other standard defence, only down-weight a constraint when its residual
-is large, so a sub-noise coherent bias passes through them, and even when they act they give no
-statement about trust: they neither exclude the view nor tell the user that the output should not
-be relied on. The gate excludes the view and can raise a \emph{no consensus} alarm, as RAIM does.
-The claim is only as good as the measurement model: the minimum detectable bias is derived from
-the residual covariance $\Sigma_r$, which must be calibrated, not assumed.
+The cheap defences act per pixel or per ray. Robust losses \cite{rob_blackrangarajan,rob_barron}
+and distractor-aware splatting such as RobustNeRF and SpotLessSplats
+\cite{gs_robustnerf,gs_spotless} down-weight residuals that look like outliers, mostly from
+photometric evidence; a per-view RMS of the aligned depth residual, or the depth model's own
+confidence, gives a view score. None of them states a false-alarm rate, and none uses the fact
+that the other views of the same scene observe the same surface with known uncertainty.
 
-\paragraph{Approach.}
-This paper proposes \emph{view-level fault rejection} for monocular-depth reconstruction: a
-\emph{gate} that performs fault detection and exclusion (FDE) on views before pose graph
-optimisation and fusion. The gate tests each depth map once against a single shared surface of
-planar Gaussian primitives, built from the depth maps alone in closed form and fused in
-information form. The view's own contribution is removed by an exact subtraction, so the cost
-grows with the number of views rather than the number of view pairs, and the surface of the kept
-depth maps doubles as the fused output, with a posterior, a protection level and a view count in
-every region. The gate, with this consensus and its integrity statements, is the contribution. We
-embed it in a test bed, a differentiable, renderable pose graph fed by one depth model per image;
-the pipeline is not claimed as a new reconstruction system, soft down-weighting inside it is a
-baseline, and a multi-model ensemble is an ablation only.
+\paragraph{Approach}
+We propose a \emph{depth-only view gate} built on Gaussian surfels whose uncertainty renders. Each
+2DGS-style surfel keeps its shape covariance for rendering and, separately, a $9\times9$
+uncertainty over its mean, its tangent-space rotation error and its log scales. Every view adds the
+alpha-weighted rasteriser information $J^{\top}R^{-1}J$ to the surfels it sees, so the fused surface is
+a Bayesian posterior obtained by rendering, without correspondences. Leaving a view out is a
+subtraction of its information. The gate renders the other views' surface, and its variance, into
+the tested view and tests the whitened depth residuals: pixels that no other view sees are
+untestable, and the tested view spawns no surfels of its own. Colour is a separate appearance block
+that never updates the geometry; it reaches geometry only through the depth model.
 
-\paragraph{Related work in brief.}
-RAIM and fault detection and exclusion
-\cite{flt_raim_parkinson,flt_raim_sturza,flt_raim_brown,flt_raim_pervan,flt_araim_pl_exclusion}
-supply the framework; strong metric depth estimators
-\cite{est_metric3dv2,est_unidepth,est_depthpro} supply the depth maps; Gaussian primitives
-\cite{gs_3dgs,gs_2dgs,gs_mcmc} fit surfaces to given supervision, and at most mask pixels of it;
-MASt3R-SfM and VGGT \cite{rec_mast3rsfm,rec_vggt} are reference points rather than rivals.
-Robust kernels and loop-closure back-ends down-weight constraints but do not exclude a view or
-state an integrity level. To our knowledge, integrity monitoring of this kind has not been
-applied to the views of a learned-depth reconstruction; this rests on a limited literature
-search. The full review, the challenges (C1--C7) and the baseline study are in
-Supplement~\ref{sup:related}.
+\paragraph{What is and is not new}
+The test is classical (Baarda's data snooping, Teunissen's DIA procedure \cite{stat_teunissen_dia} and
+GNSS solution separation \cite{flt_raim_joerger}); surfels with confidence-weighted fusion are
+point-based fusion \cite{fus_keller_surfels}; per-view alignment of monocular depth is standard
+\cite{rec_monosdf}. What is new, to our knowledge, is a per-Gaussian uncertainty that the splatting
+rasteriser renders into depth variance, used with exact leave-view-out to test whole views at a stated
+false-alarm rate (Section~\ref{sec:related}).
 
-\paragraph{Contributions.}
+\paragraph{Contributions}
 \begin{itemize}
-  \item An explicit measurement model and a gate derived from it (C1--C3): the residual
-        covariance $\Sigma_r$, tests on whitened, nuisance-projected residuals at a stated
-        false-alarm rate, and an effective number of pixels and minimum detectable bias that
-        follow from $\Sigma_r$ (Section~\ref{sec:method:forward}).
-  \item A closed-form shared Gaussian surface as the consensus (C3, C7), with exact
-        leave-view-out equal to RAIM solution separation, cost linear in the number of views,
-        and per-region posterior, protection level and view count
-        (Section~\ref{sec:method:surface}).
-  \item Exclusion, a no-consensus alarm, availability and a conditional protection level
-        (Sections~\ref{sec:method:elim} and~\ref{sec:method:pl}), and a corrected admission
-        criterion (C6, Section~\ref{sec:method:admission}).
-  \item Depth and pose fault models, a regime map of per-pixel bias against the fraction of the
-        view affected, and ten pre-registered hypotheses, with breakdown scenarios, that state
-        when gating helps and when it does not (Section~\ref{sec:setup}).
+  \item Gaussian surfels with a separate $9\times9$ uncertainty whose normal-offset and tilt block
+        renders into per-pixel depth variance, fused on rendering by $J^{\top}R^{-1}J$ with exact
+        leave-view-out by subtraction (Sections~\ref{sec:method:surfels}--\ref{sec:method:fusion}).
+  \item A depth-only view gate that tests whitened residuals against the other views' rendered
+        surface, with untestable pixels and no spawning by the tested view
+        (Section~\ref{sec:method:gate}).
+  \item A pre-registered evaluation that starts by measuring the residuals of a real depth model,
+        tests whether the model repeats its errors across views in textureless regions, and
+        requires the gate to beat cheap baselines on regional, appearance-driven failures
+        (Section~\ref{sec:setup}).
 \end{itemize}
-\TODO{Replace this list by result-bearing contributions once H1--H10 are evaluated.}
-
-The rest of the paper presents the method (Section~\ref{sec:method}), the experimental design and
-hypotheses (Section~\ref{sec:setup}), the status of the results (Section~\ref{sec:results}) and the
-limitations (Section~\ref{sec:conclusion}). The supplement holds the related work, the
-experimental details, the planned tables and figures, and the derivations.
+\TODO{Replace this list by result-bearing contributions once H1--H6 are evaluated.}

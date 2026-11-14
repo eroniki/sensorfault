@@ -1,537 +1,145 @@
 \section{Method}
 \label{sec:method}
 
-The method is a view-level gate that performs fault detection and exclusion (FDE) on views, in
-the manner of integrity monitoring: it decides which views' depth maps to keep before pose graph
-optimisation and fusion, and raises an alarm when it cannot decide. One monocular metric depth
-model is applied to each RGB image, so each view has one depth source. The gate tests each depth
-map \emph{once} against a single shared surface of Gaussian primitives, built from the depth maps
-alone in closed form, from which the view itself is removed by an exact subtraction of its
-information, and rendered at the view. It passes only the kept depth maps to the pose graph and to
-fusion. The gate is the contribution; the surrounding pipeline (Supplement~\ref{sup:testbed}) is
-the test bed, and several models per view is an ablation (Supplement~\ref{sup:ensemble}).
+\todofig{pipeline}{Pipeline: one depth map per image from the depth model; depth-supervised 2DGS surfels rendered with gsplat, with a separate appearance block that never updates geometry; per-view information $J^{\top}R^{-1}J$ accumulated on each surfel; for each tested view, subtraction of its information, render of the other views' surface and variance, and the whitened test (contribution); refit without excluded views.}
 
-\subsection{Definitions and Notation}
-\label{sec:method:defs}
-A static scene is observed by $N$ RGB images $I_i$, $i\in\mathcal{V}=\{1,\dots,N\}$, with
-approximately known intrinsics $\mathbf{K}_i$ and unknown poses
-$\mathbf{T}_i\in SE(3)$ (camera to world). A monocular metric depth model $f$ predicts a
-depth map $D_i=f(I_i):\Omega_i\to\R_{>0}$ for each view; $D_i$ is the \emph{depth source}
-of view $i$. Depth from a metric model is used through a per-view scale and shift
-$\mathbf{a}_i=(s_i,t_i)$ with a prior at $(1,0)$, giving the aligned depth
-$\tilde D_i=s_iD_i+t_i$; a model with affine-invariant output uses the same form without the
-prior. A pose graph $\mathcal{G}=(\mathcal{V},\mathcal{E})$ has an edge $(i,j)$ for each
-pair of views with enough feature matches and co-visibility. The gate outputs
-$g_i\in\{0,1\}$ for each view, where $g_i=0$ means the depth map of view $i$ is excluded
-from the depth constraints and from fusion; a view whose depth is excluded still takes part
-in the graph through its geometric constraints. A \emph{shared surface} $\mathcal{S}$
-is a set of planar Gaussian primitives, each with a centre, a normal, an extent, a normal
-offset $h_k$ with information $\lambda_k$, and an opacity; rendering it at
-view $i$ with pose $\mathbf{T}_i$ gives a depth $\hat S_i(u)$, a depth variance
-$v_{S,i}(u)$ and an accumulated opacity $W_i(u)$ at each pixel (Section~\ref{sec:method:surface}). In the ensemble ablation,
-$M$ models $f_m$ give $M$ depth maps $D_{m,i}$ per view, each of which is a source.
+\subsection{Setting and Faults}
+\label{sec:method:setting}
+A static scene is observed by $N$ RGB images $I_i$ with known intrinsics and poses (camera centre
+$\mathbf{c}_i$, rotation $\mathbf{R}_i$). A monocular metric depth model gives one depth map
+$\hat d_i$ per image. The surface is a set of 2DGS-style surfels \cite{gs_2dgs} fitted by
+depth-supervised splatting and rendered with gsplat \cite{gs_gsplat} into expected depth, alpha
+weights and accumulated opacity. Colour is a separate appearance block (per-surfel colour): the
+photometric loss updates only that block, its gradients are stopped at the geometry, and colour
+reaches geometry only through the depth model. The gate uses depth only.
 
-In integrity-monitoring terms, \emph{detection} decides whether any view is inconsistent
-with the others, \emph{exclusion} sets $g_i=0$ for the view identified as faulty, and the
-\emph{no-consensus alarm} is raised for a view that the other views cannot test, or for a
-scene in which the test itself cannot be trusted. The \emph{false-alarm probability} $\alpha$
-is the probability that a healthy view is excluded, and the \emph{missed-detection
-probability} $\beta$ is the probability that a faulty view is kept.
-
-A set $\mathcal{F}\subset\mathcal{V}$ of views is \emph{faulty}. A \emph{fault} is any
-deviation of a view from the nominal measurement model of Section~\ref{sec:method:forward}
-that the model cannot explain, and a fault is \emph{coherent} when it moves a whole view in a
-consistent way. Its size is parametrised by the \emph{per-pixel bias} $\delta$, in units of the
-per-pixel noise $\sigma$, and by the \emph{fraction} $f$ of the view's pixels that it affects.
-Depth faults add a field $\phi_i(u)$ to the measurement: a \emph{coherent bias}
-$\phi_i(u)=\delta\sigma(u)m_i(u)$ on a mask covering a fraction $f<1$ of the pixels (for $f=1$ it
-is a uniform bias, which the scale and offset absorb, so it is not a fault; Section~\ref{sec:method:faultdef}),
-a \emph{smooth warp} of the inverse depth that is not affine, a \emph{region failure} (glass, sky)
-that replaces the depth on a connected region by one unrelated to the geometry, and a
-\emph{non-affine distortion} $D'=D^{\gamma}$. \emph{Pose faults} move the view instead of its
-depth: a spoofed pose prior, intermittent glitches, and false loop closures. A fault is
-\emph{view-level} if it affects a subset of the views and \emph{model-level} if it affects all of
-them alike, which is undetectable by construction (Section~\ref{sec:disc:limits}); faulty views are
-assumed to be a minority in every region. The goal is a trajectory and a
-fused surface that are close to those obtained from the healthy views alone, together with the
-identity of the excluded views and a statement of when this cannot be guaranteed. The concrete
-magnitudes and the injection procedure are given in Section~\ref{sec:setup:faults}.
-
-\subsection{Measurement Model}
-\label{sec:method:forward}
-The gate is derived from an explicit model of what a healthy view looks like, so that a fault
-can be defined as a deviation that this model cannot explain. This subsection states the model,
-lists its sources of uncertainty, propagates them to the residual against the rendered surface,
-and shows how the test statistics and the effective number of pixels follow from the resulting
-covariance instead of being assumed.
-
-\subsubsection{Nominal measurement}
-\label{sec:method:nominal}
-Let $u$ index the pixels of view $i$ and $d_i(u)$ be the true depth along the pixel ray. The
-model's output is
+The nominal measurement of pixel $u$ in view $i$ is
 \begin{equation}
-  \hat d_i(u)=a_i\,d_i(u)+b_i+\varepsilon_i(u),\qquad
-  \boldsymbol\varepsilon_i\sim\mathcal{N}\bigl(\mathbf{0},\,\Sigma_\varepsilon\bigr),
+  \hat d_i(u)=a_i\,d_i(u)+b_i+\varepsilon_i(u),\qquad \boldsymbol\varepsilon_i\sim\mathcal{N}(\mathbf{0},\Sigma_\varepsilon),
   \label{eq:meas}
 \end{equation}
-where $a_i$ and $b_i$ are the monocular scale and offset ambiguity, with a prior around
-$(1,0)$ for a metric model and none for an affine-invariant one, and the error field is
-heteroscedastic and spatially correlated,
+with a per-view scale and offset $(a_i,b_i)$ absorbed by alignment and
+$\Sigma_\varepsilon=DCD$, $D=\mathrm{diag}\,\sigma(r,\tau,\theta)$ depending on range, texture and
+incidence, and $C=(1-\nu)K_\ell+\nu I$ a spatial correlation with length scale $\ell$ and nugget
+$\nu$. These are fitted on clean development data before anything else (H1,
+Section~\ref{sec:setup:hyp}). A \emph{fault} is a regional deviation that \eqref{eq:meas} cannot
+explain: a connected region of a view whose depth is wrong by many $\sigma$, typically on a
+reflective or textureless surface. A whole-view affine error is absorbed by $(a_i,b_i)$ and is not a
+fault. We make no claim about faults below the per-pixel noise.
+
+\subsection{Surfels with an Uncertainty That Renders}
+\label{sec:method:surfels}
+Surfel $k$ has a \emph{shape} used for rendering only: centre $\boldsymbol\mu_k$, rotation
+$\mathbf{R}_k=[\mathbf{t}_1\ \mathbf{t}_2\ \mathbf{n}]$ with normal $\mathbf{n}$, scales
+$\mathbf{s}_k$ and opacity. Separately, it carries an \emph{uncertainty} over the perturbation
+\begin{equation}
+  \boldsymbol\theta_k=\bigl(\delta\boldsymbol\mu,\ \delta\boldsymbol\phi,\ \delta\log\mathbf{s}\bigr)\in\R^{9},
+  \qquad \mathbf{R}_k\leftarrow\mathbf{R}_k\exp([\delta\boldsymbol\phi]_\times),
+\end{equation}
+kept in information form as a $9\times9$ block $\Lambda_k$. Keeping the two apart matters: if one
+covariance served both, a confident surfel would shrink in the render and lose its weight.
+
+Depth observes only the normal offset and the tilt of a surfel. With
+$\nu=\mathbf{n}^{\top}\delta\boldsymbol\mu$ and the tangent components of the normal
+perturbation, $\tau_1=\delta\phi_2$ and $\tau_2=-\delta\phi_1$, the sub-block is
+$(\nu,\tau_1,\tau_2)=G_k\boldsymbol\theta_k$ with a fixed $3\times9$ map $G_k$. The ray of pixel $u$
+of view $i$, $\mathbf{w}=\mathbf{R}_i\mathbf{K}^{-1}[u\ v\ 1]^{\top}$, meets the surfel plane at the
+z-depth $d_k=\mathbf{n}^{\top}(\boldsymbol\mu_k-\mathbf{c}_i)/\mathbf{n}^{\top}\mathbf{w}$ and the
+point $\mathbf{x}$, and to first order
 \begin{equation}
 \begin{split}
-  \Sigma_\varepsilon&=D\,C\,D,\qquad D=\mathrm{diag}\bigl(\sigma(r_u,\tau_u,\theta_u)\bigr),\\
-  C&=(1-\nu)\,K_\ell+\nu I,
+  \frac{\partial d_k}{\partial(\nu,\tau_1,\tau_2)}&=
+  \frac{\bigl[\,1,\ -\mathbf{t}_1^{\top}(\mathbf{x}-\boldsymbol\mu_k),\ -\mathbf{t}_2^{\top}(\mathbf{x}-\boldsymbol\mu_k)\bigr]}{\mathbf{n}^{\top}\mathbf{w}},\\
+  J_{uk}&=\frac{\partial d_k}{\partial(\nu,\tau_1,\tau_2)}\,G_k ,
 \end{split}
-  \label{eq:sigeps}
+  \label{eq:jac}
 \end{equation}
-with $K_\ell(u,v)=\exp(-\|u-v\|^{2}/2\ell^{2})$ a spatial correlation kernel of length scale
-$\ell$ (in pixels) and a nugget $\nu$, the fraction of the variance that is independent from
-pixel to pixel. The standard deviation $\sigma(r,\tau,\theta)$ depends on the range $r$, on the
-image texture $\tau$ (for example the local gradient energy) and on the incidence angle
-$\theta$, for instance $\log\sigma=\gamma_0+\gamma_1\log r+\gamma_2 g(\tau)+\gamma_3\tan^{2}\theta$
-with $g$ decreasing; any positive function fitted on clean data will do. The pose used to
-render the surface at the view is $\exp(\boldsymbol\xi_i)\mathbf{T}_i$ with
-$\boldsymbol\xi_i\sim\mathcal{N}(\mathbf{0},\Sigma_q)$, $\Sigma_q\in\R^{6\times6}$, and the
-intrinsics carry a small error $\boldsymbol\zeta_i\sim\mathcal{N}(\mathbf{0},\Sigma_K)$.
-
-\subsubsection{Sources of uncertainty}
-\label{sec:method:uncertainty}
-The model has six sources of uncertainty, each of which enters the test:
-\begin{enumerate}
-  \item[\textbf{U1.}] \textbf{Scale and offset ambiguity} $(a_i,b_i)$ of the monocular depth: a
-        nuisance, absorbed by the alignment.
-  \item[\textbf{U2.}] \textbf{Heteroscedastic depth noise} $\sigma(r,\tau,\theta)$, growing with
-        range, in textureless regions and at grazing incidence.
-  \item[\textbf{U3.}] \textbf{Spatial correlation} of the depth error, with length scale $\ell$
-        and nugget $\nu$.
-  \item[\textbf{U4.}] \textbf{Pose error} $\boldsymbol\xi_i\sim\mathcal{N}(\mathbf{0},\Sigma_q)$
-        of the pose used for rendering.
-  \item[\textbf{U5.}] \textbf{Intrinsics error} $\boldsymbol\zeta_i\sim\mathcal{N}(\mathbf{0},\Sigma_K)$,
-        small when the intrinsics are given and larger when the model estimates the focal
-        length itself.
-  \item[\textbf{U6.}] \textbf{Surface uncertainty}: the rendered surface is itself an estimate,
-        and its composite variance $a^{2}\,\mathrm{diag}\,v_{S,i}(u)$ of \eqref{eq:composite} is
-        $\Sigma_{\mathrm{surf}}$ (diagonal by assumption).
-\end{enumerate}
-Not modelled are occlusion and visibility, which a mask handles, dynamic content, and
-non-Gaussian tails, which the calibration of the threshold absorbs.
-
-\subsubsection{Residual against the rendered surface}
-\label{sec:method:residual}
-Let $\mathbf{r}_0\in\R^{n}$ be the residual $\hat d_i(u)-\hat S_i(u)$ over the $n$ visible pixels,
-with $\hat S_i$ the depth rendered from the surface rendered with the view left out
-(Section~\ref{sec:method:surface}). Linearising the rendering in the pose and intrinsics,
+The scale columns of $J_{uk}$ vanish (scales move the alpha weights, which are held fixed), so their
+information comes from a weak prior (Supplement~\ref{sup:derivations}). The rasteriser composites
+$\hat D_i(u)=\sum_k w_{uk}d_k$ with normalised alpha weights $w_{uk}$; the rendered depth variance is
 \begin{equation}
-\begin{split}
-  \mathbf{r}_0&\approx A\boldsymbol\eta+\boldsymbol\varepsilon_i+J_q\boldsymbol\xi_i+J_K\boldsymbol\zeta_i+\mathbf{e}_S,\\
-  A&=[\,\mathbf{d}_i,\ \mathbf{1}\,],\quad \boldsymbol\eta=(a_i-1,\,b_i),
-\end{split}
-  \label{eq:resid}
+  V_i(u)=\sum_k w_{uk}^{2}\,J_{uk}\,\Lambda_k^{-1}J_{uk}^{\top},
+  \label{eq:var}
 \end{equation}
-where $J_q\in\R^{n\times6}$ is the Jacobian of the rendered depth with respect to the pose
-(Appendix~\ref{app:variance}), $J_K$ the Jacobian with respect to the intrinsics, and $\mathbf{e}_S$
-the error of the rendered surface. The terms are independent, so
+which needs only the $3\times3$ marginal $G_k\Lambda_k^{-1}G_k^{\top}$ that the gate renders.
+
+\subsection{Bayesian Fusion on Rendering and Leave-View-Out}
+\label{sec:method:fusion}
+Linearising the rendered depth at the fitted surfels, view $i$ adds to surfel $k$
 \begin{equation}
-\begin{split}
-  \mathbf{r}_0&\sim\mathcal{N}(A\boldsymbol\eta,\Sigma_r),\\
-  \Sigma_r&=\Sigma_\varepsilon+J_q\Sigma_qJ_q^{\top}+J_K\Sigma_KJ_K^{\top}+\Sigma_{\mathrm{surf}}.
-\end{split}
-  \label{eq:Sigmar}
-\end{equation}
-The surface term is the composite variance of the closed-form surface,
-$\Sigma_{\mathrm{surf}}=a^{2}\,\mathrm{diag}\,v_{S,i}(u)$ from \eqref{eq:composite}; it is
-diagonal, so the spatial correlation of the surface error is ignored. Information-form fusion
-also treats the observations as independent, so correlated depth error within a view and the
-shared pose error of a view across its primitives make it overconfident; the calibration of the
-threshold on clean data is the guard against this. The structure of $\Sigma_r$ is a scaled
-stationary kernel plus a low-rank term of rank at most $6+\dim\boldsymbol\zeta$ and a
-diagonal, so $\Sigma_r^{-1}$ follows from the Woodbury identity and fast kernel solves, at a
-cost that is near-linear in $n$; the pixels are subsampled to the correlation length $\ell$
-where this is not enough. For rotation errors the diagonal of the pose
-term reduces to $(r\,\sigma_\varphi\tan\theta)^{2}$, the pointing-error variance of the
-earlier, independent-pixel treatment (Appendix~\ref{app:variance}), which is therefore the
-diagonal special case of \eqref{eq:Sigmar}. The regularisation of that term at grazing
-incidence, $\tan^{2}\theta\to\sin^{2}\theta/(\cos^{2}\theta+\epsilon^{2})$ with
-$\epsilon\approx\cos80^{\circ}$ and a hard gate at $\theta>85^{\circ}$, is kept in $J_q$.
-
-\subsubsection{Whitening, projection and the effective number of pixels}
-\label{sec:method:whitening}
-The scale and offset are a nuisance that the alignment absorbs, so the test uses the precision
-with the nuisance projected out,
-\begin{equation}
-  M=\Sigma_r^{-1}-\Sigma_r^{-1}A\bigl(A^{\top}\Sigma_r^{-1}A\bigr)^{-1}A^{\top}\Sigma_r^{-1},
-  \label{eq:M}
-\end{equation}
-which annihilates $A$ ($MA=0$). Equivalently, the residual is whitened, $\mathbf{w}=L^{-1}\mathbf{r}_0$
-with $\Sigma_r=LL^{\top}$, and the whitened nuisance directions $L^{-1}A$ are projected out. Under
-the nominal model $\mathbf{r}_0^{\top}M\mathbf{r}_0\sim\chi^{2}_{n-2}$. The correlation that
-remains in the unwhitened, diagonally standardised residual is
-$C_r=D_r^{-1}\Sigma_rD_r^{-1}$, with $D_r=\mathrm{diag}(\Sigma_r)^{1/2}$, and the effective number
-of independent pixels follows from it,
-\begin{equation}
-  n_{\mathrm{eff}}=\frac{\mathrm{tr}(C_r)^{2}}{\mathrm{tr}(C_r^{2})},
-  \label{eq:neff}
-\end{equation}
-the participation ratio of the eigenvalues of $C_r$. It equals $n$ for independent pixels and
-$1$ for fully correlated ones, and it is the quantity that sets the variance of the energy
-statistic of standardised residuals, $\mathrm{Var}[\boldsymbol\rho^{\top}\boldsymbol\rho/n]=2/n_{\mathrm{eff}}$.
-It replaces a hand-set value: for the kernel of \eqref{eq:sigeps},
-$n_{\mathrm{eff}}\approx n/[(1-\nu)^{2}\pi\ell^{2}+2\nu(1-\nu)+\nu^{2}]$, which for $n=10^{5}$ pixels,
-$\ell=6$ and $\nu=0.2$ is about $1.4\times10^{3}$. The whitened tests below do not need
-$n_{\mathrm{eff}}$, but it is the summary of how many independent looks a view gives and the
-quantity in the closed-form approximations of the minimum detectable bias.
-
-\subsubsection{Faults as unexplained deviations}
-\label{sec:method:faultdef}
-Under the model, a healthy view has $\mathbf{r}_0=A\boldsymbol\eta+\mathbf{n}$ with
-$\mathbf{n}\sim\mathcal{N}(\mathbf{0},\Sigma_r)$. A \emph{fault} is a deviation
-$\boldsymbol\phi$ with $\mathbf{r}_0=A\boldsymbol\eta+\mathbf{n}+\boldsymbol\phi$ and
-$M\boldsymbol\phi\neq\mathbf{0}$: anything that neither the nuisance nor the noise can explain.
-Four consequences follow. First, a pure scale or offset error, including a uniform additive bias
-over a whole view and a bias proportional to $\sigma$ when $\sigma$ is affine in depth, lies in
-$\mathrm{span}(A)$: it is absorbed by $\boldsymbol\eta$ in the gate and by the per-view alignment
-in the pose graph, and is not a fault. Second, a coherent bias confined to a fraction $f$ of the
-view is a fault, with detectability $\kappa^{2}=\boldsymbol\phi^{\top}M\boldsymbol\phi$, which for
-independent pixels is $n\,f(1-f)\,\delta^{2}$: it peaks at $f=\tfrac12$ and vanishes at
-$f=1$. Third, a pose error is a fault through $J_q$ to the extent that it exceeds $\Sigma_q$.
-Fourth, noise correlation and surface spread are part of the model: a smooth deviation of the size they predict is not a fault.
-
-\subsubsection{Calibration of the nominal model}
-\label{sec:method:calibration}
-The functions $\sigma(r,\tau,\theta)$, the length scale $\ell$ and the nugget $\nu$ are fitted
-once per depth model, on clean development data, by maximum likelihood of the residuals of the
-model against the laser reference depth, where the surface term is absent; $\Sigma_q$ comes from
-the marginal covariances of the provisional pose graph, $\Sigma_K$ from the intrinsics source, and
-$\Sigma_{\mathrm{surf}}$ is computed online. Alternatively, a depth model that outputs a
-confidence supplies it as a covariate of $\sigma(\cdot)$. Of the candidate models, Metric3D v2 and UniDepthV2 output a confidence, whereas the default, Depth Pro, does not, so its $\sigma(\cdot)$ is fitted (Supplement~\ref{sup:setup}). Adequacy is checked on fault-free development
-views: the mean of the whitened statistic divided by its degrees of freedom must be $1\pm0.1$ and
-the false-alarm rate must match $\alpha$ without per-scene retuning (H6); if not, the model is
-misspecified, for example in its tails or its $\ell$.
-
-\subsection{View-Level Gate}
-\label{sec:method:gate}
-
-\subsubsection{Requirements}
-Given evidence from the other views about the depth of a view, an exclusion rule should
-(R1)~give the same answer for any ordering of the views; (R2)~respond to
-\emph{disagreement} between a view and the others, not only to the view's own precision,
-since a sharp but biased depth map must not be favoured; (R3)~return \emph{no consensus}
-rather than guess when attribution is not identifiable, for example where fewer than three
-other views observe the region; (R4)~keep the false-exclusion rate on fault-free data at a
-stated level; (R5)~have a cost that grows with the number of views, not with the number
-of view pairs; and (R6)~state its integrity from an explicit measurement model: a false-alarm probability, a
-minimum detectable bias for a stated missed-detection probability, and an alarm when these
-cannot be met. The entropy criterion of our earlier work does not meet (R1) and (R2) as
-published (challenge C6), and a comparison with every overlapping view does not meet (R5)
-when overlap is dense (challenge C7); this subsection gives a gate that meets all six.
-
-\subsubsection{Shared surface: Gaussians over an SDF}
-\label{sec:method:surface}
-Instead of comparing a depth map with the depth maps of every overlapping view, the gate
-compares it once with a single shared surface rendered at the view. The surface is built from
-the depth maps alone; colour is out of scope, and images enter the method only through the
-depth model and the matcher. We represent it as a set of planar Gaussian primitives rather than
-as a signed distance function (SDF) for two reasons. A Gaussian is built from a depth map in
-closed form, with no optimisation, and a primitive carries its own uncertainty, so the
-uncertainty of the surface comes with the representation instead of from a resampling scheme.
-An SDF would need a voxel grid or a network, and an uncertainty estimate would need extra
-machinery; the TSDF remains a secondary check of the fused output
-(Section~\ref{sec:method:pipeline}).
-
-\paragraph{Extent is separated from uncertainty.}
-A primitive $k$ has a centre $\boldsymbol\mu_k$, a unit normal $\mathbf{n}_k$ and tangent
-half-widths $(s_{u},s_{v})$ with covariance $\Sigma_{\mathrm{ext}}$, which are used for
-rendering only. Its uncertainty is separate: the normal offset
-$h_k=\mathbf{n}_k^{\top}\boldsymbol\mu_k$ has variance $\sigma_{h,k}^{2}$, equivalently
-information $\lambda_k=1/\sigma_{h,k}^{2}$, and the primitive has an opacity $\alpha_k$. The
-separation is deliberate. If a single covariance served both purposes, a confident primitive
-(small variance) would shrink in the render and drop out of the composite, so the primitives
-that carry the most information would carry the least weight. Here the render weight depends on
-the extent only, and confidence enters only through the variances.
-
-\paragraph{Forward: depth map to primitives, in closed form.}
-For pixel $u$ of view $i$ with pose $(\mathbf{R}_i,\mathbf{t}_i)$, the ray is
-$\mathbf{r}=\mathbf{K}^{-1}[u\ v\ 1]^{\top}$ and the centre is
-$\boldsymbol\mu=\mathbf{R}_i\,d\,\mathbf{r}+\mathbf{t}_i$. The normal follows from the depth
-gradient, the cross product of the image-axis tangents of the back-projected points, oriented
-towards the camera. One pixel subtends $d/f$, so the half-widths are $s=d/f$, stretched by
-$1/\cos\theta$ along the direction of the tilt. The uncertainty of the point is propagated
-through the first-order Jacobians of the depth, the pose and the intrinsics,
-\begin{equation}
-  P=J_d\sigma_d^{2}J_d^{\top}+J_q\Sigma_qJ_q^{\top}+J_K\Sigma_KJ_K^{\top},\qquad
-  \sigma_h^{2}=\mathbf{n}^{\top}P\,\mathbf{n},
-  \label{eq:sigh}
-\end{equation}
-where $\sigma_d=\sigma(r,\tau,\theta)$ of \eqref{eq:sigeps}, $J_d=\mathbf{R}_i\mathbf{r}$ and
-$J_q=[\mathbf{I},\,-[\mathbf{R}_id\mathbf{r}]_{\times}]$. The normal is treated as known, so
-$\sigma_h^{2}$ omits the normal uncertainty (a stated limitation).
-
-\paragraph{Fusion in information form, and exact leave-view-out.}
-The offsets of the observations that associate to one primitive (below) are fused as
-\begin{equation}
-  \lambda=\sum_i\lambda_i,\qquad h=\frac{1}{\lambda}\sum_i\lambda_ih_i,\qquad
-  \mathrm{Var}(h)=\frac{1}{\lambda},
+  \Lambda_{k}^{(i)}=\sum_{u}\frac{a_i^{2}\,w_{uk}^{2}J_{uk}^{\top}J_{uk}}{\sigma_{i}^{2}(u)},\qquad
+  \boldsymbol\eta_{k}^{(i)}=\sum_{u}\frac{a_i\,w_{uk}J_{uk}^{\top}e_i(u)}{\sigma_{i}^{2}(u)},
   \label{eq:info}
 \end{equation}
-and the extent is the union (the elementwise maximum) of the contributing extents, which never
-shrinks, so adding views cannot make a region disappear from the render. Leaving view $j$ out
-is an exact subtraction of its information,
+with $e_i(u)=\hat d_i(u)-a_i\hat D_i(u)-b_i$, and the posterior is
+$\Lambda_k=\Lambda_0+\sum_i\Lambda_k^{(i)}$, $\boldsymbol\eta_k=\sum_i\boldsymbol\eta_k^{(i)}$,
+$\hat{\boldsymbol\theta}_k=\Lambda_k^{-1}\boldsymbol\eta_k$. This is the alpha-weighted
+Gauss--Newton information of the rasteriser; it needs no correspondences, because each pixel
+reaches the surfels it renders. Removing view $j$ is a subtraction,
 \begin{equation}
-  \lambda_{-j}=\lambda-\lambda_j,\qquad h_{-j}=\frac{\lambda h-\lambda_jh_j}{\lambda_{-j}},
+  \Lambda_{k}^{(-j)}=\Lambda_k-\Lambda_k^{(j)},\qquad \boldsymbol\eta_{k}^{(-j)}=\boldsymbol\eta_k-\boldsymbol\eta_k^{(j)},
   \label{eq:loo}
 \end{equation}
-so the surface that excludes a view needs no refit and no fold. This is the RAIM solution
-separation: with $\mathrm{Cov}(h-h_{-j})=1/\lambda_{-j}-1/\lambda$, the separation statistic
-equals the leave-one-out innovation statistic $(h_j-h_{-j})^{2}/(1/\lambda_j+1/\lambda_{-j})$
-(Proposition~\ref{prop:loo}). A view that is the only contributor to a primitive leaves
-$\lambda_{-j}=0$ and cannot be tested there.
+exact for the linearised model: the posterior without view $j$ does not depend on the
+linearisation point in the directions the data observe (Supplement~\ref{sup:derivations}). The
+statistic of a view against the rest equals the solution-separation statistic
+\cite{flt_raim_joerger}, so leaving a view out and comparing it with the full solution are the same
+test.
 
-\paragraph{Backward: rendering a primitive at view $j$.}
-Let view $j$ have centre $\mathbf{c}_j$ and rotation $\mathbf{R}_j$. The ray through pixel $u$
-meets the plane of primitive $k$, computed with that primitive's leave-$j$-out offset, at the
-depth
+\subsection{The View Gate}
+\label{sec:method:gate}
+To test view $j$, the other views' surface is rendered into it. A surfel enters this render only if
+the other views give it normal-offset information,
+$\mathbf{g}^{\top}(\Lambda_k^{(-j)}-\Lambda_0)\mathbf{g}\ge\lambda_{\min}$ with
+$\mathbf{g}=G_k^{\top}\mathbf{e}_1$; surfels that only view $j$ supports are dropped and the
+compositing weights are recomputed, so the tested view spawns nothing and cannot hide its own fault
+behind surfels it created. A pixel whose accumulated opacity after dropping is below $\tau_W$ is
+\emph{untestable}: no other view sees it. On the testable pixels, with the leave-$j$-out depth
+$\hat D_{-j}(u)$ and variance $V_{-j}(u)$ from \eqref{eq:var}, the alignment $(a_j,b_j)$ is fitted
+by weighted least squares and the residual
 \begin{equation}
-  d_k=\frac{h_{-j,k}-\mathbf{n}_k^{\top}\mathbf{c}_j}{\mathbf{n}_k^{\top}\mathbf{R}_j\mathbf{r}_u},\qquad
-  \sigma_k^{2}=\frac{\sigma_{h,-j,k}^{2}}{(\mathbf{n}_k^{\top}\mathbf{R}_j\mathbf{r}_u)^{2}}+J_{q,k}\Sigma_qJ_{q,k}^{\top},
-  \label{eq:rayplane}
+  r_j(u)=\hat d_j(u)-\bigl(a_j\hat D_{-j}(u)+b_j\bigr),\qquad
+  \Sigma_r=\Sigma_\varepsilon+a_j^{2}\,\mathrm{diag}\,V_{-j}
+  \label{eq:res}
 \end{equation}
-where the first term of the variance is $\sigma_h^{2}/\cos^{2}\theta_j$ for a unit ray and
-$J_{q,k}=[-\mathbf{n}/(\mathbf{n}^{\top}\mathbf{R}_j\mathbf{r}),\,-d_k(\mathbf{R}_j\mathbf{r}\times\mathbf{n})/(\mathbf{n}^{\top}\mathbf{R}_j\mathbf{r})]$
-is the pose Jacobian of the ray-plane depth. The primitives along the ray are composited with
-extent-only weights,
-\begin{equation}
-\begin{split}
-  w_k&=\alpha_kG(u;\Sigma_{\mathrm{ext},k})\,T_k,\qquad T_k=\prod_{l\prec k}(1-\alpha_lG_l),\\
-  \hat S_j(u)&=\frac{\sum_kw_kd_k}{\sum_kw_k},\qquad
-  v_{S,j}(u)=\frac{\sum_kw_k\sigma_k^{2}}{\sum_kw_k},
-\end{split}
-  \label{eq:composite}
-\end{equation}
-with the transmittance $T_k$ from the primitives nearer the camera, and the accumulated opacity
-$W=\sum_kw_k$ as the support of the pixel. A between-primitive spread term can be added to
-$v_{S,j}$ at depth discontinuities. The gate residual is
-$r=\hat d_j(u)-(a\hat S_j(u)+b)$ with variance $\sigma_d^{2}+a^{2}v_{S,j}(u)$, which is the
-diagonal $\Sigma_{\mathrm{surf}}=a^{2}\,\mathrm{diag}\,v_{S,j}(u)$ of the measurement model.
-Because the leave-$j$-out offsets are used, the rendered surface never contains view $j$ (challenge C3).
-
-\paragraph{Rendering informs fusion.}
-A new view is added by \emph{projective association}. The surface is rendered into the new view;
-the ray of each pixel is intersected with the primitives, and the pixel updates primitive $k$ if
-the normals agree ($\mathbf{n}^{\top}\mathbf{n}_k\ge\cos_{\min}$), the offset lies within
-$\tau_h$ combined standard deviations, $|\mathbf{n}_k^{\top}\boldsymbol\mu-h_k|/\sqrt{\sigma_h^{2}+\sigma_{h,k}^{2}}\le\tau_h$,
-and the point lies within $\tau_{\mathrm{ext}}$ extents of the centre; otherwise a new
-primitive is spawned. The visibility of a primitive follows from the transmittance, and the
-observation enters with the soft weight $w_k\lambda_i$ rather than a hard assignment. The
-render-and-compare gate decides whether the view is admitted to the fusion at all, so
-association does not depend on view order for the gate itself, although it does for the cold
-start. There is no adaptive densification: a primitive is added only by association failure,
-and the number of primitives is determined by the data. A fixed-budget variant with
-3DGS-MCMC \cite{gs_mcmc} refitted by optimisation is kept as an ablation (H7).
-
-\paragraph{Outputs per region.}
-Each region of the surface yields a posterior ($h$, $1/\lambda$), a protection level
-(Section~\ref{sec:method:pl}) and a view count. The view count is the availability: a region
-seen by fewer than three views cannot be tested and is reported as no consensus.
-
-
-\subsubsection{Visibility-aware residuals and statistics}
-\label{sec:method:consensus}
-A pixel $u$ of a held-out depth map enters the comparison only if it is valid, if the surface
-supports it ($W_i(u)\ge\tau_\alpha$; occlusion is handled by the depth-ordered
-rendering), and if the incidence angle is below the grazing gate. On these $n$ pixels the
-residual $\mathbf{r}_0$, its covariance $\Sigma_r$ of \eqref{eq:Sigmar} and the projected
-precision $M$ of \eqref{eq:M} are formed (Section~\ref{sec:method:residual}). The gate uses two
-statistics, both defined on the whitened, nuisance-projected residual. The \emph{energy
-statistic}
-\begin{equation}
-  T_i=\mathbf{r}_0^{\top}M\,\mathbf{r}_0\ \sim\ \chi^{2}_{n-2}\quad\text{under the nominal model,}
-  \label{eq:Ts}
-\end{equation}
-is sensitive to any pattern, including zero-mean warps. The \emph{region-scan statistic} tests
-a family of $R$ candidate patterns $\mathbf{g}_1,\dots,\mathbf{g}_R$, the indicators of
-superpixels or connected regions of the residual scaled by $\sigma$, with the matched statistic
-$z_j=\mathbf{g}_j^{\top}M\mathbf{r}_0/\sqrt{\mathbf{g}_j^{\top}M\mathbf{g}_j}\sim\mathcal{N}(0,1)$
-and the threshold $\max_j|z_j|>z_{\alpha/R}$ of a Bonferroni correction. The signed mean of the
-residual is not used: with a free offset it is zero by construction. Thresholds are set from
-the false-alarm probability $\alpha$ (5\% per view), and calibrated on fault-free development
-runs to absorb heavy tails (Section~\ref{sec:setup:protocol}). We also record Moran's~I of the
-whitened residual as a diagnostic: a view-level fault leaves spatially structured residuals,
-whereas sparse outliers do not. If too few pixels of a view are supported
-($|\{u:W_i(u)\ge\tau_\alpha\}|<s_{\min}P$), the surface cannot test the view and the
-gate returns \emph{no consensus} for it.
-\TODO{Report the Moran's~I figure (Fig.~\ref{fig:residual-structure}).}
-
-\subsubsection{Detection theory and minimum detectable bias}
-\label{sec:method:detection}
-A fault is a deviation $\boldsymbol\phi=\beta\,\mathbf{g}$ of pattern $\mathbf{g}$ and size
-$\beta$, in units of $\sigma$ when $\mathbf{g}$ is scaled by $\sigma$. Its \emph{detectability
-index} is
-\begin{equation}
-  \kappa_{\mathbf{g}}=\sqrt{\mathbf{g}^{\top}M\,\mathbf{g}},
-  \label{eq:kappa}
-\end{equation}
-the length of the fault pattern after whitening and after removal of whatever the scale and
-offset explain. For a pattern that lies in $\mathrm{span}(A)$, $\kappa_{\mathbf{g}}=0$. The
-matched statistic $z_{\mathbf{g}}$ is $\mathcal{N}(\beta\kappa_{\mathbf{g}},1)$, so its power is
-$\Phi(\beta\kappa_{\mathbf{g}}-z_\alpha)$ up to the far tail, and the \emph{minimum detectable bias}
-for a missed-detection probability $\beta_{\mathrm{md}}$ is
-\begin{equation}
-\begin{split}
-  \beta_{\min}&=\frac{z_{\alpha}+z_{\beta_{\mathrm{md}}}}{\kappa_{\mathbf{g}}},\\
-  z_\alpha&=\Phi^{-1}(1-\alpha/2),\quad z_{\beta_{\mathrm{md}}}=\Phi^{-1}(1-\beta_{\mathrm{md}}),
-\end{split}
-  \label{eq:mdb}
-\end{equation}
-the analogue of the minimum detectable bias of RAIM. The energy statistic is non-central
-$\chi^{2}_{n-2}(\lambda)$ with $\lambda=\beta^{2}\kappa_{\mathbf{g}}^{2}$; its minimum detectable bias is
-$\sqrt{\lambda_0}/\kappa_{\mathbf{g}}$, with $\lambda_0$ the non-centrality at which the missed-detection
-probability is $\beta_{\mathrm{md}}$, and it needs no knowledge of the pattern. A scan over $R$
-patterns replaces $z_\alpha$ by $z_{\alpha/R}$ in \eqref{eq:mdb}. For independent pixels with
-unit variance, and a bias of $\delta$ on a fraction $f$ of $n$ pixels,
-$\kappa^{2}=n\,f(1-f)$: the offset removes the mean, so the detectability peaks at $f=\tfrac12$
-and a uniform bias ($f=1$) is invisible. Table~\ref{tab:mdb} gives the values for $n=1000$,
-$\alpha=0.05$ and $\beta_{\mathrm{md}}=0.1$. With correlated noise, $\kappa$ and the energy
-non-centrality follow from \eqref{eq:M} and are not simply a function of $n_{\mathrm{eff}}$ of
-\eqref{eq:neff}, which summarises the energy statistic: a sharp-edged region is more
-detectable than $n_{\mathrm{eff}}$ suggests, and a smooth warp less.
-
-A pixel-wise filter at $k=3$ sees almost nothing of a $0.3\sigma$ bias (its flag probability
-rises from $0.0027$ to $0.0040$), and a count of flagged pixels is about 12 times weaker than the
-matched statistic at $f=0.5$ (Supplement~\ref{app:detection}). The gate therefore wins when a fault is
-sub-noise per pixel but coherent over a part of the view, and pixel filters win when the bias is
-large and confined to few pixels; H1 measures this. The weak point is the nominal model: the
-minimum detectable bias is only as good as the calibration of $\Sigma_r$.
-
-\subsubsection{Corrected admission criterion}
-\label{sec:method:admission}
-In our earlier work \cite{flt_ambarkutuk}, each sensor $i$ has a PDF $f_i$ over a
-common grid $\Sgrid$, the product over a consensus set $C$ is formed, and $C$ is grown
-greedily from the best pair using an entropy test; we follow Eq.~(14) of that paper, which
-seeds the set with the pair of maximum entropy after fusion. (The inequality in the
-corresponding line of its Algorithm~1 is a typographical error and is not used here.)
-
-A more basic problem is that the entropy of a normalised product cannot detect a
-biased source. For one-dimensional Gaussians $\mathcal{N}(m_C,\sigma_C^2)$ and
-$\mathcal{N}(m_k,\sigma_k^2)$, the normalised product has variance
-$\sigma_C^2\sigma_k^2/(\sigma_C^2+\sigma_k^2)$ regardless of the offset $m_C-m_k$, so
-\begin{equation}
-  H(C\cup k)-H(C)=-\tfrac12\log\!\bigl(1+\sigma_C^{2}/\sigma_k^{2}\bigr)<0
-  \label{eq:dH}
-\end{equation}
-for every source, healthy or faulty; a sharp biased source lowers entropy the most.
-Entropy measures the precision of a consensus, not its consistency.
-
-We therefore test consistency directly. For a pixel $u$, the consensus is the rendered
-surface, a Gaussian $p_{C,u}=\mathcal{N}(\hat S_i(u),v_{S,i}(u))$, and the depth map of view
-$i$ has the PDF $f_{i,u}$ on an interval $\Sgrid_u$ of admissible depths. The view is
-\emph{compatible} with $C$ at $u$ when its Bayes factor against a uniform null on $\Sgrid_u$
-is at least one:
-\begin{equation}
-  \Lambda_{i,u}(C)=|\Sgrid_u|\int_{\Sgrid_u}p_{C,u}\, f_{i,u}\,\mathrm{d}z\;\ge\;1 .
-  \label{eq:lambda}
-\end{equation}
-For Gaussians, $\Lambda_{i,u}(C)\ge 1$ is equivalent to
-$\tfrac12\nu^{2}/(v_S+\sigma_i^2)\le \log\!\bigl(|\Sgrid_u|/\sqrt{2\pi(v_S+\sigma_i^2)}\bigr)$
-with $\nu=\hat S_i(u)-\tilde D_i(u)$, so the offset enters exponentially. A view is kept on
-the \emph{mean log Bayes factor} over its visible pixels,
-$\bar\ell_i(C)=|\Omega_i^{\mathrm{vis}}|^{-1}\sum_u\log\Lambda_{i,u}(C)\ge\tau$, where
-$\tau=0$ is the nominal null and the calibrated $\tau$ absorbs the correlation of
-pixels. The interval volume $|\Sgrid_u|$ is part of the test and must be fixed and
-reported. Applied to the whitened, projected residual, the pixels are independent with unit variance,
-and for equal variances the mean log Bayes factor is a decreasing function of
-$T_i/(n-2)$, which is why the evidence criterion ranks views like the chi-square test
-(Proposition~\ref{prop:loo}) and differs from it only where the whitened residual is not
-Gaussian. Because every view is tested against a surface from which its own information has been subtracted exactly, the
-result does not depend on the order of the views (R1), and the gate returns \emph{no
-consensus} when the surface does not support the view (R3). Algorithm~\ref{alg:admission}
+is whitened. Two statistics are used: the energy $T_j=\mathbf{r}_j^{\top}M\mathbf{r}_j$, with $M$ the
+precision $\Sigma_r^{-1}$ projected orthogonally to the alignment, which is $\chi^{2}_{n-2}$ under the
+model; and a region scan $\max_R |z_R|$ over candidate regions $R$ (appearance segments of view $j$),
+$z_R=\mathbf{g}_R^{\top}M\mathbf{r}_j/\sqrt{\mathbf{g}_R^{\top}M\mathbf{g}_R}$, with a Bonferroni
+threshold. For a region bias $\boldsymbol\phi=\beta\mathbf{g}_R$ the matched statistic is
+$\mathcal{N}(\beta\kappa,1)$ with $\kappa^{2}=\mathbf{g}_R^{\top}M\mathbf{g}_R$, so the minimum detectable
+bias is $(z_\alpha+z_\beta)/\kappa$, as in Baarda's reliability theory. Thresholds are set for a 5\%
+per-view false alarm and calibrated on clean development views, which also absorbs the
+overconfidence of \eqref{eq:var} (H5). A view is kept, excluded, or reported untestable; a
+scene-level alarm is raised if more than half of the views are excluded. Excluded views are
+removed from the depth supervision and the surface is refitted. Algorithm~\ref{alg:gate}
 summarises the gate.
 
 \begin{algorithm}[t]
-\caption{Shared-surface view-level gate}
-\label{alg:admission}
+\caption{Depth-only view gate}
+\label{alg:gate}
 \begin{algorithmic}[1]
-\REQUIRE depth maps $\{D_i\}$, provisional poses, threshold $\tau$, support $(\tau_\alpha,s_{\min})$, association gate $(\tau_h,\tau_{\mathrm{ext}})$
+\REQUIRE fitted surfels, depth maps $\{\hat d_i\}$, poses, $\Sigma_\varepsilon$, thresholds
 \FOR{each view $i$}
-  \STATE build primitives from $D_i$ in closed form \hfill (eq.~\eqref{eq:sigh})
-  \STATE associate to existing primitives or spawn; add information \hfill (eq.~\eqref{eq:info})
+  \STATE rasterise; accumulate $\Lambda_k^{(i)},\boldsymbol\eta_k^{(i)}$ \hfill \eqref{eq:info}
 \ENDFOR
 \FOR{each view $j$}
-  \STATE subtract $\lambda_j,h_j$ from the primitives it touches \hfill (eq.~\eqref{eq:loo})
-  \STATE render $\hat S_j,\;v_{S,j},\;W_j$ at view $j$ \hfill (eqs.~\eqref{eq:rayplane},~\eqref{eq:composite})
-  \IF{supported pixels $<s_{\min}P$}
-    \STATE $g_{j}\gets0$; \textbf{continue} \hfill (no consensus)
-  \ENDIF
-  \STATE fit the alignment of $D_j$ to $\hat S_j$; compute $\bar\ell_{j}$ on visible pixels
-  \STATE $g_{j}\gets\mathbb{1}[\bar\ell_{j}\ge\tau]$
+  \STATE subtract view $j$ \hfill \eqref{eq:loo}
+  \STATE drop surfels without other-view support; render $\hat D_{-j},V_{-j}$ \hfill \eqref{eq:var}
+  \STATE mark untestable pixels; align; whiten \hfill \eqref{eq:res}
+  \STATE keep, exclude or untestable by energy and region scan
 \ENDFOR
-\STATE re-fuse the primitives from the kept views only \hfill (fused output)
-\RETURN $\{g_{j}\}$, posterior, protection level, view count per region
+\STATE refit the surfels without the excluded views
 \end{algorithmic}
 \end{algorithm}
 
-\subsubsection{Cost}
-\label{sec:method:cost}
-A pairwise gate warps the neighbouring depth maps into the view under test, at a cost
-$C_{\mathrm{pair}}\approx N\bar d\,P\,c_w$ for $N$ views of $P$ pixels and mean co-visibility
-degree $\bar d$, which grows with the number of view pairs when overlap is dense. The
-closed-form surface builds each view once and renders it once,
-$C_{\mathrm{surf}}\approx N\,P\,(c_b+c_r)$, with no optimisation iterations and an $O(1)$
-leave-view-out per primitive; it wins when overlap is dense, with break-even degree
-$\bar d^{*}\approx(c_b+c_r)/c_w$, and the pairwise gate can be cheaper on sparse view graphs (H7;
-Supplement~\ref{sup:cost}).
+\paragraph{Cost}
+One rasterisation per view accumulates \eqref{eq:info}; the test of a view needs one more
+rasterisation and a $9\times9$ solve per surfel it touches. The cost is linear in the number of views
+and pixels and needs no correspondence search.
 
-\subsubsection{Exclusion, no-consensus alarm and availability}
-\label{sec:method:elim}
-The gate returns $g_i=1$ for kept depth maps and $0$ for excluded ones; an excluded view is
-removed from the depth constraints and from fusion but keeps its geometric constraints in the pose
-graph. A \emph{no-consensus} alarm is raised for a view that the other views cannot test, because
-the surface does not support it or fewer than three other views observe the region; the view is
-then not trusted, as for a satellite outside the redundancy. A \emph{scene-level} alarm is raised if
-more than half of the views are rejected, since the gate then cannot tell a failing model from a
-wrong surface. \emph{Availability}, the fraction of views that are tested and kept, is reported next
-to the false-alarm rate, because a monitor that excludes too much is also unusable. After pose graph
-optimisation the primitives are re-fused from the kept depth maps at the refined poses; this is the
-fused output.
-
-\subsubsection{Protection level on the fused output (conditional)}
-\label{sec:method:pl}
-For a primitive, the protection level is closed form. An undetected fault of view $j$ is at
-most its minimum detectable offset error, $(z_\alpha+z_{\beta_{\mathrm{md}}})\sqrt{1/\lambda_j+1/\lambda_{-j}}$,
-which moves the fused offset by the fraction $\lambda_j/\lambda$ of that error, so
-\begin{equation}
-  \mathrm{PL}_h=\max_j\frac{\lambda_j}{\lambda}\,(z_\alpha+z_{\beta_{\mathrm{md}}})\sqrt{\frac{1}{\lambda_j}+\frac{1}{\lambda_{-j}}}+\frac{z_q}{\sqrt{\lambda}},
-  \label{eq:plh}
-\end{equation}
-which is $(z_\alpha+z_{\beta_{\mathrm{md}}})/\sqrt{\lambda(m-1)}+z_q/\sqrt{\lambda}$ for $m$ views of
-equal information, and which falls as views are added. A region seen by fewer than three views
-has no protection level (it is untestable). The general ellipsoid form for an arbitrary scalar
-output follows.
-Integrity monitoring does not stop at detection: a protection level bounds the error in the
-output that an undetected fault can cause. For a scalar output $q$ of the reconstruction, for
-example the fused depth at a query pixel or one coordinate of a camera position, let
-$\mathbf{s}_i\in\R^{n}$ be the sensitivity of $q$ to a perturbation $\boldsymbol\phi$ of the depth
-of view $i$, $\Delta q=\mathbf{s}_i^{\top}\boldsymbol\phi$, estimated by perturbing the view and
-refitting; the response to a perturbation in $\mathrm{span}(A)$ is absorbed by the alignment. A
-fault that the energy test misses has a non-centrality below $\lambda_0$, that is
-$\boldsymbol\phi^{\top}M\boldsymbol\phi\le\lambda_0$, so if at most one view is faulty the remaining
-error is bounded by the extremum of $\mathbf{s}_i^{\top}\boldsymbol\phi$ over this ellipsoid,
-\begin{equation}
-\begin{split}
-  \mathrm{PL}_q&=\max_i\sqrt{\lambda_0\,\mathbf{s}_i^{\top}\tilde\Sigma_r\,\mathbf{s}_i}+z_q\,\sigma_q,\\
-  \tilde\Sigma_r&=\Sigma_r-A\bigl(A^{\top}\Sigma_r^{-1}A\bigr)^{-1}A^{\top},
-\end{split}
-  \label{eq:pl}
-\end{equation}
-where $\sigma_q$ is the standard deviation of $q$ under the healthy fit and $z_q$ a Gaussian
-quantile. For independent pixels this is $\sqrt{\lambda_0}\,\sigma\,\|\mathbf{s}_{i,\perp}\|$, a
-slope times a minimum detectable bias, the structure of a RAIM protection level
-\cite{flt_araim_pl_exclusion}, and for correlated residuals it uses $\Sigma_r$ directly. Equation
-\eqref{eq:pl} uses the energy test only, which is conservative: the scan statistic tightens it.
-There is an important difference from RAIM: RAIM allocates integrity risk using prior fault
-probabilities, which are unknown for learned depth, so \eqref{eq:pl} is \emph{conditional on a fault
-being present}. It rests on four assumptions, each of which fails in a regime we test: (A1) at most
-one faulty view, (A2) $\Sigma_r$ calibrated on clean data, (A3) a linear response for faults of the
-size of the minimum detectable bias, and (A4) a surface that is not itself corrupted, which fails
-for model-level faults. We therefore state \eqref{eq:pl} as a bound whose coverage is tested (H9),
-not as a guarantee, and it is the first item cut if the schedule slips.
-
+\paragraph{Approximation}
+Each surfel has its own block. Cross-surfel correlations (pixels shared by overlapping surfels), the
+correlation of depth error within a view and the shared pose error of a view are ignored, so the
+rendered variance is overconfident; H5 measures by how much, and deflating each view's information by
+$n_{\mathrm{eff}}/n$ is an ablation.

@@ -27,33 +27,33 @@
             country={USA}}
 
 \begin{abstract}
-Monocular-depth reconstruction uses a depth model's prediction for each image as a geometric
-prior, but a model can fail coherently on some views, as on glass, sky and out-of-distribution
-scenes. Such a fault adds a small, spatially structured bias that the monocular scale and offset
-cannot absorb: below the noise at each pixel, so pixel-wise consistency filters cannot see it,
-yet large when aggregated over the view's co-visible pixels. Robust kernels only down-weight a
-bad view and make no statement about trust. This paper proposes view-level fault rejection in the
-spirit of receiver autonomous integrity monitoring. Starting from an explicit measurement model,
-with scale and offset ambiguity, heteroscedastic and spatially correlated depth noise, pose,
-intrinsics and surface uncertainty, it derives a gate that tests the whitened residual of each
-view, with a stated false-alarm rate, a minimum detectable bias and an effective number of pixels
-that follow from the residual covariance. The gate excludes a faulty view before pose graph
-optimisation and fusion and raises a no-consensus alarm when it cannot decide. Each depth map,
-produced by one metric model per image, is tested once against a shared surface of Gaussian
-primitives built from the depth maps in closed form, from which the view's own information is
-subtracted exactly, as in RAIM solution separation, so the cost grows with the number of views
-and each region reports a posterior, a protection level and a view count. A pre-registered protocol
-states ten falsifiable hypotheses, including where gating does not help.
+Monocular metric depth models are good enough to supervise Gaussian splatting, but they fail
+regionally and for reasons of appearance: on reflective surfaces they predict the depth of the
+reflection, and on textureless walls they guess. Robust losses and distractor masks act per pixel,
+mostly from colour, and state no false-alarm rate. This paper proposes a depth-only view gate built
+on Gaussian surfels whose uncertainty renders. Each 2DGS-style surfel keeps its shape for rendering
+and, separately, a $9\times9$ uncertainty over its mean, rotation error and log scales; every view adds
+the alpha-weighted rasteriser information $J^{\top}R^{-1}J$, so fusion needs no correspondences and
+leaving a view out is a subtraction. The other views' surface and its variance are rendered into the
+tested view, whose whitened depth residuals are tested at a stated false-alarm rate; pixels that no
+other view sees are untestable, and the tested view spawns no surfels. Colour is a separate block that
+never updates geometry. The test is classical (Baarda, Teunissen, solution separation); the
+contribution is a per-Gaussian uncertainty that renders and its use for testing views. A
+pre-registered protocol first measures the residuals of a real depth model on ETH3D, tests whether it
+repeats its errors across views in textureless regions, and requires the gate to beat cheap
+baselines, including SpotLessSplats, RobustNeRF, robust depth losses, aligned residual RMS and depth
+confidence, in depth-supervised splatting on ETH3D and ScanNet++.
 \textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 
 \begin{keyword}
-3D reconstruction \sep fault detection and exclusion \sep Gaussian surfaces \sep integrity monitoring \sep monocular depth estimation \sep pose graph optimisation \sep robust estimation
+Gaussian splatting \sep monocular depth estimation \sep fault detection and exclusion \sep uncertainty quantification \sep surfels \sep 3D reconstruction \sep integrity monitoring
 \end{keyword}
 
 \end{frontmatter}
 
 \input{sections/intro}
+\input{sections/related}
 \input{sections/method}
 \input{sections/setup}
 \input{sections/results}

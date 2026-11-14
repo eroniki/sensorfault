@@ -1,337 +1,62 @@
 \section{Experimental Setup in Detail}
 \label{sup:setup}
-\label{sup:expsetup}
 
-\subsubsection{Data}
-\label{sec:setup:data}
-\runin{ETH3D (primary real data).} ETH3D provides multi-view images with
-high-resolution laser-scan ground truth and calibrated camera poses \cite{data_eth3d}.
-The laser scan gives, for every view, a reference depth against which each view's depth
-map can be scored, so natural failures (glass, sky and other out-of-distribution content) can be labelled without injecting anything.
-\TODO{Fix the scene subset, the dev/test split and the licence check.}
+\subsection{Data}
+\runin{ETH3D (primary; residual measurement).} Multi-view images with laser-scan ground truth and
+calibrated poses \cite{data_eth3d}; the laser depth scores every view's depth map, so natural failures
+are labelled without injection. Development scenes (proposed: courtyard, electro, kicker) are used for
+the residual measurement and all tuning; test scenes only after the pre-registration tag.
+\TODO{Fix the scene subset and check the licence.}
 
-\runin{ScanNet++ (secondary, subject to access terms).} ScanNet++ provides indoor
-scenes with registered images and high-fidelity laser-scanned geometry
-\cite{data_scannetpp}, and contains reflective and transparent surfaces on which
-monocular models are expected to fail. Access requires accepting the dataset terms.
-\TODO{Confirm access and terms before relying on it.}
+\runin{ScanNet++ (secondary).} Indoor scenes with registered images and laser-scanned geometry
+\cite{data_scannetpp}, with many reflective and transparent surfaces. Access requires accepting the
+dataset terms. \TODO{Confirm access and terms.}
 
-\runin{Replica (controlled synthetic).} Rendered images and exact depth from Replica
-\cite{data_replica} allow every fault parameter and the overlap between views to be
-varied. Its terms do not clearly permit redistributing renderings, so only the
-generator, seeds and configurations are released.
+\subsection{Depth Model}
+Depth Pro \cite{est_depthpro} is the default: it predicts metric depth without intrinsics, one map per
+image, and it returns no confidence, so its $\sigma(\cdot)$ is fitted (H1). Per their public
+documentation (checked 2026-11-14), Metric3D v2 returns a depth confidence for its ViT models and
+UniDepthV2 lists a confidence output; they supply the confidence baseline. MoGe returns a validity
+mask rather than a confidence, and Depth Anything V2 and Marigold document no uncertainty output.
 
-\runin{View counts for the cost study (H7).} The scaling study needs scenes with tens to
-hundreds of views and a controllable co-visibility degree $\bar d$. It uses Replica
-renderings, where the number of views and the overlap are set by the trajectory,
-frames subsampled from ScanNet++ capture sequences, and the multi-camera videos of ETH3D,
-whose view counts are to be checked. \TODO{Verify the number of views per scene and the
-achievable $\bar d$ in each dataset before fixing the grid of $N$ and $\bar d$.}
+\subsection{Reconstruction and Gate}
+Surfels are 2DGS planar Gaussians rendered with gsplat into expected depth, alpha weights and
+accumulated opacity, fitted by depth supervision at the dataset poses. The appearance block holds the
+colours; the photometric loss updates only that block (gradients stopped at the geometry), so colour
+never updates geometry (ablation A9 lifts this rule). The gate accumulates \eqref{eq:info} from the
+rasteriser's per-pixel surfel weights and the Jacobians \eqref{eq:jac}; its parameters are the support
+threshold $\lambda_{\min}$, the opacity threshold $\tau_W$, the prior $\Lambda_0$, the candidate regions
+of the scan (appearance segments) and the 5\% per-view false alarm, all fixed on development scenes.
+\TODO{Fix $\lambda_{\min}$, $\tau_W$, $\Lambda_0$ and the segmentation on development scenes; report
+GPU model, wall-clock and memory on the 8~GB card.}
 
-\runin{Trajectory benchmarks (optional).} The TUM RGB-D protocol \cite{data_tum} and
-the Tanks and Temples benchmark \cite{data_tnt} define trajectory and reconstruction
-metrics that are used as the metric definition when a scene lacks a laser reference.
+\subsection{Faults}
+\runin{Natural.} A view region is a natural failure if its aligned error against the laser depth
+exceeds $k\sigma$ on a connected region of at least a minimum area; regions are classed from the image
+and the laser reference as reflective or glass, textureless wall, or other. $k$ and the minimum area
+are fixed on development scenes.
+\runin{Injected.} Offset, plane replacement, blurred copy and mirrored depth (the depth of a reflected
+scene) on 2, 5, 10, 20 or 40\% of a view at 2, 4, 8 or 16$\sigma$, placed on reflective or textureless
+appearance masks or on random connected superpixels, either independently per view or repeated with
+the same error across views. Whole-view affine errors are a control: they are absorbed and should be
+neither detected nor harmful.
 
-\subsubsection{Depth model}
-\label{sec:setup:model}
-\runin{Default: Depth Pro.} The main setup applies one metric model to each image. We use
-Depth Pro \cite{est_depthpro} for three reasons taken from its description: it predicts
-depth with absolute scale, so depth maps of different views are comparable without a
-per-view scale fit, which matters when each view has a single source and a free alignment
-could absorb a fault; it does not rely on camera intrinsics or other metadata; and it is fast
-(its authors report a 2.25-megapixel depth map in 0.3 seconds on a standard GPU), which
-bounds the cost of $N$ inferences per scene. It also produces sharp boundaries, which
-helps a surface fit. UniDepth and Metric3D v2 \cite{est_unidepth,est_metric3dv2} are
-comparable metric alternatives. The default is confirmed on development scenes by comparing
-the aligned depth error of the candidates against the laser reference; it is never selected
-on test scenes. \TODO{Check Depth Pro's weight licence and GPU memory on an 8~GB card,
-and record the development-scene comparison; if the check disfavours it, switch to the
-best candidate and say so.}
+\subsection{Baselines}
+\emph{Robust splatting:} SpotLessSplats as released with depth supervision added \cite{gs_spotless};
+the RobustNeRF trimmed robust loss applied to splatting \cite{gs_robustnerf}; Huber and
+Geman--McClure depth losses \cite{rob_blackrangarajan,rob_barron}. \emph{Cheap view tests:} the RMS of
+the per-view aligned depth residual against the other views' render, without whitening; and a view
+score from the confidence of Metric3D v2 or UniDepthV2. For H3, the masks of the robust methods are
+also turned into view scores. \emph{Bounds:} no gate, and an oracle gate that drops exactly the faulty
+views. \emph{Gate ablations:} a joint surface (no leave-view-out); keeping surfels that only the tested
+view supports; constant-$\sigma$ residuals; information deflated by $n_{\mathrm{eff}}/n$; a FisherRF-style
+diagonal Fisher \cite{unc_fisherrf} and a Bayes' Rays-style uncertainty \cite{unc_bayesrays} in place
+of the rendered blocks; energy or region scan alone; and the evidence (Bayes-factor) criterion of our
+earlier work \cite{flt_ambarkutuk}, following its Eq.~(14), as an equivalence check.
 
-\runin{Ensemble ablation.} The ablation adds UniDepth and Metric3D v2, and optionally the
-affine-invariant MoGe \cite{est_moge}, to give $M\in\{2,3,4\}$ models per view
-(Section~\ref{sec:method:ensemble}). The overlap of their training data is only coarsely
-documented, so the ablation measures how often models fail together instead of assuming it.
-
-\subsubsection{Fault injection}
-\label{sec:setup:faults}
-The fault classes are defined in Section~\ref{sec:method:defs}; this subsection fixes the
-grid. Faults are injected into the depth map or the pose prior of selected views, by
-deterministic, seeded scripts, so every realisation is reproducible from a manifest. Seeds are
-derived as $\mathrm{SeedSequence}([\text{master},\,h(\text{view id}),\,\text{fault id}])$ with a
-stable hash and at least five master seeds. The grid is:
-\begin{itemize}
-  \item \emph{coherent bias (the regime map):} a per-pixel bias of
-        $\delta\in\{0.1,0.2,0.3,0.5,1,2,4\}\,\sigma$ on a fraction
-        $f\in\{0.01,0.02,0.05,0.1,0.2,0.5,0.8\}$ of the pixels of one view, either in a contiguous
-        region or scattered at random (the two differ in the effective number of independent
-        pixels), with both signs; and, as an \emph{affine control}, the same bias on all pixels
-        ($f=1$) and a bias proportional to $\sigma(d)$, which lie in the span of the scale and
-        offset and are predicted to be neither detected nor harmful (H1d);
-  \item \emph{smooth warp:} a random low-frequency field added to the inverse depth,
-        with amplitude $\alpha\in\{0.25,0.5,1,2\}$ times the standard deviation of the
-        inverse depth of the view;
-  \item \emph{region failure:} a connected region covering $20$--$40\%$ of the pixels is
-        replaced by a plane fitted to the whole view or by a blurred copy;
-  \item \emph{non-affine distortion:} $D'=D^{\gamma}$ with $\gamma\in\{0.8,0.9,1.1,1.25\}$;
-  \item \emph{spoofed pose prior:} a consistent or linearly drifting offset of the pose prior
-        over a block of views, of $\{1,2.5,5,10\}$~cm and $\{0.1,0.25,0.5,1\}^{\circ}$;
-  \item \emph{intermittent pose glitches:} isolated views whose prior jumps by
-        $\{10,25,50\}$~cm and $\{2,5,10\}^{\circ}$;
-  \item \emph{false loop closures:} $\{1,3,5\}$ spurious relative-pose constraints between
-        non-neighbouring views, with a random wrong relative pose and a plausible inlier ratio;
-  \item \emph{persistence:} a fraction $p\in\{10,20,40,60\}\%$ of the views, scattered at
-        random or clustered in contiguous views; a fault on all views is the model-level
-        breakdown scenario;
-  \item \emph{controls:} sparse independent outliers at the same corrupted-pixel rate, and
-        fault-free runs;
-  \item \emph{ensemble ablation:} 1 to $\lceil M/2\rceil$ of the $M$ models corrupted on the
-        same views, with independent parameters and, separately, identical parameters
-        (common mode).
-\end{itemize}
-Natural failures need no injection: a view is labelled faulty when, after robust affine
-alignment, its error against the laser reference exceeds a threshold fixed on development
-scenes. \TODO{Fix the labelling threshold on development scenes.}
-Overlap between views, the clustering of faulty views, the fold layout relative to the
-clusters, and the spatial layout of the bias mask are controlled variables, because a pixel
-filter or a kernel does not fail merely because a fault is coherent: it is expected to fail
-when the per-pixel bias is below the noise, when faulty views have few neighbours, or when
-neighbouring views fail together (challenge C1).
-
-\subsubsection{Baselines}
-\label{sec:setup:baselines}
-Every method receives the same images, matches, depth maps, fault realisations and
-pose-graph solver; thresholds are tuned on development scenes only, with the tuning
-budget reported. Re-implementations are labelled as such and released. Methods that do not
-exclude a view, namely robust kernels, soft weights and pixel filters, are compared on
-detection by an \emph{action rate} calibrated to the same false-alarm rate as the gate: a view
-counts as detected when its weight falls below one half (or, for a pixel filter, when it loses
-more than the pixel fraction that removes 5\% of healthy views).
-\begin{itemize}
-  \item \textbf{Robust kernels in the pose graph (no gate).} Huber, Cauchy and
-        Geman--McClure kernels \cite{flt_huber,rob_blackrangarajan,rob_barron,rob_mactavish},
-        graduated non-convexity \cite{rob_gnc}, switchable constraints \cite{rob_switchable},
-        dynamic covariance scaling \cite{rob_dcs} and max-mixtures \cite{rob_maxmix}, applied to
-        the geometric and the depth constraints; the last three are the strong baselines for
-        false loop closures.
-  \item \textbf{Soft view down-weighting.} A per-view weight $w_i\in[0,1]$ estimated inside
-        the differentiable pose graph from the view's residual (a Student-$t$ or learned-scale
-        weight), with no hard exclusion and no alarm.
-  \item \textbf{COLMAP geometric consistency filter.} The pixel-wise cross-view depth and
-        reprojection consistency test of COLMAP \cite{fus_colmap_mvs}, run with the same
-        poses, masking depth constraints and fusion pixel by pixel; and, as the strongest
-        pixel-based competitor, the same pixel flags \emph{aggregated} over the view into a
-        count test with the same false-alarm rate.
-  \item \textbf{Plain voting.} Per-pixel median and majority across the views that observe
-        a pixel, with no gate.
-  \item \textbf{No gate, no robust kernel;} and an \textbf{oracle gate} that drops
-        exactly the faulty views (from the injection manifest, or from the laser
-        reference for natural failures), as an upper bound.
-  \item \textbf{Gate variants:} a chi-square (energy) gate and the evidence gate of
-        Section~\ref{sec:method:admission}, a region-scan gate, and their combination, each
-        against the closed-form shared surface (leave-view-out by subtraction)
-        and against a \emph{pairwise}
-        consensus that warps the neighbouring views into the view under test
-        (Appendix~\ref{app:pairwise}); three ablations of the shared surface: no
-        leave-view-out (the surface contains the view under test, a joint fit),
-        a fixed-budget 3DGS-MCMC surface \cite{gs_mcmc} fitted by optimisation in place of the closed
-        form (with explicit leave-view-out refits as its reference), and a single-covariance
-        variant in which extent and uncertainty are not separated; and, as a context for the choice of dropping over correcting, an
-        estimate-and-correct baseline that refits the alignment of every view without
-        dropping any.
-  \item \textbf{Ensemble ablation (H10).} Cross-model voting (per-pixel median or majority
-        across the $M$ models, flagging a view when the models disagree) and the ensemble
-        gate of Section~\ref{sec:method:ensemble}.
-  \item \textbf{Reference points, not rivals.} MASt3R-SfM \cite{rec_mast3rsfm} and VGGT
-        \cite{rec_vggt}, run as released on the same images, with classical COLMAP SfM
-        \cite{fus_colmap_sfm} as a classical reference. They do not use our depth
-        maps and therefore do not see the injected faults; they are reported to place
-        the test bed in context, and no claim is made to beat them.
-\end{itemize}
-All methods fuse their kept depth with the same closed-form surface (the baselines without
-gating, with a robust kernel in the information weights); a TSDF of the same depth is a secondary check.
-Every method is timed. The test bed is an offline pipeline, and we report latency and memory
-per stage and state which methods do not meet a per-frame real-time budget.
-
-\subsubsection{Metrics and statistics}
-\label{sec:setup:metrics}
-Integrity metrics are the primary ones, and the measurement model is checked first: the fitted
-$\sigma(\cdot)$, $\ell$ and $\nu$ of each model, the effective number of pixels of
-\eqref{eq:neff} per view, the mean of $T_i/(n-2)$ on fault-free views and the false-alarm rate
-against $\alpha$ (the adequacy of the nominal model). Per view and per fault cell, the gate is scored by its
-\emph{detection power} at a fixed 5\% false-alarm probability (the regime map is the
-heatmap of power over $(\delta,f)$), the \emph{empirical minimum detectable bias} (the smallest
-$\delta$ with power $0.9$, to be compared with \eqref{eq:mdb} computed from the measured
-$\Sigma_r$), the false-alarm and
-missed-detection rates, the rate of no-consensus alarms, and \emph{availability}, the fraction
-of views that are tested and kept. Precision and recall against the oracle labels and the
-\emph{elimination curve AUC}, the normalised partial area under power versus clean-run
-false-alarm rate on $[0,0.2]$ (it equals the ROC AUC at $\mathrm{FER}_{\max}=1$), summarise
-the trade-off. For H9 the realised error of the output $q$ is compared with the protection
-level \eqref{eq:pl}: the exceedance rate. Downstream accuracy is reported as absolute
-trajectory error after similarity alignment, relative pose error, the area under the curve of
-the relative pose error at fixed angular thresholds, and fused-surface accuracy, completeness
-and F-score against the laser reference; accuracy and completeness are reported separately,
-because dropping a view lowers completeness wherever only that view saw a region. Depth
-quality is the absolute relative error and the fraction within a ratio of the reference after
-alignment. Gate cost is reported as wall-clock time and peak GPU memory against the number of
-views $N$ (log--log slope), the number of surface fits, and the mean co-visibility degree
-$\bar d$. For the ablation, the failure indicator of a model on a view is that its aligned
-error against the laser reference exceeds the same threshold as for natural failures;
-agreement between models is reported as the joint failure frequency, its ratio to the product
-of the marginals (lift), and the phi coefficient. Intervals are scene-level bootstrap
-confidence intervals, with paired Wilcoxon tests against baselines and scenes as the unit.
-
-
-\subsection{Implementation}
-\label{sec:setup:protocol}
-Hypotheses, thresholds, metrics, the tuning protocol and the dev/test split are fixed in a
-preregistration file and tagged in version control before any test scene is processed;
-the runner refuses the test split without that tag. The measurement model is calibrated once per depth model on clean development data
-(Section~\ref{sec:method:calibration}): $\sigma(r,\tau,\theta)$, $\ell$ and $\nu$ by maximum
-likelihood of the residuals against the laser reference depth, $\Sigma_q$ from the marginal
-covariances of the provisional pose graph, and $\Sigma_{\mathrm{surf}}$ online from the composite variance of the closed-form surface; the confidence-covariate variant uses Metric3D v2 or UniDepthV2, which
-output a confidence, as ablation models. The gate threshold is then calibrated by permutation on
-clean development runs, with $n_{\mathrm{eff}}$ computed from $\Sigma_r$ by \eqref{eq:neff}, to a
-5\% per-view false-alarm rate. At least six
-scenes (three development, three test) and five seeds are used per dataset. The
-test bed uses an off-the-shelf feature matcher, a Gauss--Newton or Levenberg--Marquardt
-pose-graph solver \cite{opt_g2o,opt_factorgraphs,opt_theseus}, and the closed-form Gaussian surface of Section~\ref{sec:method:surface}, with a TSDF
-\cite{fus_curless,fus_kinectfusion} as a secondary check. The surface has no iterations and no
-folds; its parameters are the association gate $(\tau_h,\tau_{\mathrm{ext}},\cos_{\min})$,
-the footprint scale of the extent, and the support $\tau_\alpha$ and $s_{\min}$. The
-fixed-budget MCMC ablation uses a fixed $N_s$ and a fixed number of iterations $n_{\mathrm{it}}$.
-Depth is computed once per view and cached, so the
-default setup runs $N$ model inferences per scene and the ensemble ablation $MN$; the
-surface build and render, the pose graph and, for the reference points, MASt3R-SfM and VGGT are the
-other costs, and their memory on an 8~GB card is checked before the scenes are fixed. The sensitivities of H9 are the closed-form slopes of \eqref{eq:plh} for primitives and, for scalar outputs, estimated by perturbing a view and re-fusing.
-\TODO{Choose and cite the matcher and the solver; fix the association gate, the footprint, $N_s$ and $n_{\mathrm{it}}$ (MCMC ablation only),
-  $\tau_\alpha$ and $s_{\min}$ on development scenes; add the GPU model, wall-clock time and
-  GPU-hours per experiment once runs exist.}
-
-\subsection{Hypotheses in Full}
-\label{sup:hyp}
-The following predictions are pre-registered. Each states what would falsify it, and several
-state where the gate is expected \emph{not} to help.
-\begin{description}
-  \item[H1] \emph{(regime map: where pixel filters and robust kernels fail and the gate does not).}
-        With one metric model whose depth carries a coherent bias of $\delta\sigma$ on a
-        fraction $f$ of one view, at 5\% false alarm: (a)~the gate's empirical minimum
-        detectable bias follows \eqref{eq:mdb} computed from the measured $\Sigma_r$ within a
-        factor of 2; (b)~in the sub-noise regime ($\delta\le0.5$, $0.2\le f\le0.8$) the gate
-        detects at least 80\% of the faulty views, whereas the best pixel-wise filter, robust
-        kernel and soft weight each detect at most 20\%; (c)~in the sparse-outlier regime
-        ($\delta\ge4$, $f\le0.02$) the best pixel filter detects at least as many views as the
-        gate, and the gate is not expected to win; (d)~a uniform bias ($f=1$) and a bias
-        proportional to $\sigma$ are neither detected (power at most the false-alarm rate plus 5
-        points) nor harmful (no increase of the trajectory or fused-surface error above the
-        clean value by more than 5\%), because the per-view alignment absorbs them.
-        \emph{Falsified if} (a)~the empirical and predicted minimum detectable bias differ by
-        more than a factor of 2, (b)~the detection gap at $\delta=0.3$, $f=0.5$ is below 30 points
-        or its interval includes zero, (c)~the gate beats the best pixel filter by 10 points or
-        more in the sparse-outlier regime, or (d)~the uniform bias is detected or degrades the
-        output.
-  \item[H2] \emph{(consequence for the trajectory and the fused surface).} In the sub-noise regime
-        of H1, the gated pipeline reduces the absolute trajectory error and the fused-surface
-        error by at least 25\% relative to the best tuned of the robust kernels, soft weights,
-        the COLMAP consistency filter and plain voting, and lands within 20\% of the oracle
-        gate; in the sparse-outlier regime they tie or win, and that is reported.
-        \emph{Falsified if} the paired confidence interval of the improvement includes zero in
-        the sub-noise regime, or the median error is more than 20\% above the oracle gate.
-  \item[H3] \emph{(statistic).} (a)~At a fixed 5\% false-alarm rate the evidence criterion exceeds the
-        chi-square (energy) gate by at least 10 points of detection power, only where
-        heteroscedastic depth noise, grazing geometry, occlusion or non-Gaussian residuals break
-        the chi-square assumptions, and ties under idealised Gaussian noise
-        (Proposition~\ref{prop:loo}). (b)~The region-scan statistic beats the energy statistic by at
-        least 20 points for a bias confined to a region, the energy statistic beats the scan by at
-        least 20 points for a smooth warp that is diffuse over the view, and the combined gate
-        loses at most 3 points to the better of the two. \emph{Falsified if} (a)~there is no gain
-        in any pre-registered regime (the fallback is to report the gate with the chi-square
-        statistic, with the entropy relation as an equivalence result) or (b)~either gap is below
-        10 points.
-  \item[H4] \emph{(leave-view-out, alignment and support).} Testing a depth map against a
-        surface from which its view has been \emph{subtracted}, after a scale-and-shift fit of
-        the depth map to the rendering, and only on pixels the surface supports, keeps the
-        false-alarm rate on clean data at or below 5\%; testing against a joint surface that
-        contains the view lets the surface absorb the fault and
-        lowers detection power by at least 10 points, and removing the support mask at
-        least doubles the false-alarm rate. \emph{Falsified if} the ablations leave
-        the rate and the power unchanged.
-  \item[H5] \emph{(placement, soft down-weighting and complementarity).} Gating before pose graph
-        optimisation gives lower trajectory error than applying the same statistic after the
-        graph, and lower than soft per-view down-weighting inside the differentiable
-        optimisation, in the sub-noise regime; the gate combined with a robust kernel is at least
-        as accurate as either alone. \emph{Falsified if} soft down-weighting matches the gate in
-        the sub-noise regime (it would then suffice), if gating after the graph matches gating
-        before it, or if the combination is worse than the better component.
-  \item[H6] \emph{(adequacy of the measurement model, price of monitoring on clean data, and reference         points).} The nominal model is adequate: on fault-free views the mean of $T_i/(n-2)$ is
-        $1\pm0.1$ and the false-alarm rate is within $[0.5\alpha,1.5\alpha]$ without per-scene
-        retuning, with $\sigma(\cdot)$, $\ell$ and $\nu$ fitted once on development scenes. On
-        fault-free data the per-view false-alarm rate is at most 5\%, availability is at least 90\%, and the gate
-        changes trajectory and fused-surface error by at most 5\% relative to the pipeline
-        without it; on natural failures the gated test bed narrows the gap to the reference
-        points MASt3R-SfM and VGGT, which are reported as context. \emph{Falsified if} the
-        mean of $T_i/(n-2)$ leaves $1\pm0.1$ or the false-alarm rate leaves its band (the model is
-        misspecified and the minimum detectable bias of H1 cannot be trusted), the price of gating
-        on clean data exceeds 5\%, or availability falls below 90\%.
-  \item[H7] \emph{(shared surface versus pairwise checks).} (a)~\emph{Efficiency:} the wall-clock
-        time of the closed-form shared-surface gate grows linearly with the number of views (log--log
-        slope below 1.2), whereas the pairwise gate grows with $N\bar d$ (slope above 1.5 on
-        dense overlap graphs), and for $N\ge100$ views at mean co-visibility degree
-        $\bar d\ge10$ the shared-surface gate is at least 2$\times$ faster; for sparse
-        graphs the pairwise gate is expected to be cheaper, and the break-even degree is
-        reported. (b)~\emph{Robustness:} at 5\% false alarm, the shared-surface gate's
-        detection power is within 5 points of the pairwise gate's (non-inferiority) in the
-        regimes of H1. (c)~\emph{Closed form versus optimised:} the closed-form surface is
-        within 3 points of the fixed-budget MCMC surface with explicit leave-view-out refits
-        at a fraction of its cost, and each region yields a posterior, a protection level and
-        a view count whose coverage is reported. (d)~\emph{Association:} the gate is robust to
-        the order of the views, and the cold start and association failure are measured as
-        breakdown scenarios. \emph{Falsified if} (a)~the speed-up is below 2$\times$ at
-        dense overlap or the slopes do not separate, (b)~the pairwise gate is more than
-        5 points better, or (c)~the closed form is more than 3 points worse than the
-        optimised surface.
-  \item[H8] \emph{(pose faults).} (a)~For spoofed pose priors and glitches, the gate detects at
-        least 80\% of the views whose pose error exceeds the minimum detectable bias that
-        \eqref{eq:mdb} implies through the pose Jacobian \eqref{eq:Jq}, and excluding them lowers the
-        trajectory error relative to robust kernels. (b)~For large false loop closures,
-        switchable constraints, dynamic covariance scaling and max-mixtures, which were
-        designed for them, match the gate within 5 points, and the gate is not expected to win.
-        (c)~For small coherent pose offsets ($\le0.5^{\circ}$) the gate beats every robust kernel
-        by at least 20 points of detection power. \emph{Falsified if} (a)~the power above the
-        minimum detectable bias is below 80\%, (b)~the gate beats the best loop-closure
-        baseline by more than 10 points, or (c)~the interval of the gap in (c) includes zero.
-  \item[H9] \emph{(protection level; optional).} Under single-fault injections that satisfy
-        assumptions A1--A4 of Section~\ref{sec:method:pl}, with a fault at the minimum detectable
-        bias, the realised error of the output $q$ exceeds the protection level \eqref{eq:pl}, computed
-        from the measured $\Sigma_r$, in at most $\beta_{\mathrm{md}}+5$ points of the runs; under two faulty views in a region or a model-level
-        fault, where the assumptions fail, the exceedance rate is more than $2\beta_{\mathrm{md}}$, which
-        documents where the bound does not hold. \emph{Falsified if} the exceedance under single
-        faults is above $\beta_{\mathrm{md}}+5$ points.
-  \item[H10] \emph{(ensemble ablation).} (a)~\emph{Shared failures:} on natural failures, models
-        that overlap in training data fail on the same views more often than independence
-        predicts: for each pair of models the lift of the joint failure frequency is at
-        least 2 and the phi coefficient at least 0.3. (b)~\emph{Where voting breaks:} on
-        views where at least half of the models fail, cross-model voting detects the failing
-        view in at most 20\% of cases (the models agree with each other), whereas the
-        single-model gate against the surface detects at least 20 points more of them; the
-        converse is reported, not predicted: on views the surface cannot support (too few
-        other views), voting is expected to detect what the gate cannot. (c)~\emph{Value of the
-        ensemble:} adding the models to the gate raises detection power at 5\% false alarm
-        by at least 5 points over the single-model gate, which would justify the $M\times$
-        inference cost. \emph{Falsified if} (a)~the lift interval includes 1 (failures are
-        independent), (b)~voting's power on common-mode views is within 10 points of the
-        gate's, or (c)~the gain from the ensemble includes zero.
-\end{description}
-
-
-
-
-\subsection{Depth-Model Confidence Outputs}
-Per their public documentation
-(checked 2026-11-14), Metric3D v2 returns a depth confidence (and a normal confidence) for its
-ViT models, and UniDepthV2 lists a confidence output; Depth Pro returns depth and an estimated
-focal length but no confidence, MoGe returns a binary validity mask rather than a confidence, and
-the documentation of Depth Anything V2 and Marigold describes no uncertainty output. The default
-model therefore needs its $\sigma(\cdot)$ fitted, and the confidence-output models are the
-candidates for the confidence-covariate variant. 
+\subsection{Metrics and Protocol}
+Detection power at 5\% per-view false alarm, false-alarm, untestable and availability rates and the
+elimination-curve AUC; held-out laser-depth AbsRel and surface accuracy, completeness and F-score; the
+cross-view error correlation by appearance class; raw and deflated $T_j/(n-2)$ on clean views.
+Scene-level bootstrap intervals and paired Wilcoxon tests, five seeds. Hypotheses, thresholds and the
+dev/test split are fixed in a pre-registration file and tagged before any test scene is processed.

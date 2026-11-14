@@ -1,175 +1,43 @@
-\section{Related Work, Challenges and Baseline Study}
+\section{Related Work}
 \label{sup:related}
-\subsection{Relevant Literature}
-\label{sec:intro:lit}
-\runin{Integrity monitoring and fault detection and exclusion.}
-In satellite navigation, a consistency test on the residuals of redundant ranges detects a
-fault when its statistic exceeds a threshold set by the allowed false-alarm probability
-\cite{flt_raim_parkinson,flt_raim_sturza,flt_raim_brown}; the smallest fault that is detected
-with a given probability of missed detection is the minimum detectable bias, and the
-\emph{protection level} bounds the position error that an undetected fault of that size can
-cause. Solution-separation and multiple-hypothesis tests compare the solution with and without
-each measurement, which identifies the faulty one so that it can be excluded
-\cite{flt_raim_brenner,flt_raim_pervan,flt_raim_joerger}, and advanced RAIM extends this to
-several constellations and to protection levels after exclusion
-\cite{flt_araim_baseline,flt_araim_pl_exclusion}. Integrity monitoring has been applied to
-LiDAR-based navigation, to detect unwanted objects \cite{flt_integrity_lidar}. Byzantine fault
-tolerance \cite{flt_lamport}, interval-based fusion of continuous-valued sensors
-\cite{flt_marzullo,flt_brooksiyengar} and random-sample-consensus methods
-\cite{flt_ransac,flt_msac} select a consistent subset of sources. In our earlier work we
-eliminated Byzantine accelerometers from a vibration-based localisation by building a
-consensus of per-sensor PDFs \cite{flt_ambarkutuk}, and used a joint likelihood over several
-sensors for dispersive wave propagation \cite{flt_ambarkutuk2024}. Testing a unit against a
-model that was fitted without it is the idea behind cross-validation and the jackknife; the
-gate applies it to depth sources, with a Gaussian surface as the model, for which leaving a view out is exact. To our knowledge,
-integrity monitoring of this kind has not been applied to the views of a learned-depth
-reconstruction; this statement rests on a limited literature search.
 
-\runin{Monocular depth estimators.}
-MiDaS learns depth that is invariant to range and scale by mixing datasets
-\cite{est_midas}; Depth Anything V2 reports finer and more robust predictions from
-synthetic labels and pseudo-labelled real images \cite{est_dav2}. Metric3D v2,
-UniDepth and Depth Pro target zero-shot metric depth \cite{est_metric3dv2,est_unidepth,est_depthpro};
-MoGe predicts an affine-invariant point map \cite{est_moge}, and Marigold repurposes
-diffusion-based image generators for depth \cite{est_marigold}. Outputs therefore differ
-in whether they carry metric scale, and none of these works states when a prediction
-should not be used for downstream geometry. Ensembles are a standard route to
-predictive uncertainty \cite{ens_deepensembles}; here an ensemble of models appears only
-as an ablation, because models trained on overlapping data may fail on the same views.
+\runin{Testing theory and integrity monitoring.} Baarda's data snooping and reliability theory and
+its extension to the detection--identification--adaptation (DIA) procedure test a linear Gaussian
+model with nuisance parameters for a misspecified observation and give a minimum detectable bias
+\cite{stat_teunissen_dia}. Receiver autonomous integrity monitoring applies the same logic to
+satellites \cite{flt_raim_parkinson,flt_raim_sturza,flt_raim_brown,flt_raim_pervan}, and solution
+separation, which compares the full solution with a leave-one-out solution, equals the
+residual-based test \cite{flt_raim_joerger}; protection levels with exclusion are analysed in
+\cite{flt_araim_pl_exclusion}. Our gate is an instance of this theory; its observations are pixels,
+its nuisance is the per-view scale and offset, and its leave-one-out solution is a rendered surface.
 
-\runin{Gaussian splatting as a surface.}
-3D Gaussian splatting represents a scene by anisotropic Gaussians rendered with a
-visibility-aware rasteriser \cite{gs_3dgs}; 2D Gaussian splatting uses oriented planar
-disks with depth-distortion and normal-consistency terms for surface accuracy
-\cite{gs_2dgs}; 3DGS-MCMC treats the Gaussians as MCMC samples and replaces densification
-by relocation, which allows a fixed primitive budget \cite{gs_mcmc}; we use it only as an
-ablation of our closed-form surface. DN-Splatter adds
-depth and normal priors, including monocular ones, to splatting of indoor scenes
-\cite{gs_dnsplatter}. SpotLessSplats and RobustSplat mask transient distractors from
-photometric evidence \cite{gs_spotless,gs_robustsplat}. These fit a surface to given
-supervision and, at most, mask pixels or regions of it; none uses the rendered surface as
-the reference against which whole depth sources are admitted or rejected.
+\runin{Monocular depth.} Metric depth models \cite{est_metric3dv2,est_unidepth,est_depthpro} and
+affine-invariant ones \cite{est_midas,est_dav2,est_marigold,est_moge} are used as priors for
+reconstruction, usually after a per-view scale and shift alignment \cite{rec_monosdf}. Their
+failures on reflective, transparent and textureless surfaces are known; whether a model repeats the
+same error across views is what H2 measures.
 
-\runin{SfM, view graphs and multi-view consistency.}
-Incremental and global SfM estimate poses from feature matches
-\cite{fus_colmap_sfm,sfm_glomap}; view-graph filtering removes inconsistent
-pairwise constraints before global estimation \cite{sfm_1dsfm}. In multi-view stereo, a
-depth map is kept pixel by pixel when enough neighbouring views agree on depth and
-normal \cite{fus_colmap_mvs}, or when other views do not see free space in front of it
-\cite{fus_merrell}, and surviving depth is fused volumetrically
-\cite{fus_curless,fus_kinectfusion}. These filters decide per pixel.
+\runin{Surfels and Gaussian splatting.} Point-based fusion maintains surfels with a normal, a radius
+and a confidence and fuses depth by confidence-weighted averaging with projective association
+\cite{fus_keller_surfels}; volumetric fusion uses a TSDF \cite{fus_curless,fus_kinectfusion}.
+3D Gaussian splatting renders anisotropic Gaussians with a differentiable rasteriser
+\cite{gs_3dgs}; 2DGS uses planar Gaussians for accurate surfaces \cite{gs_2dgs}; gsplat is an
+open-source rasteriser \cite{gs_gsplat}; DN-Splatter adds depth and normal priors \cite{gs_dnsplatter};
+3DGS-MCMC replaces densification by relocation \cite{gs_mcmc}. Our surfels are 2DGS surfels with a
+separate uncertainty block, fused by the rasteriser's own Jacobians instead of by association.
 
-\runin{Robust pose graph optimisation.}
-Pose graph and factor-graph solvers \cite{opt_g2o,opt_factorgraphs} are made robust to
-bad constraints with robust cost functions \cite{flt_huber,rob_blackrangarajan,rob_barron,rob_mactavish},
-graduated non-convexity \cite{rob_gnc}, switchable constraints \cite{rob_switchable},
-dynamic covariance scaling \cite{rob_dcs} and max-mixture models \cite{rob_maxmix}; the last
-three were designed for false loop closures. These act on the residual of each constraint,
-after the constraint has been built from the depth map or the match, and down-weight it
-without a statement about trust.
+\runin{Robust reconstruction and distractors.} Robust losses \cite{rob_blackrangarajan,rob_barron}
+and distractor-aware methods such as RobustNeRF \cite{gs_robustnerf}, SpotLessSplats
+\cite{gs_spotless} and RobustSplat \cite{gs_robustsplat} down-weight pixels or regions whose
+photometric residual looks like an outlier. They act per pixel or per region, mostly from colour,
+and they state no false-alarm rate. Multi-view depth consistency filters \cite{fus_merrell,fus_colmap_mvs}
+test pixels against other views' depth maps by correspondence.
 
-\runin{Learned reconstruction and differentiable optimisation.}
-DUSt3R reconstructs image collections without calibration or poses
-\cite{rec_dust3r}; MASt3R casts matching as a 3D task \cite{rec_mast3r}, and MASt3R-SfM
-builds a fully integrated SfM solution on it \cite{rec_mast3rsfm}. VGGT is a
-feed-forward network that infers camera parameters, point maps, depth maps and tracks
-from one to hundreds of views \cite{rec_vggt}. DROID-SLAM updates poses and pixelwise
-depth through a dense bundle-adjustment layer \cite{rec_droidslam}, and Theseus provides
-differentiable nonlinear least squares on PyTorch \cite{opt_theseus}. We use MASt3R-SfM and
-VGGT as reference points rather than rivals: they replace the pipeline, whereas the
-gate is a component that can precede one.
-
-\runin{Positioning.}
-Pixel filters, robust kernels and voting decide at a different unit and stage from the
-gate: pixel filters per pixel and after poses are fixed, kernels per constraint and after
-the constraint exists, voting per pixel across views (or, in the ablation, across models), and
-none of them excludes a view or states that the output is not trustworthy. A coherent
-view-level fault is neither sparse nor independent across pixels, so none of these is
-designed to attribute it to a view, and comparing every view with every overlapping view makes
-the check cost grow with the number of view pairs.
-\TODO{Final literature pass over the bibliographic databases: integrity monitoring for
-  visual or learned-depth navigation, depth-prior filtering in SfM or SLAM, and
-  uncertainty-aware use of monocular depth in pose graphs.}
-
-\subsection{Challenges in Monitoring the Integrity of Monocular Depth}
-\label{sec:intro:challenges}
-Several challenges limit current approaches.
-\begin{enumerate}
-  \item[\textbf{C1.}] \textbf{Coherent faults are sub-noise per pixel.} A fault that moves a
-        view coherently (a depth bias or warp over part of it, a pose prior error, a false loop
-        closure) adds a small shift to many pixels, so each pixel stays within its noise and a
-        per-pixel filter has almost no power. The evidence is in the aggregate over the view, and
-        its strength depends on the number of effectively independent pixels, on the fraction of
-        the view that is affected, and on what the scale and offset of the monocular depth can
-        explain (Section~\ref{sec:method:detection}).
-  \item[\textbf{C2.}] \textbf{Down-weighting gives no trust statement.} Robust kernels and soft
-        view weights reduce the influence of a constraint with a large residual; they do not
-        exclude the view, do not state a false-alarm or missed-detection probability, and do not
-        tell the user when the output should not be relied on. An integrity monitor needs
-        detection, exclusion and an alarm.
-  \item[\textbf{C3.}] \textbf{Monocular depth has no exact reference scale, and its errors
-        are not iid Gaussian.} Even metric models are only approximately metric, and some outputs
-        are affine-invariant, so a view's depth can be compared with the others only after fitting
-        a scale and shift. That fit can absorb part of a fault and make the faulty view look
-        consistent, so the comparison must be made against a reference, and after an alignment,
-        that were fitted without the view under test. The residual is also heteroscedastic and
-        spatially correlated, and pose, intrinsics and surface errors add to it, so the test must
-        be derived from an explicit covariance and not from one iid Gaussian $\sigma$.
-  \item[\textbf{C4.}] \textbf{A single model gives no redundancy within a view.} Only
-        other views can expose a failure, and an ensemble does not obviously help: models
-        trained on overlapping data may fail on the same views, so a majority of an
-        ensemble can be wrong together. A gate must therefore be able to answer \emph{no
-        consensus}, for example when too few other views observe the region.
-  \item[\textbf{C5.}] \textbf{Disagreement is not always a fault.} Occlusion, low
-        overlap and moving content make views disagree for reasons unrelated to
-        the quality of the depth, so residuals must be compared only on pixels that are
-        visible at the view under test and supported by the reference.
-  \item[\textbf{C6.}] \textbf{The consensus criterion must detect disagreement.} A
-        criterion that rewards the precision of the combined estimate, as the entropy
-        test of our earlier work does as published, cannot distinguish an agreeing
-        source from a sharp but biased one.
-  \item[\textbf{C7.}] \textbf{Pairwise checks do not scale with overlap.} Comparing every
-        view with every overlapping view costs in proportion to the number of view
-        pairs, which grows faster than the number of views when overlap is dense. A
-        single shared surface avoids this, but a surface fitted to the view under
-        test would absorb its fault, so it must be fitted without that view and must not
-        be free to grow a second layer.
-\end{enumerate}
-
-\subsection{Baseline Study and Overview of the Fundamental Differences}
-\label{sec:intro:baseline}
-The gate must beat three families of baselines, which act at different units and
-stages (Table~\ref{tab:diff}): robust kernels in the pose graph (with soft per-view
-down-weighting inside the differentiable optimisation as their closest relative), the
-geometric consistency filter of COLMAP \cite{fus_colmap_mvs}, and plain voting.
-Cross-model voting is studied separately, in the ensemble ablation. MASt3R-SfM and
-VGGT are reference points. The consensus criterion adapted for the gate comes from our
-earlier Byzantine sensor elimination (BSE) \cite{flt_ambarkutuk}, which localised
-footsteps from the signal energies of floor-mounted accelerometers: each sensor gave a
-PDF of the location over a grid, the PDFs were multiplied, and a consensus set was grown
-greedily from the best pair under an entropy criterion. Here the sources are views, the
-PDF of a source is a per-pixel depth distribution, the consensus is a rendered Gaussian
-surface instead of a product of source PDFs, and the admission test is corrected
-(Section~\ref{sec:method:admission}); the earlier set-growing consensus survives only in
-the pairwise comparison variant (Appendix~\ref{app:pairwise}). The cost of the pairwise
-variant, and of the shared surface, is analysed in Section~\ref{sec:method:cost}.
-\begin{table}[t]
-\caption{\textbf{Where each method decides and what it states.}}
-\label{tab:diff}
-\centering
-\small
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{p{0.21\columnwidth}p{0.19\columnwidth}p{0.22\columnwidth}p{0.22\columnwidth}}
-\toprule
-Method & Decision unit & Stage & Excludes? Alarm? \\
-\midrule
-Robust kernel & Constraint (graph edge) & Inside the pose graph, after edges are built & Down-weights; no alarm \\
-Soft view weights & View & Inside the differentiable pose graph & Down-weights; no alarm \\
-COLMAP consistency filter & Pixel & After poses, before fusion & Drops pixels; no alarm \\
-Plain voting & Pixel, across views & Before or after fusion & Drops pixels; no alarm \\
-Gate, pairwise (variant) & View & Before the pose graph & Excludes; no consensus \\
-\textbf{Gate, shared surface (this work)} & \textbf{View} & \textbf{Before the pose graph and fusion} & \textbf{Excludes; no-consensus alarm} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
+\runin{Uncertainty in radiance fields.} FisherRF computes Fisher information of radiance-field
+parameters for active view selection and uncertainty quantification \cite{unc_fisherrf}; Bayes' Rays
+estimates a post-hoc spatial uncertainty of a trained NeRF with a Laplace approximation over a
+perturbation field and uses it, among other things, to remove artefacts \cite{unc_bayesrays}. Neither,
+to our knowledge, keeps a per-primitive uncertainty that renders into depth variance and is used,
+with exact leave-view-out, to test whole views at a stated false-alarm rate. H6 uses both as
+alternative uncertainties inside the same test. \TODO{Final literature pass over uncertainty-aware
+Gaussian splatting and depth-prior filtering before the preprint.}

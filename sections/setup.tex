@@ -1,68 +1,60 @@
 \section{Experimental Design and Hypotheses}
 \label{sec:setup}
-
-The experiments evaluate the gate as an integrity monitor and ask when view-level gating helps
-and when it does not. All use public datasets, public pretrained models and public code, and the
-protocol, hypotheses and thresholds are fixed and tagged in the code repository before any test
-scene is run. No experiment has been run for this version.
+The experiments ask when the gate helps and when it does not, and they start by measuring the
+depth model. All use public datasets, public pretrained models and public code; the protocol,
+hypotheses and thresholds are fixed and tagged in the code repository before any test scene is run.
+No experiment has been run for this version.
 
 \subsection{Design in Brief}
 \label{sec:setup:expsetup}
-\emph{Data.} ETH3D \cite{data_eth3d} (laser-scan reference depth, which labels natural failures
-without injection) is primary; ScanNet++ \cite{data_scannetpp} (subject to its access terms) is
-secondary; Replica \cite{data_replica} gives controlled synthetic scenes. \emph{Depth model.}
-One metric model per image, Depth Pro \cite{est_depthpro} by default (absolute scale, no
-intrinsics needed); UniDepth and Metric3D v2 appear only in the ensemble ablation and as
-confidence-covariate variants. \emph{Faults.} Injected coherent bias on a fraction $f\le0.8$ of a
-view plus the affine control $f=1$, smooth warps, region failures and non-affine distortion,
-spoofed pose priors, glitches and false loop closures, together with natural failures.
-\emph{Baselines.} Robust kernels (including switchable constraints, dynamic covariance scaling
-and max-mixtures), soft per-view down-weighting, the COLMAP geometric-consistency filter with a
-pixel-count test, plain voting, no gate, an oracle gate, and a pairwise gate; MASt3R-SfM, VGGT and
-COLMAP SfM are context only. \emph{Metrics.} Detection power at 5\% false alarm, empirical
-minimum detectable bias, false-alarm rate, no-consensus rate and availability, trajectory and
-fused-surface error, and protection-level coverage. The measurement model is calibrated once per
-depth model on clean development data. Details are in Supplement~\ref{sup:setup}.
+\emph{Data.} ETH3D \cite{data_eth3d}, with laser-scan depth and calibrated poses, is primary and is
+where the residuals are measured; ScanNet++ \cite{data_scannetpp}, subject to its access terms, is
+secondary and contains many reflective and transparent surfaces. Poses come from the datasets.
+\emph{Depth model.} Depth Pro \cite{est_depthpro}, one prediction per image; Metric3D v2 and
+UniDepthV2, which output a confidence, supply the confidence baseline. \emph{Reconstruction.}
+Depth-supervised splatting of 2DGS surfels with gsplat, with the appearance block of
+Section~\ref{sec:method:setting}, run with and without the gate. \emph{Faults.} Natural failures
+labelled against the laser depth on connected regions, classed as reflective or glass, textureless
+wall, or other; and injected regional faults (offset, plane replacement, blurred copy and mirrored
+depth on 2--40\% of a view, at 2--16$\sigma$), placed on appearance masks or random superpixels,
+either independent per view or repeated across views. \emph{Baselines.} SpotLessSplats
+\cite{gs_spotless}, the RobustNeRF loss \cite{gs_robustnerf} and robust depth losses (Huber,
+Geman--McClure) in the fit; as view tests, the per-view aligned RMS residual against the other
+views' render and the depth model's confidence; no gate and an oracle gate. \emph{Metrics.}
+Detection power at 5\% per-view false alarm, false-alarm and untestable rates, held-out laser-depth
+AbsRel, and surface accuracy, completeness and F-score. Details are in Supplement~\ref{sup:setup}.
 
 \subsection{Hypotheses}
 \label{sec:setup:hyp}
-Each hypothesis states what would falsify it, and several state where the gate is expected
-\emph{not} to help; thresholds and falsifiers are given in full in Supplement~\ref{sup:hyp}.
-\begin{description}\setlength{\itemsep}{0pt}
-  \item[H1 (regime map).] At 5\% false alarm the empirical minimum detectable bias follows
-        \eqref{eq:mdb} from the measured $\Sigma_r$ within a factor of 2; in the sub-noise regime
-        ($\delta\le0.5$, $0.2\le f\le0.8$) the gate detects $\ge80\%$ of faulty views and the best
-        pixel filter, robust kernel and soft weight $\le20\%$; in the sparse-outlier regime
-        ($\delta\ge4$, $f\le0.02$) the pixel filter wins or ties; a uniform bias ($f=1$) is neither
-        detected nor harmful.
-  \item[H2 (consequence).] In the sub-noise regime gating cuts trajectory and fused-surface error by
-        $\ge25\%$ against the best baseline and lands within 20\% of the oracle gate; in the
-        sparse regime baselines tie or win.
-  \item[H3 (statistic).] The evidence criterion beats the chi-square gate by $\ge10$ points only where
-        its assumptions break (otherwise a tie, Proposition~\ref{prop:loo}); the region scan beats the
-        energy statistic for a confined bias and loses for a diffuse warp (20 points each way).
-  \item[H4 (leave-view-out, alignment, support).] Subtracting the view, aligning, and masking by
-        support keep clean false alarm $\le5\%$; a joint surface loses $\ge10$ points of power.
-  \item[H5 (placement).] Gating before pose graph optimisation beats gating after it and soft
-        per-view down-weighting in the sub-noise regime; gate plus kernel is at least as good as either.
-  \item[H6 (adequacy and price).] On fault-free views mean $T_i/(n-2)=1\pm0.1$ and false alarm lies
-        in $[0.5\alpha,1.5\alpha]$ without per-scene retuning; the price of gating on clean data is
-        at most 5\% error with availability $\ge90\%$; reference points are context only.
-  \item[H7 (shared surface).] The closed-form surface gate is linear in $N$ and $\ge2\times$
-        faster than the pairwise gate at $N\ge100$, $\bar d\ge10$, within 5 points of its power, and
-        within 3 points of the fixed-budget MCMC surface; per-region outputs are reported with
-        coverage; view order is immaterial.
-  \item[H8 (pose faults).] The gate detects $\ge80\%$ of views above the pose minimum detectable
-        bias and beats kernels for small coherent offsets; loop-closure baselines match it on large
-        false loops.
-  \item[H9 (protection level, optional).] Single-fault exceedance of the protection level is
-        $\le\beta_{\mathrm{md}}+5$ points under its assumptions and $>2\beta_{\mathrm{md}}$ when they fail.
-  \item[H10 (ensemble ablation).] Models sharing training data fail on the same views (lift $\ge2$);
-        cross-model voting misses common-mode failures that the gate catches; the ensemble gate adds
-        $\ge5$ points.
+Each hypothesis states what would falsify it, and several state where the gate is not expected to
+help. Thresholds match the pre-registered configuration files.
+\begin{description}
+  \item[H1] \emph{(residuals first; go/no-go).} Fit $\sigma(\cdot)$, $\ell$, $\nu$ and tails of the
+        aligned Depth Pro residuals on ETH3D development scenes; characterise natural regional
+        failures. \emph{Go} if $\ge10\%$ of views carry a failure covering $\ge2\%$ of pixels at
+        $>3\sigma$ and keeping those views lowers the fused-surface F-score by $\ge2$ points.
+        \emph{No-go} (pivot to an analysis paper) below 5\% of views or below 1 point.
+  \item[H2] \emph{(repetition).} Cross-view correlation of aligned errors at the same laser surface
+        point: $\ge0.5$ on textureless regions, $\le0.3$ on reflective, $\le0.2$ on textured.
+        \emph{Falsified} if the textureless value is below 0.5 or not at least 0.2 above the reflective one.
+  \item[H3] \emph{(detection).} At 5\% false alarm, on reflective-region failures, the gate beats the
+        best cheap or robust baseline by $\ge15$ points of power. \emph{Falsified} if the gain is
+        below 15 points or its interval includes zero. No gain is predicted on textureless failures.
+  \item[H4] \emph{(reconstruction).} With the gate, AbsRel and F-score improve by $\ge10\%$ relative
+        over no gate and the best robust-splatting baseline on failure scenes of ETH3D and ScanNet++,
+        and change by $\le2\%$ on clean scenes. \emph{Falsified} if the paired interval includes zero
+        on failure scenes, or clean scenes degrade by more than 2\%.
+  \item[H5] \emph{(calibration).} Raw mean $T_j/(n-2)>1.2$ on clean views; after deflation or
+        threshold calibration, the test-scene false-alarm rate is within $[0.5\alpha,1.5\alpha]$.
+        \emph{Falsified} if it leaves that band.
+  \item[H6] \emph{(ablations).} Joint surface $-10$ points; keeping tested-view-only surfels $-20$
+        points on large region failures; unwhitened $-5$ points; rendered blocks at least as calibrated
+        and powerful as the FisherRF-style and Bayes' Rays-style uncertainties. \emph{Falsified} if any
+        ablation is within its margin.
 \end{description}
+H1 is a go/no-go and runs first; H2 predicts a blind spot rather than a success; H3 and H4 are the
+claims that would justify the method; H5 tests the stated approximation; H6 tests the design choices.
 
-\paragraph{Breakdown scenarios.} Reported as honest negatives: model-level faults; very few
-views; faults below the detection floor and small $n_{\mathrm{eff}}$; sparse outliers; low
-overlap; faulty views that dominate a region; association failure and cold start; large false
-loop closures; misspecified measurement model; and poor provisional poses (Supplement~\ref{sup:setup}).
+\paragraph{Breakdown scenarios} Reported as honest negatives: errors repeated in all views
+(textureless walls, H2); low overlap, where pixels are untestable; faulty views that supply most of a
+region; a misspecified measurement model; and faults or misfits beyond the linearised fusion.

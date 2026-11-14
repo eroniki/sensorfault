@@ -1,0 +1,71 @@
+\section{Derivations}
+\label{sup:derivations}
+
+\subsection{Ray-Surfel Depth and Its Jacobian}
+Let the camera have centre $\mathbf{c}$ and ray $\mathbf{w}=\mathbf{R}_c\mathbf{K}^{-1}[u\ v\ 1]^{\top}$
+(so the parameter along $\mathbf{w}$ is the z-depth). The surfel plane is
+$\mathbf{n}^{\top}(\mathbf{x}-\boldsymbol\mu)=0$, so $d=\mathbf{n}^{\top}(\boldsymbol\mu-\mathbf{c})/\mathbf{n}^{\top}\mathbf{w}$
+and $\mathbf{x}=\mathbf{c}+d\mathbf{w}$. Differentiating
+$\mathbf{n}^{\top}(\mathbf{c}+d\mathbf{w}-\boldsymbol\mu)=0$ gives
+$\delta\mathbf{n}^{\top}(\mathbf{x}-\boldsymbol\mu)+\mathbf{n}^{\top}\mathbf{w}\,\delta d-\mathbf{n}^{\top}\delta\boldsymbol\mu=0$, so
+\[
+\delta d=\frac{\mathbf{n}^{\top}\delta\boldsymbol\mu-\delta\mathbf{n}^{\top}(\mathbf{x}-\boldsymbol\mu)}{\mathbf{n}^{\top}\mathbf{w}} .
+\]
+With $\mathbf{R}\leftarrow\mathbf{R}\exp([\delta\boldsymbol\phi]_\times)$ and $\mathbf{R}=[\mathbf{t}_1\ \mathbf{t}_2\ \mathbf{n}]$,
+$\delta\mathbf{n}=\mathbf{R}(\delta\boldsymbol\phi\times\mathbf{e}_3)=\delta\phi_2\mathbf{t}_1-\delta\phi_1\mathbf{t}_2$, which has no normal
+component. Hence $\delta d$ depends on $\boldsymbol\theta$ only through
+$(\nu,\tau_1,\tau_2)=(\mathbf{n}^{\top}\delta\boldsymbol\mu,\ \delta\phi_2,\ -\delta\phi_1)$, which gives \eqref{eq:jac}.
+The in-plane components of $\delta\boldsymbol\mu$, the spin $\delta\phi_3$ and the scales do not change
+the depth to first order; with the alpha weights held fixed they are unobserved and keep their prior
+information $\Lambda_0$. The code checks \eqref{eq:jac} against finite differences of the exact
+ray-surfel depth.
+
+\subsection{Information Update, Posterior and Leave-View-Out}
+Linearise the measurement of view $i$ at the fitted surfels: $\hat d_i(u)=a_i\bigl(\hat D_i(u)+\sum_k
+w_{uk}J_{uk}\boldsymbol\theta_k\bigr)+b_i+\varepsilon_i(u)$. With independent pixel noise and
+independent surfel blocks, the Gaussian likelihood of view $i$ contributes \eqref{eq:info}, and the
+posterior of each surfel is $\mathcal{N}(\Lambda_k^{-1}\boldsymbol\eta_k,\Lambda_k^{-1})$. Because the
+model is linear, the information of view $j$ enters additively, and the posterior given all views
+except $j$ is obtained by subtracting it, \eqref{eq:loo}; no refit is needed. The posterior mean in
+the observed directions is the weighted least-squares solution, which does not depend on the
+linearisation point, so the subtraction is exact for the linearised model even though the
+linearisation point was fitted with view $j$. The code checks that the subtraction equals a fusion
+recomputed without the view.
+
+\subsection{Solution Separation Equals the Leave-One-Out Innovation}
+\begin{proposition}
+\label{prop:loo}
+Let a view measure a state $\mathbf{x}$ through $\mathbf{z}_k=H\mathbf{x}+\mathbf{v}$ with noise covariance
+$R_k$, let $\hat{\mathbf{x}}_{-k}$ be the estimate without it, with covariance $P_{-k}$, and let
+$\boldsymbol\nu=\mathbf{z}_k-H\hat{\mathbf{x}}_{-k}$, $S=R_k+HP_{-k}H^{\top}$. For $H=I$ the solution-separation
+statistic $\mathbf{d}^{\top}\mathrm{Cov}(\mathbf{d})^{-1}\mathbf{d}$, $\mathbf{d}=\hat{\mathbf{x}}_{\mathrm{all}}-\hat{\mathbf{x}}_{-k}$, equals the
+leave-one-out statistic $\boldsymbol\nu^{\top}S^{-1}\boldsymbol\nu$.
+\end{proposition}
+\emph{Proof.} $\mathbf{d}=P_{-k}S^{-1}\boldsymbol\nu$ and $\mathrm{Cov}(\mathbf{d})=P_{-k}-P_{\mathrm{all}}=P_{-k}S^{-1}P_{-k}$,
+so $\mathbf{d}^{\top}\mathrm{Cov}(\mathbf{d})^{-1}\mathbf{d}=\boldsymbol\nu^{\top}S^{-1}P_{-k}(P_{-k}S^{-1}P_{-k})^{-1}P_{-k}S^{-1}\boldsymbol\nu=\boldsymbol\nu^{\top}S^{-1}\boldsymbol\nu$.
+\hfill$\square$\\
+The same identity holds for a scalar surfel offset with information $\lambda_k$ and $\lambda_{-k}$,
+where both statistics equal $(h_k-h_{-k})^{2}\lambda_k\lambda_{-k}/(\lambda_k+\lambda_{-k})$; the code checks it
+\cite{flt_raim_joerger}.
+
+\subsection{Rendered Variance and the Whitened Residual}
+With independent blocks, $\mathrm{Var}\,\hat D_{-j}(u)=\sum_kw_{uk}^{2}J_{uk}(\Lambda_k^{(-j)})^{-1}J_{uk}^{\top}$,
+which is \eqref{eq:var}. The residual \eqref{eq:res} is the sum of the depth noise of view $j$ and the
+error of the leave-$j$-out surface, which are independent because view $j$ was subtracted, so its
+covariance is $\Sigma_\varepsilon+a_j^{2}\mathrm{diag}\,V_{-j}$ up to the dropped cross terms. When each
+pixel is rendered by one surfel the blocks are exact and the whitened residual is $\mathcal{N}(0,1)$;
+when footprints overlap, the dropped cross-surfel terms make it overconfident. The code reproduces both
+cases on a synthetic plane, and also the overconfidence caused by spatially correlated noise, which
+deflating each view's information reduces.
+
+\subsection{Minimum Detectable Bias of a Region}
+For a bias $\beta$ on a region with pattern $\mathbf{g}_R$, the matched statistic is
+$\mathcal{N}(\beta\kappa,1)$ with $\kappa^{2}=\mathbf{g}_R^{\top}M\mathbf{g}_R$ and $M$ the precision projected
+orthogonally to the alignment $A=[\hat{\mathbf{D}}_{-j},\mathbf{1}]$,
+$M=\Sigma_r^{-1}-\Sigma_r^{-1}A(A^{\top}\Sigma_r^{-1}A)^{-1}A^{\top}\Sigma_r^{-1}$; the minimum detectable bias at
+false-alarm $\alpha$ and missed-detection $\beta_{\mathrm{md}}$ is
+$(z_{\alpha}+z_{\beta_{\mathrm{md}}})/\kappa$, and a scan over $R$ regions replaces $z_\alpha$ by
+$z_{\alpha/R}$. A pattern in the span of $A$ (a whole-view affine error) has $\kappa=0$ and is not
+detectable, which is why it is not a fault. With spatially correlated noise, $\kappa$ follows from
+$\Sigma_r$, not from the pixel count, and the effective number of pixels
+$n_{\mathrm{eff}}=\mathrm{tr}(C)^{2}/\mathrm{tr}(C^{2})$ summarises the energy statistic.

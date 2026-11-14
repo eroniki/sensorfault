@@ -1,48 +1,34 @@
 \section{Conclusions, Limitations and Future Work}
 \label{sec:conclusion}
-We have proposed view-level fault detection and exclusion, in the spirit of receiver autonomous
-integrity monitoring, for monocular-depth reconstruction. A coherent view-level fault adds a small,
-spatially structured bias that the monocular scale and offset cannot absorb; it is sub-noise at
-each pixel, so pixel filters and robust kernels do not see it, but it is a large statistic once the
-view's residual is whitened by the covariance of an explicit measurement model and projected
-orthogonally to the scale and offset. The gate tests each depth map once against a closed-form
-shared surface of Gaussian primitives from which the view's information is subtracted exactly,
-excludes it when its statistic exceeds a calibrated threshold, raises a no-consensus alarm when the
-other views cannot test it, and returns the fused surface with a posterior, a conditional
-protection level and a view count per region. The empirical case rests on hypotheses H1--H10,
-none of which has been tested in this version.
-\TODO{Rewrite around the measured results: if H1b fails, there is no sub-noise regime in which the
-gate beats the baselines and the paper should be reframed as an analysis; if H3a fails, reframe
-around the chi-square statistic; if H5 fails because soft down-weighting suffices, say so; report
-for each of H1--H10 whether it was supported, partly supported or falsified.}
+We have proposed a depth-only view gate for depth-supervised Gaussian splatting. Each surfel keeps a
+$9\times9$ uncertainty, separate from its rendering shape, whose normal-offset and tilt block the
+rasteriser renders into depth variance; views add their alpha-weighted information, leaving a view
+out is a subtraction, and the tested view is compared with the other views' rendered surface by a
+whitened test with a stated false-alarm rate. The test is Baarda's and Teunissen's; the
+contribution is an uncertainty that renders and its use for testing views. The evaluation starts by
+measuring the depth model and requires the gate to beat cheap baselines on regional,
+appearance-driven failures. None of H1--H6 has been tested.
+\TODO{Rewrite around the measured results; if H1 is a no-go, reframe as an analysis of the depth
+model's failures; report for each of H1--H6 whether it was supported or falsified.}
 
-\subsection{Limitations and Failure Conditions}
+\subsection{Limitations}
 \label{sec:disc:limits}
-The gate is a monitor built on a consensus of views, and it fails where the consensus is wrong or
-not identifiable. (1)~A model-level fault, where all views are wrong alike, makes the surface agree
-with the faulty depth and is undetectable from depth alone; a minority of faulty views in every
-region is assumed. (2)~With very few views, or in regions that few other views observe, the gate
-can only raise a no-consensus alarm. (3)~The detection floor $(z_\alpha+z_{\beta_{\mathrm{md}}})/\kappa$ and the
-false-alarm rate are only as good as the measurement model, which is calibrated on clean data and
-checked by H6; a smooth, textureless scene has a small $n_{\mathrm{eff}}$ and a high floor for
-diffuse faults. (4)~The protection level is conditional on a fault being present and rests on a
-single faulty view, calibrated noise, a linear response and an uncorrupted surface; unlike RAIM we
-have no prior fault probabilities. (5)~A pure scale or shift error is absorbed by the alignment and
-is neither detected nor harmful. (6)~A depth bias and a pose fault look alike to the gate, which
-does not isolate which is at fault. (7)~Provisional poses render the surface, so poor poses can
-corrupt both. (8)~Several faulty views supporting the same fault, or faulty views supplying most of
-a region's coverage, can make the surface follow the fault. (9)~Association is order dependent at
-the cold start, and a faulty view with a large offset may spawn primitives that no other view can
-test. (10)~Planar primitives fit thin or curved structure poorly; information-form fusion treats
-observations as independent and is overconfident under correlated depth error and shared pose
-error; the offset variance omits normal uncertainty; the surface variance is diagonal.
-(11)~The cost advantage holds only for dense overlap, and loop-closure baselines are the right
-tool for large false loops. (12)~Injected faults are surrogates of natural failures, scored on a
-few static scenes for one default model.
+(1)~Independent per-surfel blocks ignore cross-surfel correlations, the correlation of depth error
+within a view and the shared pose error of a view, so the rendered variance is overconfident; the
+threshold is calibrated on clean data, and H5 measures the gap. (2)~If the depth model repeats the
+same error across views, as H2 tests for textureless walls, the other views agree with the fault and
+the gate cannot see it. (3)~Pixels that no other view sees are untestable, so low overlap lowers
+availability. (4)~Several faulty views supporting the same region can make the leave-view-out surface
+follow the fault. (5)~The fusion is linearised at the fitted surfels; leave-view-out is exact only for
+the linearised model, and the alpha weights and the set of surfels come from a fit that used every
+view. (6)~Whole-view affine errors are absorbed by the alignment and are neither detected nor
+harmful. (7)~Colour never updates geometry, so appearance cues are not used for detection, and the
+gate depends on the depth model being right in most views. (8)~Poses come from the datasets; pose
+faults are out of scope. (9)~The measurement model is calibrated on a few static scenes for one
+default model.
 
 \subsection{Future Work}
 \label{sec:disc:future}
-Planned, none started: separating depth from pose faults by re-alignment to the surface;
-allocating an integrity risk from measured fault frequencies; training the gate through the
-differentiable back-end; online and dynamic-scene operation; and the same gate for physical depth
-sensors (LiDAR, time of flight), where extrinsic drift and multipath are fault classes.
+Planned, none started: modelling cross-surfel correlation by low-rank or banded blocks; testing poses
+as well as depth; using the rendered uncertainty for view selection and for reconstruction from fewer
+views; online operation; and depth from physical sensors.

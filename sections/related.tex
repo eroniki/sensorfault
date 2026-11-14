@@ -1,0 +1,29 @@
+\section{Related Work}
+\label{sec:related}
+\runin{Testing theory.} Baarda's data snooping, its reliability theory and the DIA procedure test a
+linear Gaussian model with nuisance parameters for misspecified observations and give a minimum
+detectable bias \cite{stat_teunissen_dia}; receiver autonomous integrity monitoring applies them to
+satellites, and solution separation equals the residual-based test \cite{flt_raim_joerger}. Our gate
+is an instance: the observations are pixels, the nuisance is a per-view scale and offset, and the
+leave-one-out solution is a rendered surface.
+
+\runin{Surfels, splatting and monocular priors.} Point-based fusion keeps surfels with a normal, a
+radius and a confidence and fuses depth by projective association \cite{fus_keller_surfels}. Gaussian
+splatting renders primitives with a differentiable rasteriser \cite{gs_3dgs,gs_gsplat}; 2DGS uses planar
+Gaussians for accurate surfaces \cite{gs_2dgs}, and monocular depth and normal priors supervise
+splatting and implicit surfaces after per-view alignment \cite{gs_dnsplatter,rec_monosdf}. We fuse by
+the rasteriser's own Jacobians rather than by association, and keep the uncertainty apart from the
+rendering shape.
+
+\runin{Robust reconstruction.} Robust losses \cite{rob_blackrangarajan,rob_barron} and distractor-aware
+methods \cite{gs_robustnerf,gs_spotless,gs_robustsplat} down-weight pixels whose residual, mostly
+photometric, looks like an outlier; multi-view consistency filters test pixels by correspondence
+\cite{fus_merrell,fus_colmap_mvs}. None decides on a whole view at a stated false-alarm rate.
+
+\runin{Uncertainty in radiance fields.} FisherRF uses the Fisher information of radiance-field
+parameters for view selection and uncertainty quantification \cite{unc_fisherrf}; Bayes' Rays fits a
+post-hoc Laplace uncertainty over a perturbation field of a trained NeRF \cite{unc_bayesrays}. They
+quantify uncertainty; we render a per-primitive uncertainty into depth variance and use it, with exact
+leave-view-out, to test views. H6 puts both inside the same test. A longer review is in
+Supplement~\ref{sup:related}.
+

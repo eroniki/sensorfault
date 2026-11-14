@@ -2,10 +2,11 @@
 
 Draft v0 of *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian
 Surface*, in the Elsevier `elsarticle` template (preprint first; no pay-to-publish venue). Companion code and plan: `eroniki/sensorfault`.
-The gate is the contribution; the monocular-depth pipeline is the test bed.
+Design v3: a depth-only view gate for depth-supervised Gaussian splatting, built on surfels whose 9x9 uncertainty
+renders into depth variance; leave-view-out is a subtraction of a view's information.
 
 **Status: pre-experiment draft.** No experiment has been run. Every result table and figure is a
-placeholder marked `TODO` in red; the hypotheses H1-H10 in Sec. 3 are pre-registered *predictions*,
+placeholder marked `TODO` in red; the hypotheses H1-H6 in Sec. 4 are pre-registered *predictions*,
 not findings. Do not submit before the TODOs are resolved.
 
 ## Build
@@ -13,21 +14,21 @@ not findings. Do not submit before the TODOs are resolved.
 latexmk -pdf main.tex        # output: build/main.pdf (needs TeX Live; uses ./latexmkrc)
 ```
 The class is `elsarticle` (TeX Live) with `elsarticle-num`; the layout is `5p,twocolumn`, and changing the class option to `preprint` gives the single-column preprint format.
-The main text (title to Future Work) is 8 pages; the declarations and references follow, then the Supplementary Material (S1--S10, same PDF).
+The main text (title to Future Work) is limited to 8 pages (currently about 4.5); the declarations and references follow, then the Supplementary Material (S1--S4, same PDF).
 `draft_v0.pdf` is the last committed build.
 
 ## Outline
-Main text (8 pages): Abstract, Keywords; 1 Introduction (core argument, approach, related work in brief, contributions);
-2 Method (notation, measurement model, view-level gate: shared Gaussian surface, statistics, detection theory, admission,
-cost, exclusion and alarms, conditional protection level); 3 Experimental Design and Hypotheses (H1-H10, breakdown
-scenarios); 4 Results (status); 5 Conclusions, Limitations, Future Work. Then Declarations, References.
-Supplementary Material: S1 related work, challenges, baseline study; S2 gate details, test bed, ensemble, cost, MDB table,
-leave-one-out proposition; S3 experimental setup in full and hypotheses in full; S4 planned tables and figures;
-S5-S8 derivations (pose Jacobian and variance, proofs including the protection level, pairwise gate, detection analysis).
+Main text: Abstract, Keywords; 1 Introduction (problem, approach, what is and is not new, contributions); 2 Related Work
+(short); 3 Method (setting and faults, surfels with an uncertainty that renders, fusion on rendering and leave-view-out,
+the view gate); 4 Experimental Design and Hypotheses (H1-H6, breakdown); 5 Results (status, Figure 2 placeholder);
+6 Conclusions, Limitations, Future Work. Then Declarations, References.
+Supplementary Material: S1 related work; S2 derivations (ray-surfel Jacobian, information update and leave-view-out,
+solution separation = leave-one-out innovation, rendered variance, minimum detectable bias); S3 experimental setup;
+S4 planned tables and figures.
 
 ## Layout
 - `main.tex` front matter, abstract, section includes
-- `sections/` intro, method, setup, results, conclusion (main text); `supplement.tex` includes `supp_*.tex`
+- `sections/` intro, related, method, setup, results, conclusion (main text); `supplement.tex` includes `supp_*.tex`
 - `refs/references.bib` merged bibliography (`refs/part_*.bib` + `part_*_evidence.md` are the sources and the evidence log)
 - `figures/` (empty; placeholders are drawn by `\todofig` in `sections/macros.tex`)
 
