@@ -1,0 +1,28 @@
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: h3_statistic_choice
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: H3
+  prediction: (a) At fixed 5% false alarm the evidence criterion exceeds the chi-square (energy) gate
+    by >=10 points of power only where heteroscedastic depth noise, grazing, occlusion or non-Gaussian
+    residuals break chi-square assumptions; ties under idealised Gaussian noise. (b) The mean-shift statistic
+    beats the energy statistic by >=20 points for a uniform bias; the energy statistic beats the mean-shift
+    by >=20 points for a zero-mean warp; the combined gate loses <=3 points to the better of the two.
+  falsification_criterion: 'Falsified if (a) there is no gain >=10 points in any pre-registered regime
+    (fallback: chi-square statistic, entropy relation as an equivalence result) or (b) either gap is <10
+    points.'
+  independent_variables: [noise_model, grazing_fraction, occlusion_fraction, residual_distribution, fault_shape_uniform_bias_or_zero_mean_warp]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    noise_model: [gaussian_homoscedastic, depth_dependent, heavy_tailed]
+    fault_shape: [uniform_bias, zero_mean_warp]
+baselines: [gate_surface_chi2, gate_surface_mean_shift, gate_surface_combined, gate_surface_evidence]
+metrics:
+  primary: [detection_power_at_fa_0.05]
+  power_gain_threshold_points: 10
+  shape_gap_points: 20
+  combined_loss_points: 3
+implemented: false

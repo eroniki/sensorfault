@@ -1,4 +1,5 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 baselines:
 - id: mast3r_sfm
   family: reference_point

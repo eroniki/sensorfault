@@ -1,3 +1,4 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 {dataset: ScanNet++, role: secondary_real, ref: data_scannetpp, access: requires accepting dataset terms,
-  licence: TODO(verify), scenes: TODO}
+  licence: TODO(verify), scenes: TODO, note: reflective and transparent surfaces}

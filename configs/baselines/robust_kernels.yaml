@@ -1,4 +1,5 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 baselines:
 - id: rk_huber
   family: robust_kernel
@@ -13,10 +14,14 @@ baselines:
   fuser: robust_kernel_pgo
   params: {kernel: geman_mcclure_gnc}
 - id: rk_switchable
-  family: robust_kernel
+  family: loop_closure_robust
   fuser: robust_kernel_pgo
   params: {kernel: switchable}
 - id: rk_dcs
-  family: robust_kernel
+  family: loop_closure_robust
   fuser: robust_kernel_pgo
   params: {kernel: dcs}
+- id: rk_max_mixture
+  family: loop_closure_robust
+  fuser: robust_kernel_pgo
+  params: {kernel: max_mixture}

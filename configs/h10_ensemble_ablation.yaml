@@ -1,0 +1,28 @@
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: h10_ensemble_ablation
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: H10
+  prediction: '(a) Shared failures: on natural failures, models overlapping in training data fail on the
+    same views more than independence predicts: pairwise lift of joint failure frequency >=2 and phi >=0.3.
+    (b) Where voting breaks: on views where >= half of the models fail, cross-model voting detects the
+    failing view <=20% of the time while the single-model gate against the surface detects >=20 points
+    more; the converse (views the surface cannot support) is reported, not predicted. (c) Value: adding
+    the models to the gate raises power at 5% false alarm by >=5 points (else the Mx inference cost is
+    not justified).'
+  falsification_criterion: Falsified if (a) the lift CI includes 1, (b) voting power on common-mode views
+    is within 10 points of the gate, or (c) the ensemble gain CI includes 0.
+  independent_variables: [M, models_in_ensemble, natural_or_injected_common_mode, view_support_of_surface]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    M: [2, 3, 4]
+    models: [depth_pro, unidepth, metric3d_v2, moge]
+    fault_source: [natural, injected_common_mode]
+baselines: [cross_model_voting, gate_surface_evidence, gate_ensemble]
+metrics:
+  primary: [joint_failure_lift, phi_coefficient, detection_power_at_fa_0.05, inference_cost_x]
+implemented: false
+depth_models: depth_models/depth_models.yaml

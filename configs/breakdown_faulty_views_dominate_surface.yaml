@@ -1,18 +1,20 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: breakdown_faulty_views_dominate_surface
 status: preregistered_draft
 design: v2_view_level_gate
 hypothesis:
   id: breakdown
-  prediction: Faulty views supply most of the coverage of a region, so the surface follows the fault (masking).
+  prediction: Faulty views supply most of the coverage of a region, or two faulty views lie in the same
+    region, so the surface follows the fault (masking).
   falsification_criterion: Report power versus the share of coverage supplied by faulty views; expect
-    the surface gate to degrade toward the pairwise gate or worse.
-  independent_variables: [faulty_coverage_share, K, N_s]
+    degradation (links to H9 assumption A1/A4).
+  independent_variables: [faulty_coverage_share, n_faulty_views, K, N_s]
   controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     faulty_coverage_share: [0.25, 0.5, 0.75]
-baselines: [no_gate, gate_surface_evidence, rk_huber, vote_median, colmap_geom_consistency]
+baselines: [no_gate, gate_surface_evidence, rk_huber, vote_median, colmap_geom_consistency, soft_view_weights]
 metrics:
-  primary: [ate_rmse_sim3, fscore, precision, recall]
+  primary: [detection_power_at_fa_0.05, no_consensus_rate, ate_rmse_sim3, fscore]
 implemented: false

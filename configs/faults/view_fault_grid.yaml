@@ -1,7 +1,14 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
-target: the depth map of selected views (a depth source = one view of the default model)
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+target: the depth map or the pose prior of selected views
 seed_rule: SeedSequence([master, stable_hash(view_id), fault_id])
-classes:
+depth_faults:
+  coherent_bias:
+    delta_sigma: [0.1, 0.2, 0.3, 0.5, 1, 2, 4]
+    fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1]
+    mask_layout: [contiguous, scattered]
+    sign: [+, '-']
+    note: the regime map (H1)
   smooth_warp:
     space: inverse_depth
     amplitude_x_std_inverse_depth: [0.25, 0.5, 1, 2]
@@ -10,6 +17,20 @@ classes:
     replace_with: [plane_fit_whole_view, blurred_copy]
   nonaffine_distortion:
     gamma: [0.8, 0.9, 1.1, 1.25]
+pose_faults:
+  spoofed_prior:
+    translation_cm: [1, 2.5, 5, 10]
+    rotation_deg: [0.1, 0.25, 0.5, 1]
+    profile: [constant, linear_drift]
+    block_of_views: true
+  intermittent_glitch:
+    translation_cm: [10, 25, 50]
+    rotation_deg: [2, 5, 10]
+    isolated_views: true
+  false_loop_closure:
+    n_spurious_edges: [1, 3, 5]
+    relative_pose: random_wrong_SE3
+    inlier_ratio: plausible
 persistence:
   fraction_of_views_p: [0.1, 0.2, 0.4, 0.6]
   layout: [scattered, clustered]
@@ -18,6 +39,8 @@ controls: [sparse_independent_outliers_same_corrupted_pixel_rate, fault_free]
 ensemble_ablation_only:
   models_corrupted_on_same_views: 1..ceil(M/2)
   parameters: [independent, identical_common_mode]
-natural_failures: {label_rule: aligned error vs laser reference > threshold, threshold: TODO fix on dev
-    scenes}
+natural_failures:
+  kinds: [glass_reflective, sky, textureless, out_of_distribution]
+  label_rule: aligned error vs laser reference > threshold
+  threshold: TODO fix on dev scenes
 implemented: false

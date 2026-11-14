@@ -1,0 +1,32 @@
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: h7_shared_surface_vs_pairwise
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: H7
+  prediction: '(a) Efficiency: shared-surface gate time grows linearly with the number of views N (log-log
+    slope <1.2) while the pairwise gate grows with N*d_bar (slope >1.5 on dense graphs); for N>=100 at
+    d_bar>=10 the surface gate is >=2x faster; for sparse graphs the pairwise gate is cheaper (break-even
+    reported). (b) Robustness: power within 5 points of the pairwise gate (non-inferior) in the H1 regimes;
+    K in {3,4,6} within 3 points of exact leave-one-view-out refitting. (c) Fixed budget: adaptive densification
+    at matched final size loses >=10 points (the surface adds a layer fitting the faulty view); sweet
+    spot in N_s.'
+  falsification_criterion: Falsified if (a) speed-up <2x at dense overlap or slopes do not separate, (b)
+    the pairwise gate is >5 points better, or (c) adaptive densification is within 5 points of fixed budget.
+  independent_variables: [number_of_views_N, mean_covisibility_degree, folds_K, n_splats_Ns, densification_fixed_or_adaptive]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    N: [25, 50, 100, 200]
+    d_bar: [2, 5, 10, 20]
+    K: [3, 4, 6]
+    densification: [fixed_N, adaptive_matched_final_N]
+baselines: [gate_pairwise_evidence, gate_surface_evidence, gate_surface_adaptive, gate_surface_exact_loo]
+metrics:
+  primary: [detection_power_at_fa_0.05, wall_clock_s, gpu_mem_gb, loglog_slope_vs_N]
+  speedup_threshold: 2.0
+  noninferiority_margin_points: 5
+  crossfit_gap_points: 3
+  adaptive_loss_points: 10
+implemented: false

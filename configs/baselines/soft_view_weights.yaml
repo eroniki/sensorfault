@@ -1,0 +1,7 @@
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+baselines:
+- id: soft_view_weights
+  family: soft_downweighting
+  fuser: soft_view_weights_pgo
+  params: {weight: student_t_per_view, detection_rule: weight_below_0.5, no_exclusion_no_alarm: true}

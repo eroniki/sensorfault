@@ -1,0 +1,19 @@
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: breakdown_small_n_eff
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: breakdown
+  prediction: 'Smooth, textureless scenes with strongly correlated residuals: small effective number of
+    independent pixels, higher MDB.'
+  falsification_criterion: Report MDB vs measured n_eff; not a falsifier.
+  independent_variables: [n_eff, scene_texture]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    scene_texture: [textured, smooth]
+baselines: [no_gate, gate_surface_evidence, rk_huber, vote_median, colmap_geom_consistency, soft_view_weights]
+metrics:
+  primary: [detection_power_at_fa_0.05, no_consensus_rate, ate_rmse_sim3, fscore]
+implemented: false

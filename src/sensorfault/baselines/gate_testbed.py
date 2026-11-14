@@ -17,19 +17,29 @@ _STUBS: dict[str, str] = {
     "no_gate": "Test bed with every view's depth trusted and a quadratic pose-graph cost.",
     "oracle_gate": "Upper bound: drops exactly the faulty views (manifest or laser reference).",
     "view_gate": (
-        "The contribution: view-level gate; params: consensus in {shared_surface, pairwise}, "
-        "statistic in {chi2, evidence}, cross_fit in {True, False, exact_leave_one_view_out}, "
+        "The contribution: view-level fault detection and exclusion (integrity monitoring); params: "
+        "consensus in {shared_surface, pairwise}, statistic in {chi2_energy, mean_shift, "
+        "combined_mean_shift_energy, evidence}, cross_fit in {True, False, exact_leave_one_view_out}, "
         "densification in {fixed_N, adaptive_matched_final_N}, sources in {one_model_per_view, "
-        "ensemble_M_models_per_view}. Admission test per PLAN.md section 2 "
-        "and src/sensorfault/elim/admission.py (grid form)."
+        "ensemble_M_models_per_view}. Admission test per PLAN.md section 2 and "
+        "src/sensorfault/elim/admission.py (grid form); detection theory in "
+        "src/sensorfault/eval/detection_theory.py."
     ),
     "robust_kernel_pgo": (
         "Robust kernels in the pose graph, no gate; params: kernel in "
-        "{huber, cauchy, geman_mcclure_gnc, switchable, dcs}."
+        "{huber, cauchy, geman_mcclure_gnc, switchable, dcs, max_mixture}."
     ),
     "colmap_consistency_filter": (
         "Pixel-wise COLMAP geometric consistency filter on the test bed's depth sources "
         "(see consistency_voting for the implemented numpy test)."
+    ),
+    "soft_view_weights_pgo": (
+        "Baseline: soft per-view down-weighting inside the differentiable pose graph "
+        "(Student-t or learned-scale weight); down-weights but neither excludes nor alarms."
+    ),
+    "pixel_count_test": (
+        "Baseline: pixel-wise flags (threshold k sigma) aggregated over the view into a count test "
+        "at the same false-alarm rate; strongest pixel-based competitor (see eval/detection_theory.py)."
     ),
     "plain_voting": (
         "Per-pixel median / majority; param rule in {cross_view_median, cross_view_majority} "

@@ -1,0 +1,26 @@
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: h2_consequence_vs_baselines
+status: preregistered_draft
+design: v2_view_level_gate
+hypothesis:
+  id: H2
+  prediction: In the sub-noise regime of H1 the gated pipeline reduces ATE and fused-surface error by
+    >=25% vs the best tuned of {robust kernels, soft weights, COLMAP filter, cross-view voting} and lands
+    within 20% of the oracle gate; in the sparse-outlier regime the baselines tie or win.
+  falsification_criterion: Falsified if the paired CI of the improvement includes 0 in the sub-noise regime,
+    or median error is >20% above the oracle gate.
+  independent_variables: [fault_class, delta_sigma, fraction_f, fraction_of_views_p, layout_scattered_or_clustered]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
+  levels:
+    regime: [sub_noise, sparse_outlier, clean]
+    p: [0.1, 0.2, 0.4, 0.6]
+    layout: [scattered, clustered]
+baselines: [rk_huber, rk_cauchy, rk_gm_gnc, soft_view_weights, colmap_geom_consistency, vote_median, vote_majority,
+  no_gate, gate_surface_combined, gate_surface_evidence, gate_pairwise_evidence, oracle_gate]
+metrics:
+  primary: [ate_rmse_sim3, fscore]
+  relative_reduction_threshold: 0.25
+  oracle_gap_threshold: 0.2
+implemented: false

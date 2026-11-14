@@ -1,3 +1,5 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 {dataset: ETH3D, role: primary_real, ref: data_eth3d, ground_truth: laser scan depth + calibrated poses,
-  scenes_dev_test: see base.yaml, download: TODO script (scripts/data/eth3d.* not written yet), licence: TODO(verify)}
+  natural_failures: 'glass/reflective, sky, textureless labelled against laser depth', download: TODO
+    script, licence: TODO(verify)}

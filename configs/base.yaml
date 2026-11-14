@@ -1,4 +1,5 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 # Shared defaults. Experiment configs `extends: base.yaml`.
 project: sensorfault
 design: v2_view_level_gate
@@ -15,18 +16,26 @@ depth_model: {default: depth_pro, file: depth_models/depth_models.yaml, one_mode
     on dev scenes vs laser reference; never on test scenes}
 ensemble_ablation:
   M: [2, 3, 4]
-  only_used_by: [h7_ensemble_ablation]
-metrics:
-  pose: [ate_rmse_sim3, rpe, pose_auc_at_5_10_30deg]
-  surface: [accuracy, completeness, fscore]
-  depth: [absrel, delta1_after_alignment]
-  gate: [precision, recall, false_exclusion_rate_clean, power_at_fer_0.05, elimination_curve_auc]
-  cost: [runtime_s_per_stage, gpu_mem_gb_per_stage]
-stats: {bootstrap: scene_level, bootstrap_n: 10000, paired_test: wilcoxon_signed_rank, alpha: 0.05}
-tuning:
-  dev_only: true
-  budget_reported: true
-  null_calibration: {target_false_exclusion: 0.05, method: clean_run_permutation, n_permutations: 200}
+  only_used_by: [h10_ensemble_ablation]
+integrity:
+  false_alarm_per_view: 0.05
+  missed_detection: 0.1
+  z_alpha: 1.96
+  z_beta: 1.2816
+  availability_target: 0.9
+  neff_estimation: residual_autocorrelation_on_clean_dev
+  threshold_calibration: clean_run_permutation
+  statistics: [mean_shift, energy, evidence]
+  alarms: [no_consensus_per_view, scene_level_if_more_than_half_rejected]
+  theory_module: src/sensorfault/eval/detection_theory.py
+regime_map:
+  delta_sigma: [0.1, 0.2, 0.3, 0.5, 1, 2, 4]
+  fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1]
+  mask_layout: [contiguous, scattered]
+  sign: [+, '-']
+  regimes:
+    sub_noise: {delta_le: 0.5, f_ge: 0.2}
+    sparse_outlier: {delta_ge: 4, f_le: 0.02}
 shared_surface:
   representation: gaussian_splats
   n_splats: TODO fix on dev scenes
@@ -39,10 +48,23 @@ shared_surface:
     fold_layout: contiguous_blocks_of_neighbouring_views
   iterations_n_it: TODO
   support: {alpha_threshold: TODO, min_supported_fraction: TODO}
-  output: surface refitted on admitted sources is the fused output; TSDF of same depth is a secondary
-    check
+  output: surface refitted on kept depth maps is the fused output; TSDF of same depth is a secondary check
+testbed: {pose_graph: differentiable_renderable, soft_downweighting_is_baseline: true, render_based_constraint: optional}
 shared_inputs_for_all_methods: [images, matches, depth_maps, fault_realisations, pose_graph_solver]
-implemented: {configs: true, fault_injectors: false, view_gate: false, testbed_pipeline: false, note: 'Only
-    configs, registry stubs (baselines/gate_testbed.py) and the grid-form admission test (elim/admission.py)
-    exist.'}
+metrics:
+  integrity: [detection_power_at_fa_0.05, empirical_mdb, false_alarm_rate, missed_detection_rate, no_consensus_rate,
+    availability, elimination_curve_auc]
+  pose: [ate_rmse_sim3, rpe, pose_auc_at_5_10_30deg]
+  surface: [accuracy, completeness, fscore]
+  depth: [absrel, delta1_after_alignment]
+  protection_level: [pl_exceedance_rate]
+  cost: [runtime_s_per_stage, gpu_mem_gb_per_stage, loglog_slope_vs_N]
+stats: {bootstrap: scene_level, bootstrap_n: 10000, paired_test: wilcoxon_signed_rank, alpha: 0.05}
+tuning:
+  dev_only: true
+  budget_reported: true
+  null_calibration: {target_false_alarm: 0.05, method: clean_run_permutation, n_permutations: 200}
+implemented: {configs: true, detection_theory: true, fault_injectors: false, view_gate: false, testbed_pipeline: false,
+  note: 'Implemented: configs, registry stubs (baselines/gate_testbed.py), grid-form admission test (elim/admission.py),
+    detection theory (eval/detection_theory.py).'}
 output_dir: outputs

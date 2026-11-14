@@ -1,11 +1,12 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 dataset: Replica
-role: controlled_synthetic_and_h6_scaling_study
-h6_scaling:
+role: controlled_synthetic_and_h7_scaling_study
+h7_scaling:
   N: [25, 50, 100, 200]
   mean_covisibility_degree: [2, 5, 10, 20]
   note: trajectory sets N and overlap; also ScanNet++ subsampled sequences and ETH3D multi-camera videos
     (view counts TODO verify)
 release_policy: generator, seeds and configs only; do not redistribute renderings
 licence: research-only (see legacy notes)
-renderer: scripts/data/render_replica_multisensor.py is a legacy stub; a monocular-view renderer is TODO
+renderer: monocular-view renderer TODO (scripts/data/render_replica_multisensor.py is a legacy stub)

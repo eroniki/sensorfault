@@ -1,4 +1,5 @@
-# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 baselines:
 - id: no_gate
   family: floor
@@ -15,7 +16,15 @@ baselines:
 - id: gate_surface_chi2
   family: gate
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: chi2, cross_fit: true, densification: fixed_N}
+  params: {consensus: shared_surface, statistic: chi2_energy, cross_fit: true, densification: fixed_N}
+- id: gate_surface_mean_shift
+  family: gate
+  fuser: view_gate
+  params: {consensus: shared_surface, statistic: mean_shift, cross_fit: true, densification: fixed_N}
+- id: gate_surface_combined
+  family: gate
+  fuser: view_gate
+  params: {consensus: shared_surface, statistic: combined_mean_shift_energy, cross_fit: true, densification: fixed_N}
 - id: gate_pairwise_evidence
   family: gate
   fuser: view_gate
@@ -23,7 +32,7 @@ baselines:
 - id: gate_pairwise_chi2
   family: gate
   fuser: view_gate
-  params: {consensus: pairwise, statistic: chi2}
+  params: {consensus: pairwise, statistic: chi2_energy}
 - id: gate_surface_joint_fit
   family: ablation
   fuser: view_gate
