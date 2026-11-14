@@ -2,70 +2,70 @@
 \label{sec:method}
 
 In this section, the manuscript provides its principal contribution: a view-level gate
-that decides which depth sources to trust before pose graph optimisation and fusion.
-Depth sources are produced by an ensemble of monocular estimators on RGB images. A
-pose graph couples the views through geometric and depth-induced constraints. The gate
-tests each source \emph{once} against a single shared Gaussian-splat surface rendered at
-its view, instead of against every overlapping view, admits the sources that agree with
-it, and passes only admitted sources to the graph and to fusion
-(Fig.~\ref{fig:pipeline}). The surface is fitted without the views it is tested on, so
-its cost grows with the number of views rather than the number of view pairs, and the
-surface refitted on the admitted sources is the fused output. The gate, including this
-consensus, is the contribution; the surrounding pipeline
-(Section~\ref{sec:method:pipeline}) is the test bed on which it is evaluated.
+that decides which views' depth maps to keep before pose graph optimisation and fusion.
+One monocular metric depth model is applied to each RGB image, so each view has one
+depth source. A pose graph couples the views through geometric and depth-induced
+constraints. The gate tests each depth map \emph{once} against a single shared
+Gaussian-splat surface, fitted from the other views and rendered at its view, instead of
+against every overlapping view; it keeps the depth maps that agree with the surface and
+passes only those to the graph and to fusion (Fig.~\ref{fig:pipeline}). The surface is fitted
+without the views it is tested on, so its cost grows with the number of views rather than
+the number of view pairs, and the surface refitted on the kept depth maps is the fused
+output. The gate, including this consensus, is the contribution; the surrounding pipeline
+(Section~\ref{sec:method:pipeline}) is the test bed on which it is evaluated, and the use of
+several models per view is an ablation (Section~\ref{sec:method:ensemble}).
 
-\todofig{pipeline}{Test bed: RGB images; matches and monocular depth ensemble; provisional poses; shared splat surface fitted by cross-fitting; \emph{view-level gate} against the rendered surface (contribution); pose graph optimisation with gated depth factors; surface refitted on admitted sources as the fused output.}
+\todofig{pipeline}{Test bed: RGB images; one metric depth model per image and feature matches; provisional poses; shared splat surface fitted from the other views by cross-fitting; \emph{view-level gate} against the rendered surface (contribution); pose graph optimisation with gated depth factors; surface refitted on the kept depth maps as the fused output.}
 
 \subsection{Definitions and Notation}
 \label{sec:method:defs}
 A static scene is observed by $N$ RGB images $I_i$, $i\in\mathcal{V}=\{1,\dots,N\}$, with
 approximately known intrinsics $\mathbf{K}_i$ and unknown poses
-$\mathbf{T}_i\in SE(3)$ (camera to world). An ensemble of $M$ monocular estimators
-$f_m$, $m\in\mathcal{M}=\{1,\dots,M\}$, predicts a depth map
-$D_{m,i}:\Omega_i\to\R_{>0}$ for each view. A \emph{depth source} is a pair $(m,i)$.
-Estimators that predict affine-invariant depth are used through a per-source scale and
-shift $\mathbf{a}_{m,i}=(s_{m,i},t_{m,i})$, giving the aligned depth
-$\tilde D_{m,i}=s_{m,i}D_{m,i}+t_{m,i}$; metric estimators use the same form with
-initial values $(1,0)$. A pose graph $\mathcal{G}=(\mathcal{V},\mathcal{E})$ has an edge
-$(i,j)$ for each pair of views with enough feature matches and co-visibility. The gate
-outputs $g_{m,i}\in\{0,1\}$ for each source, where $g_{m,i}=0$ means the source is
-excluded from the depth constraints and from fusion; a view whose sources are all
-excluded still takes part in the graph through its geometric constraints.
-A \emph{shared surface} $\mathcal{S}_\theta$ is a set of $N_s$ Gaussians with means,
-covariances and opacities $\theta$; rendering it at view $i$ with pose $\mathbf{T}_i$
-gives a depth $\hat S_i(u)$, a depth variance $v_{S,i}(u)$ and an accumulated alpha
-$\alpha_i(u)$ at each pixel.
+$\mathbf{T}_i\in SE(3)$ (camera to world). A monocular metric depth model $f$ predicts a
+depth map $D_i=f(I_i):\Omega_i\to\R_{>0}$ for each view; $D_i$ is the \emph{depth source}
+of view $i$. Depth from a metric model is used through a per-view scale and shift
+$\mathbf{a}_i=(s_i,t_i)$ with a prior at $(1,0)$, giving the aligned depth
+$\tilde D_i=s_iD_i+t_i$; a model with affine-invariant output uses the same form without the
+prior. A pose graph $\mathcal{G}=(\mathcal{V},\mathcal{E})$ has an edge $(i,j)$ for each
+pair of views with enough feature matches and co-visibility. The gate outputs
+$g_i\in\{0,1\}$ for each view, where $g_i=0$ means the depth map of view $i$ is excluded
+from the depth constraints and from fusion; a view whose depth is excluded still takes part
+in the graph through its geometric constraints. A \emph{shared surface} $\mathcal{S}_\theta$
+is a set of $N_s$ Gaussians with means, covariances and opacities $\theta$; rendering it at
+view $i$ with pose $\mathbf{T}_i$ gives a depth $\hat S_i(u)$, a depth variance
+$v_{S,i}(u)$ and an accumulated alpha $\alpha_i(u)$ at each pixel. In the ensemble ablation,
+$M$ models $f_m$ give $M$ depth maps $D_{m,i}$ per view, each of which is a source.
 
-A set $\mathcal{F}\subset\mathcal{M}\times\mathcal{V}$ of sources is \emph{faulty}:
-their depth deviates from the true depth by a spatially structured error that is not
-removed by the scale-and-shift alignment. We consider three classes.
-\emph{Smooth warp:} the inverse depth is perturbed by a low-frequency field,
-$1/D'_{m,i}=1/D_{m,i}+w_i(u)$. \emph{Region failure:} on a connected region covering a
-fraction of the view, the depth is replaced by one that is unrelated to the true
-geometry (for example a plane or a blurred copy). \emph{Non-affine distortion:}
-$D'_{m,i}=D_{m,i}^{\gamma}$ with $\gamma\neq1$. A fault is \emph{view-level} if it
-affects a subset of the views of an estimator, either scattered or clustered in
-neighbouring views, and \emph{estimator-level} if it affects all of them. Neither
-$\mathcal{F}$ nor its size is known; we assume that at most $F<M/2$ sources of any view
-are faulty, and return to this assumption in Section~\ref{sec:disc:limits}.
-Scale-and-shift errors are not faults in this sense, because the alignment, both in the
-gate and in the pose graph, removes them; the gate targets the structure that
-alignment cannot remove. The goal is a trajectory and a fused surface that are close to
-those obtained from the healthy sources alone, together with the identity of the
-excluded sources. The concrete magnitudes and the injection procedure are given in
-Section~\ref{sec:setup:faults}.
+A set $\mathcal{F}\subset\mathcal{V}$ of views is \emph{faulty}: their depth deviates from
+the true depth by a spatially structured error that is not removed by the scale-and-shift
+alignment. We consider three classes. \emph{Smooth warp:} the inverse depth is perturbed by a
+low-frequency field, $1/D'_{i}=1/D_{i}+w_i(u)$. \emph{Region failure:} on a connected
+region covering a fraction of the view, the depth is replaced by one that is unrelated to the
+true geometry (for example a plane or a blurred copy). \emph{Non-affine distortion:}
+$D'_{i}=D_{i}^{\gamma}$ with $\gamma\neq1$. A fault is \emph{view-level} if it affects a
+subset of the views, either scattered or clustered in neighbouring views, and
+\emph{model-level} if it affects all of them in the same way. Neither $\mathcal{F}$ nor its
+size is known. The gate relies on the other views to expose a faulty one, so we assume that
+faulty views are a minority in any region: the fraction of faulty views among those that
+observe a region stays below one half, and a model-level fault is undetectable by
+construction (Section~\ref{sec:disc:limits}). Scale-and-shift errors are not faults in this
+sense, because the alignment, both in the gate and in the pose graph, removes them; the gate
+targets the structure that alignment cannot remove. The goal is a trajectory and a fused
+surface that are close to those obtained from the healthy views alone, together with the
+identity of the dropped views. The concrete magnitudes and the injection procedure are given
+in Section~\ref{sec:setup:faults}.
 
 \subsection{Forward Problem: Monocular Depth as a Measurement}
 \label{sec:method:forward}
-For a healthy source, the aligned depth equals the true depth $d_i(u)$ up to noise whose
+For a healthy view, the aligned depth equals the true depth $d_i(u)$ up to noise whose
 spread grows with depth,
-$\tilde D_{m,i}(u)=d_i(u)+\varepsilon$, $\varepsilon\sim\mathcal{N}\bigl(0,\sigma_m^{2}(d_i(u))\bigr)$,
-with $\sigma_m(d)=\sigma_{0,m}+\kappa_m d$ fitted per estimator on clean development
-data. When a source is compared with the surface rendered at its view, the uncertainty of
-the pose used for rendering adds a pointing error to the ray. For a ray of length $r$ that meets a locally planar surface at
-incidence angle $\theta$ (the angle between ray and surface normal), a range noise
-$\sigma_r=\sigma_m(r)$ and a pointing noise $\sigma_\varphi$ taken from the rotational
-covariance of the pose give a depth \emph{residual} variance
+$\tilde D_{i}(u)=d_i(u)+\varepsilon$, $\varepsilon\sim\mathcal{N}\bigl(0,\sigma^{2}(d_i(u))\bigr)$,
+with $\sigma(d)=\sigma_{0}+\kappa d$ fitted for the model on clean development data. When
+a depth map is compared with the surface rendered at its view, the uncertainty of the pose
+used for rendering adds a pointing error to the ray. For a ray of length $r$ that meets a
+locally planar surface at incidence angle $\theta$ (the angle between ray and surface
+normal), a range noise $\sigma_r=\sigma(r)$ and a pointing noise $\sigma_\varphi$ taken from
+the rotational covariance of the pose give a depth \emph{residual} variance
 \begin{equation}
   v_{\mathrm{res}}(r,\theta)=\sigma_r^{2}+\bigl(r\,\sigma_\varphi\tan\theta\bigr)^{2}.
   \label{eq:vres}
@@ -93,19 +93,19 @@ its component along the surface normal,
 stays bounded as $\theta\to\pi/2$. We therefore use \eqref{eq:vres} to weight depth
 residuals and \eqref{eq:vn} to initialise splat covariances and to floor their scale
 (Section~\ref{sec:method:surface}). Pixels that are not visible in the rendered view, or whose
-incidence angle exceeds the gate, do not enter any comparison. Natural failures of estimators (reflective or transparent
-surfaces, sky, textureless regions) are not variance but structured errors, and are the
-faults the gate is designed to catch.
+incidence angle exceeds the gate, do not enter any comparison. Natural failures of the model
+(reflective or transparent surfaces, sky, textureless regions) are not variance but
+structured errors, and are the faults the gate is designed to catch.
 
-\subsection{Inverse Problem: Pose Graph Optimisation with Depth Sources}
+\subsection{Inverse Problem: Pose Graph Optimisation with Depth Maps}
 \label{sec:method:inverse}
 The poses and the alignments are estimated jointly,
 \begin{equation}
 \begin{split}
-  \min_{\{\mathbf{T}_i\},\{\mathbf{a}_{m,i}\}}\;
+  \min_{\{\mathbf{T}_i\},\{\mathbf{a}_{i}\}}\;
   \sum_{(i,j)\in\mathcal{E}}\Bigl[&\rho_{g}\bigl(\|\mathbf{r}^{\mathrm{geo}}_{ij}\|^{2}_{\Sigma_g}\bigr)\\
-  &+\sum_{m\in\mathcal{M}} g_{m,i}\,g_{m,j}\,
-  \rho_{d}\bigl(\|\mathbf{r}^{\mathrm{dep}}_{m,ij}\|^{2}_{\Sigma_d}\bigr)\Bigr],
+  &+g_{i}\,g_{j}\,
+  \rho_{d}\bigl(\|\mathbf{r}^{\mathrm{dep}}_{ij}\|^{2}_{\Sigma_d}\bigr)\Bigr],
 \end{split}
   \label{eq:pgo}
 \end{equation}
@@ -113,57 +113,55 @@ where $\mathbf{r}^{\mathrm{geo}}_{ij}$ are epipolar or reprojection residuals of
 feature matches between views $i$ and $j$, $\rho_g$ and $\rho_d$ are robust kernels
 (a quadratic kernel when no robust baseline is used), and the depth-induced residual
 back-projects a pixel $u$ of view $i$ with its aligned depth, transforms it into view
-$j$, and compares its depth there with the depth of source $(m,j)$:
+$j$, and compares its depth there with the depth of view $j$:
 \begin{equation}
 \begin{split}
-  r^{\mathrm{dep}}_{m,ij}(u)&=\tilde D_{m,j}\bigl(\pi_j(\mathbf{q})\bigr)-q_z,\\
-  \mathbf{q}&=\mathbf{T}_j^{-1}\mathbf{T}_i\,\pi_i^{-1}\bigl(u,\tilde D_{m,i}(u)\bigr).
+  r^{\mathrm{dep}}_{ij}(u)&=\tilde D_{j}\bigl(\pi_j(\mathbf{q})\bigr)-q_z,\\
+  \mathbf{q}&=\mathbf{T}_j^{-1}\mathbf{T}_i\,\pi_i^{-1}\bigl(u,\tilde D_{i}(u)\bigr).
 \end{split}
   \label{eq:rdep}
 \end{equation}
-The weights $g_{m,i}g_{m,j}$ are where the gate acts: a depth constraint is built only
-from two trusted sources. These constraints are pairwise because the pose graph is, but
-they are built after the gate, only from admitted sources, and they are not part of the
-gate's cost (Section~\ref{sec:method:cost}). The problem is \emph{partly end-to-end} in the following
-sense: the matcher and the depth ensemble are learned and kept fixed, while the
-back-end is a differentiable least-squares solver \cite{opt_theseus}, so that residual
-weights or the gate itself could be trained through it; in this paper the gate is
-training-free and the back-end is used as an ordinary solver
-\cite{opt_g2o,opt_factorgraphs}. \TODO{Author to confirm this reading of ``partly
-  end-to-end'' (learned front-end, differentiable back-end, training-free gate) or
-  state the intended one.}
+The weights $g_ig_j$ are where the gate acts: a depth constraint is built only from two
+kept depth maps. These constraints are pairwise because the pose graph is, but they are
+built after the gate, only from kept depth maps, and they are not part of the gate's cost
+(Section~\ref{sec:method:cost}). The problem is \emph{partly end-to-end} in the following
+sense: the matcher and the depth model are learned and kept fixed, while the back-end is a
+differentiable least-squares solver \cite{opt_theseus}, so that residual weights or the gate
+itself could be trained through it; in this paper the gate is training-free and the back-end
+is used as an ordinary solver \cite{opt_g2o,opt_factorgraphs}. \TODO{Author to confirm this
+  reading of ``partly end-to-end'' (learned front-end, differentiable back-end,
+  training-free gate) or state the intended one.}
 
 \subsection{View-Level Gate}
 \label{sec:method:gate}
 
 \subsubsection{Requirements}
-Given evidence from several sources about the depth of a view, an exclusion rule should
-(R1)~give the same answer for any ordering of the sources; (R2)~respond to
-\emph{disagreement} between a source and the others, not only to the source's own
-precision, since a sharp but biased source must not be favoured; (R3)~return
-\emph{no consensus} rather than guess when attribution is not identifiable, for
-example with $M<3$ or where nothing else observes the view; (R4)~keep the false-exclusion
-rate on fault-free data at a stated level; and (R5)~have a cost that grows with the
-number of views, not with the number of view pairs. The entropy criterion of our earlier
-work does not meet (R1) and (R2) as published (challenge C5), and a comparison with every
-overlapping view does not meet (R5) when overlap is dense (challenge C6); this subsection
-gives a gate that meets all five.
+Given evidence from the other views about the depth of a view, an exclusion rule should
+(R1)~give the same answer for any ordering of the views; (R2)~respond to
+\emph{disagreement} between a view and the others, not only to the view's own precision,
+since a sharp but biased depth map must not be favoured; (R3)~return \emph{no consensus}
+rather than guess when attribution is not identifiable, for example where fewer than three
+other views observe the region; (R4)~keep the false-exclusion rate on fault-free data at a
+stated level; and (R5)~have a cost that grows with the number of views, not with the number
+of view pairs. The entropy criterion of our earlier work does not meet (R1) and (R2) as
+published (challenge C5), and a comparison with every overlapping view does not meet (R5)
+when overlap is dense (challenge C6); this subsection gives a gate that meets all five.
 
 \subsubsection{Shared-surface consensus by cross-fitting}
 \label{sec:method:surface}
-Instead of comparing a source with the sources of every overlapping view, the gate
-compares it once with a single shared surface $\mathcal{S}_\theta$ rendered at the view.
-A surface fitted to the source under test would absorb its fault, so the surface is
+Instead of comparing a depth map with the depth maps of every overlapping view, the gate
+compares it once with a single shared surface $\mathcal{S}_\theta$ rendered at the view. A
+surface fitted to the view under test would absorb its fault, so the surface is
 \emph{cross-fitted}: the views are split into $K$ folds of neighbouring views, and for each
-fold $f$ a surface $\mathcal{S}_{-f}$ is fitted to the sources of the views outside $f$ and
-rendered at the views in $f$. A source is therefore never compared with a surface that was
-fitted to it (challenge C2), and a block of neighbouring faulty views is held out together,
-so it cannot support itself. The fit is
+fold $f$ a surface $\mathcal{S}_{-f}$ is fitted to the depth maps of the views outside $f$
+and rendered at the views in $f$. A depth map is therefore never compared with a surface
+that was fitted to it (challenge C2), and a block of neighbouring faulty views is held out
+together, so it cannot support itself. The fit is
 \begin{equation}
 \begin{split}
-  \min_{\theta,\{\mathbf{a}_{m,i}\}}\;&
-  \sum_{(m,i)\in\mathrm{train}}\sum_{u}\rho\!\left(
-  \frac{\bigl(\tilde D_{m,i}(u)-\hat S_i(u;\theta)\bigr)^{2}}{\tilde v_{\mathrm{res},m,i}(u)}\right)\\
+  \min_{\theta,\{\mathbf{a}_{i}\}}\;&
+  \sum_{i\notin f}\sum_{u}\rho\!\left(
+  \frac{\bigl(\tilde D_{i}(u)-\hat S_i(u;\theta)\bigr)^{2}}{\tilde v_{\mathrm{res},i}(u)}\right)\\
   &+\lambda_\alpha L_\alpha(\theta)+\lambda_r R(\theta),
 \end{split}
   \label{eq:fit}
@@ -173,34 +171,35 @@ $L_\alpha$ penalises the accumulated alpha on valid and invalid pixels, and $R$ 
 opacity and scale regularisers of 3DGS-MCMC \cite{gs_mcmc}. The number of splats $N_s$ is
 fixed and dead splats are relocated to live ones rather than densified \cite{gs_mcmc};
 this bounds the capacity with which the surface could add a second layer that absorbs a
-faulty source (H6c). The fit uses depth only, so floaters are controlled by $L_\alpha$, a
+faulty depth map (H6c). The fit uses depth only, so floaters are controlled by $L_\alpha$, a
 cap on splat anisotropy, and the depth-distortion and normal-consistency terms of planar
 splats \cite{gs_2dgs}, and the noise injected by the MCMC sampler is kept below the
 normal-direction standard deviation from \eqref{eq:vn}. Splat covariances are initialised
 from \eqref{eq:vn}. The rendered surface gives, at each pixel of a held-out view, the
 depth $\hat S_i(u)$, a variance $v_{S,i}(u)$ (the spread of the splat depths along the
 ray plus a floor from the splat scale) and the accumulated alpha $\alpha_i(u)$. The
-alignment of a held-out source is fitted afterwards, by a robust affine fit to
-$\hat S_i$, so only the non-affine part of its deviation remains.
+alignment of a held-out depth map is fitted afterwards, by a robust affine fit to
+$\hat S_i$ with the prior at $(1,0)$ for a metric model, so only the non-affine part of its
+deviation remains.
 
 \subsubsection{Visibility-aware residuals and statistic}
 \label{sec:method:consensus}
-A pixel $u$ of a held-out source enters the comparison only if it is valid, if the surface
+A pixel $u$ of a held-out depth map enters the comparison only if it is valid, if the surface
 supports it ($\alpha_i(u)\ge\tau_\alpha$; occlusion is handled by the depth-ordered
 rendering), and if the incidence angle is below the grazing gate. With
-$\Omega_{k}^{\mathrm{vis}}$ the set of such pixels, the normalised residual and the
-per-source statistic are
+$\Omega_{i}^{\mathrm{vis}}$ the set of such pixels, the normalised residual and the
+per-view statistic are
 \begin{equation}
 \begin{split}
-  \rho_k(u)&=\frac{\tilde D_k(u)-\hat S_i(u)}{\sqrt{\tilde v_{\mathrm{res},k}(u)+v_{S,i}(u)}},\\
-  T_k&=\frac{1}{|\Omega_k^{\mathrm{vis}}|}\sum_{u\in\Omega_k^{\mathrm{vis}}}\rho_k(u)^{2}.
+  \rho_i(u)&=\frac{\tilde D_i(u)-\hat S_i(u)}{\sqrt{\tilde v_{\mathrm{res},i}(u)+v_{S,i}(u)}},\\
+  T_i&=\frac{1}{|\Omega_i^{\mathrm{vis}}|}\sum_{u\in\Omega_i^{\mathrm{vis}}}\rho_i(u)^{2}.
 \end{split}
   \label{eq:Ts}
 \end{equation}
 Pixel residuals are spatially correlated, so the nominal $\chi^2$ quantile is not used
 as a threshold; thresholds are calibrated on fault-free development runs to a 5\%
 per-view false-exclusion rate (Section~\ref{sec:setup:protocol}). We also record
-Moran's~I of $\rho_k$ as a diagnostic: a view-level fault leaves spatially structured
+Moran's~I of $\rho_i$ as a diagnostic: a view-level fault leaves spatially structured
 residuals, whereas sparse outliers do not. If too few pixels of a view are supported
 ($|\{u:\alpha_i(u)\ge\tau_\alpha\}|<s_{\min}P$), the surface cannot test the view and the
 gate returns \emph{no consensus} for it.
@@ -232,45 +231,43 @@ for every source, healthy or faulty; a sharp biased source lowers entropy the mo
 Entropy measures the precision of a consensus, not its consistency.
 
 We therefore test consistency directly. For a pixel $u$, the consensus is the rendered
-surface, a Gaussian $p_{C,u}=\mathcal{N}(\hat S_i(u),v_{S,i}(u))$, and source $k$ has the
-depth PDF $f_{k,u}$ on an interval $\Sgrid_u$ of admissible depths. Source $k$ is
+surface, a Gaussian $p_{C,u}=\mathcal{N}(\hat S_i(u),v_{S,i}(u))$, and the depth map of view
+$i$ has the PDF $f_{i,u}$ on an interval $\Sgrid_u$ of admissible depths. The view is
 \emph{compatible} with $C$ at $u$ when its Bayes factor against a uniform null on $\Sgrid_u$
 is at least one:
 \begin{equation}
-  \Lambda_{k,u}(C)=|\Sgrid_u|\int_{\Sgrid_u}p_{C,u}\, f_{k,u}\,\mathrm{d}z\;\ge\;1 .
+  \Lambda_{i,u}(C)=|\Sgrid_u|\int_{\Sgrid_u}p_{C,u}\, f_{i,u}\,\mathrm{d}z\;\ge\;1 .
   \label{eq:lambda}
 \end{equation}
-For Gaussians, $\Lambda_{k,u}(C)\ge 1$ is equivalent to
-$\tfrac12\nu^{2}/(v_S+\sigma_k^2)\le \log\!\bigl(|\Sgrid_u|/\sqrt{2\pi(v_S+\sigma_k^2)}\bigr)$
-with $\nu=\hat S_i(u)-\tilde D_k(u)$, so the offset enters exponentially. A source is
-admitted on the \emph{mean log Bayes factor} over its visible pixels,
-$\bar\ell_k(C)=|\Omega_k^{\mathrm{vis}}|^{-1}\sum_u\log\Lambda_{k,u}(C)\ge\tau$, where
+For Gaussians, $\Lambda_{i,u}(C)\ge 1$ is equivalent to
+$\tfrac12\nu^{2}/(v_S+\sigma_i^2)\le \log\!\bigl(|\Sgrid_u|/\sqrt{2\pi(v_S+\sigma_i^2)}\bigr)$
+with $\nu=\hat S_i(u)-\tilde D_i(u)$, so the offset enters exponentially. A view is kept on
+the \emph{mean log Bayes factor} over its visible pixels,
+$\bar\ell_i(C)=|\Omega_i^{\mathrm{vis}}|^{-1}\sum_u\log\Lambda_{i,u}(C)\ge\tau$, where
 $\tau=0$ is the nominal null and the calibrated $\tau$ absorbs the correlation of
 pixels. The interval volume $|\Sgrid_u|$ is part of the test and must be fixed and
-reported. Because every source is tested against the same reference, the result does not
-depend on the order of the sources (R1), and the gate returns \emph{no consensus} when the
-surface does not support the view or rejects every source (R3).
-Algorithm~\ref{alg:admission} summarises the gate.
+reported. Because every view is tested against a surface that does not depend on it, the
+result does not depend on the order of the views (R1), and the gate returns \emph{no
+consensus} when the surface does not support the view (R3). Algorithm~\ref{alg:admission}
+summarises the gate.
 
 \begin{algorithm}[t]
 \caption{Shared-surface view-level gate}
 \label{alg:admission}
 \begin{algorithmic}[1]
-\REQUIRE views split into $K$ folds, sources $\{(m,i)\}$, provisional poses, threshold $\tau$, support $(\tau_\alpha,s_{\min})$
+\REQUIRE views split into $K$ folds, depth maps $\{D_i\}$, provisional poses, threshold $\tau$, support $(\tau_\alpha,s_{\min})$
 \FOR{each fold $f$}
-  \STATE fit $\mathcal{S}_{-f}$ to the sources of views outside $f$ \hfill (fixed $N_s$, eq.~\eqref{eq:fit})
+  \STATE fit $\mathcal{S}_{-f}$ to the depth maps of views outside $f$ \hfill (fixed $N_s$, eq.~\eqref{eq:fit})
   \FOR{each view $i\in f$}
     \STATE render $\hat S_i,\;v_{S,i},\;\alpha_i$ from $\mathcal{S}_{-f}$
     \IF{supported pixels $<s_{\min}P$}
-      \STATE $g_{m,i}\gets0$ for all $m$; \textbf{continue} \hfill (no consensus)
+      \STATE $g_{i}\gets0$; \textbf{continue} \hfill (no consensus)
     \ENDIF
-    \FOR{each source $(m,i)$}
-      \STATE fit alignment of $(m,i)$ to $\hat S_i$; compute $\bar\ell_{m,i}$ on visible pixels
-      \STATE $g_{m,i}\gets\mathbb{1}[\bar\ell_{m,i}\ge\tau]$
-    \ENDFOR
+    \STATE fit the alignment of $D_i$ to $\hat S_i$; compute $\bar\ell_{i}$ on visible pixels
+    \STATE $g_{i}\gets\mathbb{1}[\bar\ell_{i}\ge\tau]$
   \ENDFOR
 \ENDFOR
-\RETURN $\{g_{m,i}\}$
+\RETURN $\{g_{i}\}$
 \end{algorithmic}
 \end{algorithm}
 
@@ -287,7 +284,7 @@ leave-one-out statistic plus a covariance-volume term.
 \end{proposition}
 (Proof in Appendix~\ref{app:proof}.)
 \begin{remark}
-Under equal covariances and Gaussian residuals, ranking sources by this evidence is
+Under equal covariances and Gaussian residuals, ranking depth maps by this evidence is
 therefore the same as ranking by the leave-one-out chi-square statistic, and the
 evidence criterion can add value only where noise is heteroscedastic (as depth noise is),
 residuals are non-Gaussian or multimodal, or occlusion and grazing geometry break the
@@ -297,7 +294,7 @@ a tie as a reportable outcome.
 
 \subsubsection{Cost}
 \label{sec:method:cost}
-A pairwise gate warps the consensus of each neighbouring view into the view under test
+A pairwise gate warps the depth maps of the neighbouring views into the view under test
 (Appendix~\ref{app:pairwise}). With $P$ pixels per view, mean co-visibility degree $\bar d$
 and a warp cost $c_w$ per pixel, its cost is $C_{\mathrm{pair}}\approx N\bar d\,P\,c_w$,
 which grows with the number of view pairs when overlap is dense ($\bar d\propto N$). The
@@ -307,34 +304,47 @@ $C_{\mathrm{surf}}\approx\bigl((K+1)\,n_{\mathrm{it}}+1\bigr)\,N\,P\,c_r$, which
 in $N$ for fixed $K$, $N_s$ and $n_{\mathrm{it}}$ (the $+1$ in $K+1$ is the final refit
 below). The surface therefore wins only when overlap is dense: the break-even degree is
 $\bar d^{*}\approx\bigl((K+1)\,n_{\mathrm{it}}+1\bigr)\,c_r/c_w$, and for sparse view graphs
-the pairwise gate is cheaper. H6 measures the scaling and the break-even point.
+the pairwise gate is cheaper. Depth inference adds $N$ model evaluations per scene, which
+can be cached and which do not depend on the gate; with $M$ models the ensemble ablation
+multiplies this term by $M$. H6 measures the scaling and the break-even point.
 
-\subsubsection{Output, refit and persistence}
+\subsubsection{Output and scene-level alarm}
 \label{sec:method:elim}
-The gate returns $g_{m,i}=1$ for admitted sources and $0$ otherwise; if the answer is
-\emph{no consensus}, all $g_{m,i}=0$ and the view is excluded from depth constraints and
-fusion. After pose graph optimisation, the surface is refitted once on all admitted
-sources at the refined poses; this surface is the fused output. To separate a failing view
-from a failing estimator, we track, along the view order, how often each estimator is
-rejected: if one estimator is rejected on a run of neighbouring views, it is flagged by a
-CUSUM test and excluded for the whole scene (estimator-level exclusion), whereas isolated
-rejections remain view-level.
-\TODO{Estimator-level exclusion is optional and the first item to cut if the schedule
-  slips; state its status in the final version.}
+The gate returns $g_i=1$ for kept depth maps and $0$ otherwise; if the answer is
+\emph{no consensus}, $g_i=0$ and the view is excluded from depth constraints and fusion.
+After pose graph optimisation, the surface is refitted once on all kept depth maps at the
+refined poses; this surface is the fused output. Dropped views are reported in clusters of
+neighbouring views, because region-specific model failures (a reflective area seen from
+many views) produce runs of rejections. If more than half of the views of a scene are
+rejected, the gate raises a scene-level alarm: it cannot then tell a failing model from a
+surface that is itself wrong, and the result should not be trusted.
+
+\subsection{Ensemble Variant (Ablation)}
+\label{sec:method:ensemble}
+The ensemble ablation gives each view $M$ depth maps $D_{m,i}$ from $M$ models and asks two
+questions: whether models that share training data fail on the same views, and whether
+voting across models breaks where the gate does not. Cross-model voting takes, at each
+pixel, the median (or majority) of the $M$ aligned depth maps and flags a view when the
+models disagree beyond their noise; it needs no other view. The ensemble gate tests each of
+the $M$ depth maps of a view against the same surface rendered at the view, so that
+$g_{m,i}$ is defined per model and a view is dropped when every model is rejected or when
+the kept models disagree. Both are evaluated by H7 (Section~\ref{sec:setup:hyp}): they
+should differ most on views where several models fail together, since cross-model voting then
+agrees with itself, whereas the surface is built from other views.
 
 \subsection{Test Bed: Gate, Pose Graph and Fusion}
 \label{sec:method:pipeline}
-The test bed runs five steps. (i)~\emph{Depth ensemble and matches:} each view is
-processed by the $M$ estimators, and feature matches are computed for view pairs.
-(ii)~\emph{Provisional poses:} a pose graph with the geometric constraints only is
-solved with a robust kernel, to give poses that are good enough to render a surface at
-each view. (iii)~\emph{Gate:} Section~\ref{sec:method:gate}: cross-fit the shared surface
-and test every source against its rendering. (iv)~\emph{Pose graph optimisation:}
-\eqref{eq:pgo}, with gated depth constraints and, optionally, a robust kernel.
-(v)~\emph{Fused output:} the surface is refitted on the admitted sources at the refined
-poses; its rendered depth is the fused depth, and a truncated signed distance function
-\cite{fus_curless,fus_kinectfusion} of the same admitted depth is a secondary check. The
-gate may be repeated once with the refined poses. Because the gate relies on provisional
-poses, errors in those poses can corrupt both the surface and the gate; the repetition,
-and the comparison of gating before versus after the pose graph (H4), test this. The
-baseline families replace or complement step (iii) (Section~\ref{sec:setup:baselines}).
+The test bed runs five steps. (i)~\emph{Depth and matches:} each view is processed by the
+depth model, and feature matches are computed for view pairs. (ii)~\emph{Provisional poses:}
+a pose graph with the geometric constraints only is solved with a robust kernel, to give
+poses that are good enough to render a surface at each view. (iii)~\emph{Gate:}
+Section~\ref{sec:method:gate}: cross-fit the shared surface and test every depth map against
+its rendering. (iv)~\emph{Pose graph optimisation:} \eqref{eq:pgo}, with gated depth
+constraints and, optionally, a robust kernel. (v)~\emph{Fused output:} the surface is
+refitted on the kept depth maps at the refined poses; its rendered depth is the fused depth,
+and a truncated signed distance function \cite{fus_curless,fus_kinectfusion} of the same
+kept depth is a secondary check. The gate may be repeated once with the refined poses.
+Because the gate relies on provisional poses, errors in those poses can corrupt both the
+surface and the gate; the repetition, and the comparison of gating before versus after the
+pose graph (H4), test this. The baseline families replace or complement step (iii)
+(Section~\ref{sec:setup:baselines}).

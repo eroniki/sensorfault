@@ -34,35 +34,33 @@ whose negative logarithm is $\tfrac12\nu^{\top}S^{-1}\nu+\tfrac12\log\det(2\pi S
 
 \section{Pairwise Gate (Comparison Variant)}
 \label{app:pairwise}
-The pairwise gate replaces the shared surface by the consensus of the other sources of the
-view and of its neighbours. For view $i$ the candidate sources are the $M$ estimator
-outputs $(m,i)$; for each neighbour $j$ with provisional pose, the consensus depth of $j$
-is warped into view $i$ and acts as an additional source that is never itself gated. For a
-candidate $k$, let $\hat D_{-k}$ be the consensus of the other sources after a robust
-scale-and-shift fit of each of them to a common reference, with variance $v_{-k}$ (the
-inverse-variance combination of the aligned sources). The candidate is aligned to
-$\hat D_{-k}$ by its own robust affine fit, and the statistic is \eqref{eq:Ts} with
-$\hat S_i,v_{S,i}$ replaced by $\hat D_{-k},v_{-k}$. The consensus now has several members,
-so a set is grown as in our earlier work: with $F_C=\prod_{i\in C}f_{i,u}$, $Z_C=\int F_C$,
-$p_C=F_C/Z_C$ and $H(C)=-\!\int p_C\log p_C$, Algorithm~\ref{alg:pairwise} seeds with the pair
-of largest pairwise evidence, expands with the compatible source of largest mean log Bayes
-factor (which removes the order dependence), and returns the minimum-entropy set among
-admissible sets with at most $F<M/2$ removals. Its cost is $C_{\mathrm{pair}}$ of
-Section~\ref{sec:method:cost}.
+The pairwise gate replaces the shared surface by the depth maps of the neighbouring views.
+For view $i$ with neighbours $\mathcal{N}(i)$, the depth map of each neighbour $j$ is warped
+into view $i$ with the provisional poses, giving a candidate depth $D_{j\to i}$ at the
+pixels where it is visible; the view's own depth map is never part of the consensus. The
+neighbours may themselves be faulty, so the consensus is built as in our earlier work: with
+$F_C=\prod_{j\in C}f_{j\to i,u}$, $Z_C=\int F_C$, $p_C=F_C/Z_C$ and $H(C)=-\!\int p_C\log p_C$,
+Algorithm~\ref{alg:pairwise} seeds with the pair of warped neighbours of largest pairwise
+evidence, expands with the compatible neighbour of largest mean log Bayes factor (which
+removes the order dependence), and returns the minimum-entropy set among admissible sets
+with at most $F<|\mathcal{N}(i)|/2$ removals. The view's depth map is then tested against
+the consensus $p_C$ with the Bayes factor \eqref{eq:lambda} and the statistic
+\eqref{eq:Ts} after a robust affine alignment, with $\hat S_i,v_{S,i}$ replaced by the mean
+and variance of $p_C$. Its cost is $C_{\mathrm{pair}}$ of Section~\ref{sec:method:cost}.
 
 \begin{algorithm}[t]
-\caption{Pairwise view-level admission (comparison variant)}
+\caption{Pairwise consensus among warped neighbours (comparison variant)}
 \label{alg:pairwise}
 \begin{algorithmic}[1]
-\REQUIRE aligned depth PDFs $\{f_{k,u}\}_{k=1}^{M}$ of one view with warped neighbours, removal budget $F<M/2$, threshold $\tau$
-\STATE $(i^\star,j^\star)\gets\argmax_{i\ne j}\bar\ell_{j}(\{i\})$
-\IF{$\bar\ell_{j^\star}(\{i^\star\})<\tau$}
+\REQUIRE depth PDFs $\{f_{j\to i,u}\}_{j\in\mathcal{N}(i)}$ of the warped neighbours of view $i$, removal budget $F<|\mathcal{N}(i)|/2$, threshold $\tau$
+\STATE $(a^\star,b^\star)\gets\argmax_{a\ne b}\bar\ell_{b}(\{a\})$
+\IF{$\bar\ell_{b^\star}(\{a^\star\})<\tau$}
   \RETURN no consensus
 \ENDIF
-\STATE $C\gets\{i^\star,j^\star\}$
+\STATE $C\gets\{a^\star,b^\star\}$
 \WHILE{$\exists\,k\notin C:\ \bar\ell_k(C)\ge\tau$}
   \STATE $k^\star\gets\argmax_{k\notin C}\bar\ell_k(C)$; \ $C\gets C\cup\{k^\star\}$
 \ENDWHILE
-\STATE Among admissible sets $C'$ with $M-|C'|\le F$, \textbf{return} $\argmin_{C'}H(C')$
+\STATE Among admissible sets $C'$ with $|\mathcal{N}(i)|-|C'|\le F$, \textbf{return} $\argmin_{C'}H(C')$
 \end{algorithmic}
 \end{algorithm}

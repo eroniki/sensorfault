@@ -9,7 +9,7 @@ The subsections follow the hypotheses of Section~\ref{sec:setup:hyp}: H1 in
 Section~\ref{sec:results:h1}, H2 in Section~\ref{sec:results:h2}, H3 in
 Section~\ref{sec:results:h3}, H4 in Section~\ref{sec:results:h4}, H5 and the reference
 points in Section~\ref{sec:results:h5}, H6 (shared surface versus pairwise checks) in
-Section~\ref{sec:results:h6}, the breakdown scenarios in Section~\ref{sec:results:break},
+Section~\ref{sec:results:h6}, H7 (ensemble ablation) in Section~\ref{sec:results:h7}, the breakdown scenarios in Section~\ref{sec:results:break},
 natural failures in Section~\ref{sec:results:nat}, and runtime in
 Section~\ref{sec:results:time}.
 
@@ -17,7 +17,7 @@ Section~\ref{sec:results:time}.
 \label{sec:results:h1}
 \begin{table}[t]
 \caption{\textbf{[TODO]} Absolute trajectory error (cm, lower is better) with one
-estimator corrupted on a fraction of the views, by fault type. Mean over scenes and
+model's depth corrupted on a fraction of the views, by fault type. Mean over scenes and
 seeds with 95\% bootstrap CI.}
 \label{tab:h1}
 \centering
@@ -39,7 +39,7 @@ Oracle gate                           & \todocell & \todocell & \todocell & \tod
 \end{tabular}
 \end{table}
 
-\todofig{residual-structure}{Spatial structure of per-source residuals under a view-level fault versus sparse outliers; Moran's I per source (H1, Sec.~\ref{sec:method:consensus}).}
+\todofig{residual-structure}{Spatial structure of per-view residuals under a view-level fault versus sparse outliers; Moran's I per view (H1, Sec.~\ref{sec:method:consensus}).}
 
 \todofig{regimes}{Trajectory and fused-surface error versus fraction of faulty views, scattered versus clustered, for each baseline family and the gate (H1).}
 
@@ -122,13 +122,35 @@ Surface, exact leave-one-view-out     & \todocell & \todocell \\
 \end{tabular}
 \end{table}
 
+\subsection{Ensemble Ablation (H7)}
+\label{sec:results:h7}
+\todofig{failure-corr}{Joint failure frequency and lift of the natural view-level failures of each pair of models, with the independence expectation (H7a).}
+
+\begin{table}[t]
+\caption{\textbf{[TODO]} Detection power (\%) at 5\% false exclusion on views where at least
+half of the models fail, and on views the surface cannot support: cross-model voting, the
+single-model gate, and the ensemble gate (H7b, H7c).}
+\label{tab:h7}
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+Method & Common-mode & Unsupported \\
+\midrule
+Cross-model voting                    & \todocell & \todocell \\
+Gate, single model                    & \todocell & \todocell \\
+Gate, ensemble                        & \todocell & \todocell \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Breakdown Conditions}
 \label{sec:results:break}
-\todofig{breakdown}{Error versus the fraction of estimators failing together on a view and versus $M$, including the $M=2$ non-identifiable case, common-mode failures, and faulty views that dominate the surface in a region.}
+\todofig{breakdown}{Error versus the fraction of faulty views, including the model-level case where all views fail alike, very few views, and faulty views that dominate the surface in a region.}
 
 \subsection{Natural Failures}
 \label{sec:results:nat}
-\todofig{natural}{Qualitative examples of natural estimator failures (reflective or transparent surfaces, sky, textureless regions): per-source depth error against the laser reference, the gate decision, and the resulting fused surface.}
+\todofig{natural}{Qualitative examples of natural model failures (reflective or transparent surfaces, sky, textureless regions): per-view depth error against the laser reference, the gate decision, and the resulting fused surface.}
 
 \subsection{Runtime and Memory}
 \label{sec:results:time}

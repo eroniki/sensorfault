@@ -1,7 +1,7 @@
 # sensorfault-manuscript
 
-Draft v0 of *A View-Level Gate for Monocular Depth Sources Before Pose Graph Optimisation and
-Fusion*, for IEEE Access (official LaTeX template). Companion code and plan: `eroniki/sensorfault`.
+Draft v0 of *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian
+Surface*, for IEEE Access (official LaTeX template). Companion code and plan: `eroniki/sensorfault`.
 The gate is the contribution; the monocular-depth pipeline is the test bed.
 
 **Status: pre-experiment draft.** No experiment has been run. Every result table and figure is a

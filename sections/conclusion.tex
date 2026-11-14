@@ -1,65 +1,68 @@
 \section{Conclusions and Future Work}
 \label{sec:conclusion}
-We have proposed a view-level gate that decides which depth sources to trust before pose
-graph optimisation and fusion. Depth sources are the outputs of an ensemble of monocular
-estimators on RGB images; the gate tests each of them once against a single shared
-Gaussian-splat surface, fitted with a fixed number of splats on other folds of views and
-rendered at its view, so that its cost grows with the number of views rather than the number
-of view pairs. A source is compared after a scale-and-shift alignment, on supported pixels,
-and admitted only if its mean log Bayes factor against the rendered surface passes a
-calibrated threshold; the surface refitted on the admitted sources is the fused output. The admission test corrects the
-entropy criterion of our earlier Byzantine sensor elimination, which could not
-distinguish an agreeing source from a sharp but biased one, and returns \emph{no
-consensus} when attribution is not identifiable. A test bed, consisting of a monocular
-depth ensemble, a partly end-to-end pose graph and the fused surface, provides the depth
-maps and the downstream task; MASt3R-SfM and VGGT are reference points, and robust kernels,
-the COLMAP geometric consistency filter and plain voting are the baselines the gate must
-beat, with a pairwise gate as the comparison for the shared surface. The empirical case
-rests on hypotheses H1--H6, none of which has been tested in this version. \TODO{Rewrite the conclusion around the measured results; if H2 fails,
-reframe around the gate with the chi-square statistic and keep the entropy
-relation as an equivalence result.}
+We have proposed a view-level gate that decides which views' depth maps to keep before pose
+graph optimisation and fusion. One monocular metric depth model is applied to each RGB
+image; the gate tests each depth map once against a single shared Gaussian-splat surface,
+fitted with a fixed number of splats from the other views and rendered at its view, so that
+its cost grows with the number of views rather than the number of view pairs. A depth map is
+compared after a scale-and-shift alignment, on supported pixels, and kept only if its mean
+log Bayes factor against the rendered surface passes a calibrated threshold; the surface
+refitted on the kept depth maps is the fused output. The admission test corrects the entropy
+criterion of our earlier Byzantine sensor elimination, which could not distinguish an
+agreeing source from a sharp but biased one, and returns \emph{no consensus} when attribution
+is not identifiable. A test bed, consisting of a depth model, a partly end-to-end pose graph
+and the fused surface, provides the depth maps and the downstream task; MASt3R-SfM and VGGT
+are reference points, robust kernels, the COLMAP geometric consistency filter and plain
+voting are the baselines the gate must beat, a pairwise gate is the comparison for the shared
+surface, and a multi-model ensemble is an ablation that asks whether models fail on the same
+views and whether cross-model voting breaks where the gate does not. The empirical case rests
+on hypotheses H1--H7, none of which has been tested in this version. \TODO{Rewrite the
+conclusion around the measured results; if H2 fails, reframe around the gate with the
+chi-square statistic and keep the entropy relation as an equivalence result; if H7a fails,
+report that failures are independent and that an ensemble is worth its cost only if H7c holds.}
 
-\TODO{Interpretation of the results, to write after the experiments: for each of H1--H6
+\TODO{Interpretation of the results, to write after the experiments: for each of H1--H7
 state whether it was supported, partly supported or falsified, and why; state from H2
 whether the evidence criterion adds anything beyond the leave-one-out chi-square test
 (Proposition~\ref{prop:loo}); and from H1 in which overlap and clustering regimes the gate
 beats the pixel filters and robust kernels and where it ties; and from H6 at which overlap
-degree the shared surface becomes cheaper than pairwise checks and what it costs in power.}
+degree the shared surface becomes cheaper than pairwise checks and what it costs in power; and from H7 whether models share failures and where cross-model voting and the gate complement each other.}
 
 \subsection{Limitations and Failure Conditions}
 \label{sec:disc:limits}
-The gate is built on a consensus and fails where the consensus is wrong or not
-identifiable. First, it assumes that fewer than half of the sources of any view are
-faulty. Monocular estimators trained on overlapping data tend to fail on the same
-content, so a majority can fail together; the gate is then expected to be no better
-than fusing everything, and it can exclude the healthy minority. Second, with $M=2$
-the residuals are symmetric and attribution is not identifiable; only detection is
-possible. Third, the gate targets structure that the scale-and-shift alignment cannot
-remove; a pure scale or shift error is absorbed by the alignment, in the gate and in the
-pose graph, and is not detected. Fourth, the gate uses provisional poses to render the surface, so poor provisional poses can
-corrupt both the surface and the gate. The surface can also be corrupted by faulty sources
-in the folds used to fit it: cross-fitting holds out a block of neighbouring views together,
-but faulty views in other folds that support the same fault, or faulty views that supply most
-of the coverage of a region, can make the surface follow the fault and mask it; a fixed
-splat budget limits but does not remove this. A depth-only surface is weakly constrained
-and needs the alpha, anisotropy and normal-consistency regularisers, and the choice of the
-number of folds trades coverage of the held-out views against masking. The cost advantage
-holds only for dense overlap; for sparse view graphs the pairwise gate is cheaper. Fifth, faults below the
-per-pixel noise can be detected only by aggregating over many pixels, so there is a
-detection floor that depends on overlap and pixel count. Sixth, excluding a source
-lowers completeness wherever only that source covered a region. Seventh, the injected
-faults are controlled surrogates of natural failures; natural failures are scored against
-a laser reference on a small number of scenes, and the scenes are static. Finally,
-the cross-fitted surface fits ($K{+}1$ per scene) and the estimator ensemble cost memory and time; the test bed
-is an offline pipeline.
+The gate is built on a consensus of views and fails where the consensus is wrong or not
+identifiable. First, it needs the other views to expose a faulty one: a model-level fault,
+where all views are wrong in the same way, makes the surface agree with the faulty depth
+and is undetectable from depth alone, and a minority assumption is needed in every region.
+Second, with very few views, or in regions that few other views observe, the surface cannot
+test a view and the gate can only return no consensus. Third, the gate targets structure that
+the scale-and-shift alignment cannot remove; a pure scale or shift error is absorbed by the
+alignment, in the gate and in the pose graph, and is not detected. Fourth, the gate uses
+provisional poses to render the surface, so poor provisional poses can corrupt both the
+surface and the gate. The surface can also be corrupted by faulty depth maps in the folds
+used to fit it: cross-fitting holds out a block of neighbouring views together, but faulty
+views in other folds that support the same fault, or faulty views that supply most of the
+coverage of a region, can make the surface follow the fault and mask it; a fixed splat
+budget limits but does not remove this. A depth-only surface is weakly constrained and needs
+the alpha, anisotropy and normal-consistency regularisers, and the choice of the number of
+folds trades coverage of the held-out views against masking. The cost advantage holds only
+for dense overlap; for sparse view graphs the pairwise gate is cheaper. Fifth, faults below
+the per-pixel noise can be detected only by aggregating over many pixels, so there is a
+detection floor that depends on overlap and pixel count. Sixth, dropping a view lowers
+completeness wherever only that view covered a region. Seventh, the injected faults are
+controlled surrogates of natural failures; natural failures are scored against a laser
+reference on a small number of scenes, and the scenes are static. Eighth, a single default
+model was chosen on development scenes, and the conclusions are for that model; the
+ensemble ablation tests whether they carry over. Finally, the surface fits and the depth
+model cost memory and time; the test bed is an offline pipeline.
 \TODO{Update with observed failures once experiments run.}
 
 \subsection{Future Work}
 \label{sec:disc:future}
 Planned extensions, none yet started, are: adding a photometric term to the surface fit,
-which would give an evidence source that does not come from the depth estimators and could
-help against common-mode failures; training the gate through the differentiable back-end; running it online on video under a per-frame latency budget; handling dynamic
+which would give an evidence source that does not come from the depth model and could
+help against model-level failures; training the gate through the differentiable back-end; running it online on video under a per-frame latency budget; handling dynamic
 scenes; and applying the same gate to depth from physical sensors (LiDAR, time-of-flight,
-active stereo), where the sources are sensors rather than estimators and the fault
+active stereo), where the sources are sensors rather than views of one model and the fault
 classes include extrinsic drift and multipath. \TODO{Confirm which of these remain in
 scope.}

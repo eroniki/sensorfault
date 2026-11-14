@@ -26,40 +26,40 @@
 \history{Draft v0 --- not submitted. Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.}
 \doi{10.1109/ACCESS.2026.XXXXXXX}
 
-\title{A View-Level Gate for Monocular Depth Sources Before Pose Graph Optimisation and Fusion}
+\title{View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface}
 \author{\uppercase{Murat Ambarkutuk}\authorrefmark{1}}
 \address[1]{\textcolor{red}{[TODO: affiliation, city, country] (e-mail: [TODO])}}
 \tfootnote{\textcolor{red}{[TODO: funding / support statement, or delete.]}}
 
 \markboth
-{Ambarkutuk: A View-Level Gate for Monocular Depth Sources}
-{Ambarkutuk: A View-Level Gate for Monocular Depth Sources}
+{Ambarkutuk: View-Level Fault Rejection via a Shared Gaussian Surface}
+{Ambarkutuk: View-Level Fault Rejection via a Shared Gaussian Surface}
 
 \corresp{Corresponding author: \textcolor{red}{[TODO: name (e-mail)]}.}
 
 \begin{abstract}
-Image-based 3D reconstruction increasingly relies on monocular depth estimators as a
-geometric prior, but an estimator can fail coherently on some views, producing a smooth
-warp or a failed region rather than sparse pixel noise. Pixel-wise consistency filters, robust kernels in the pose graph, and
-plain voting decide at the wrong unit or too late, after the faulty depth has entered
-the graph. This paper proposes a view-level gate that decides which depth sources, that
-is, which estimator outputs on which views, to trust before pose graph optimisation and
-fusion. The gate tests each source once against a single shared Gaussian-splat surface
-rendered at its view, fitted with a fixed number of splats on other views, so that its
-cost grows with the number of views rather than view pairs and the surface doubles as the
-fused output. A source is admitted only if its mean log Bayes factor against the rendering
-passes a calibrated threshold; otherwise the gate returns no consensus. The test corrects an
-entropy criterion from earlier work on Byzantine sensor elimination, which cannot
-distinguish an agreeing source from a sharp but biased one. The gate is evaluated in a
-test bed with monocular depth estimators and a partly end-to-end pose graph, against robust
-kernels, the COLMAP geometric consistency filter, plain voting, and a pairwise gate. A
-pre-registered protocol states six falsifiable hypotheses and breakdown scenarios.
+Monocular-depth reconstruction uses a depth model's prediction for each image as a geometric
+prior, but a model can fail coherently on some views, producing a smooth warp or a failed
+region rather than sparse pixel noise. Pixel-wise consistency filters, robust kernels in the
+pose graph, and plain voting decide at the wrong unit or too late. This paper proposes
+view-level fault rejection: a gate that decides which views' depth maps to keep before pose
+graph optimisation and fusion. Each depth map, produced by one metric model per image, is
+tested once against a shared Gaussian surface that is fitted from the other views with a
+fixed number of splats and rendered at its view, so that the cost grows with the number of
+views rather than view pairs and the surface doubles as the fused output. A view is kept only
+if its mean log Bayes factor against the rendering passes a calibrated threshold; otherwise
+the gate returns no consensus. The test corrects an entropy criterion from earlier work on
+Byzantine sensor elimination, which cannot distinguish an agreeing source from a sharp but
+biased one. The gate is evaluated in a test bed with a partly end-to-end pose graph against
+robust kernels, the COLMAP geometric consistency filter, plain voting, and a pairwise gate;
+an ablation asks whether several models fail on the same views. A pre-registered protocol
+states seven falsifiable hypotheses and breakdown scenarios.
 \textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 
 \begin{keywords}
-3D reconstruction, Byzantine fault tolerance, depth fusion, monocular depth estimation,
-pose graph optimisation, robust estimation.
+3D reconstruction, Byzantine fault tolerance, fault rejection, Gaussian splatting,
+monocular depth estimation, pose graph optimisation, robust estimation.
 \end{keywords}
 
 \titlepgskip=-21pt
