@@ -9,11 +9,12 @@ projected orthogonally to the scale and offset, it is a large test statistic, wi
 detectable bias that falls as $1/\sqrt{n_{\mathrm{eff}}f(1-f)}$ and an effective number of pixels
 that follows from the correlation of the residual. One metric depth model is
 applied to each image, and the gate tests each depth map once against a single shared Gaussian
-surface, fitted with a fixed number of splats from the other views and rendered at its view, at
+surface of Gaussian primitives, built from the depth maps in closed form, with the view
+itself removed by an exact subtraction of its information and rendered at its view, at
 a cost that grows with the number of views rather than the number of view pairs. A depth map is
 excluded when its statistic exceeds a calibrated threshold, a no-consensus alarm is raised when
-the other views cannot test it, and the surface refitted on the kept depth maps is the fused
-output. The admission test corrects the entropy criterion of our earlier Byzantine sensor
+the other views cannot test it, and the surface of the kept depth maps is the fused
+output, with a posterior, a protection level and a view count per region. The admission test corrects the entropy criterion of our earlier Byzantine sensor
 elimination, which could not distinguish an agreeing source from a sharp but biased one, and a
 conditional protection level bounds the error of the output under stated assumptions. A
 differentiable, renderable pose graph is the test bed, soft down-weighting inside it is a
@@ -29,8 +30,8 @@ if H5 fails because soft down-weighting suffices, say so.}
 state whether it was supported, partly supported or falsified, and why; state from H2
 whether the evidence criterion adds anything beyond the leave-one-out chi-square test
 (Proposition~\ref{prop:loo}); and from H1 where the regime map separates the gate from pixel filters and robust kernels
-and where it ties or loses; and from H6 at which overlap
-degree the shared surface becomes cheaper than pairwise checks and what it costs in power; from H7 at which overlap degree the surface is cheaper; and from H10 whether models share failures and where cross-model voting and the gate complement each other.}
+and where it ties or loses; and from H7 at which overlap
+degree the closed-form surface becomes cheaper than pairwise checks and what it costs in power, and whether the fixed-budget MCMC surface is better or worse; and from H10 whether models share failures and where cross-model voting and the gate complement each other.}
 
 \subsection{Limitations and Failure Conditions}
 \label{sec:disc:limits}
@@ -59,13 +60,14 @@ fault look alike to the gate, since both shift the residual of a whole view; the
 the view but does not isolate which of the two is at fault, which would need a rigid
 re-alignment of the view to the surface and is left to future work. Seventh, the gate uses
 provisional poses to render the surface, so poor provisional poses can corrupt both the surface
-and the gate. The surface can also be corrupted by faulty depth maps in the folds used to fit
-it: cross-fitting holds out a block of neighbouring views together, but faulty views in other
-folds that support the same fault, or faulty views that supply most of the coverage of a
-region, can make the surface follow the fault and mask it; a fixed splat budget limits but
-does not remove this. A depth-only surface is weakly constrained and needs the alpha,
-anisotropy and normal-consistency regularisers, and the choice of the number of folds trades
-coverage of the held-out views against masking. Eighth, the cost advantage holds only for dense
+and the gate. The surface can also be corrupted by faulty depth maps: leaving a view out is exact, but
+several faulty views that support the same fault, or faulty views that supply most of the
+coverage of a region, can make the surface follow the fault and mask it. Association is
+order dependent at the cold start, and a faulty view with a large offset may spawn separate
+primitives that no other view can test, which the render-and-compare gate must catch. Planar
+primitives fit thin or curved structures poorly, information-form fusion treats observations as
+independent and so is overconfident under correlated depth error and shared pose error, the
+offset variance omits the normal uncertainty, and the surface variance is diagonal. Eighth, the cost advantage holds only for dense
 overlap; for sparse view graphs the pairwise gate is cheaper, and for large false loop closures
 the loop-closure baselines are the right tool. Ninth, excluding too much is also a failure: the
 false-alarm rate and the availability are reported, and dropping a view lowers completeness
@@ -79,9 +81,7 @@ offline pipeline.
 
 \subsection{Future Work}
 \label{sec:disc:future}
-Planned extensions, none yet started, are: isolating whether a faulty view is a depth fault or a pose fault by a rigid re-alignment to the surface; allocating an integrity risk from measured fault frequencies; adding a photometric term to the surface fit,
-which would give an evidence source that does not come from the depth model and could
-help against model-level failures; training the gate through the differentiable back-end; running it online on video under a per-frame latency budget; handling dynamic
+Planned extensions, none yet started, are: isolating whether a faulty view is a depth fault or a pose fault by a rigid re-alignment to the surface; allocating an integrity risk from measured fault frequencies; a source of evidence that does not come from the depth model, which could help against model-level failures, although colour is out of scope here; training the gate through the differentiable back-end; running it online on video under a per-frame latency budget; handling dynamic
 scenes; and applying the same gate to depth from physical sensors (LiDAR, time-of-flight,
 active stereo), where the sources are sensors rather than views of one model and the fault
 classes include extrinsic drift and multipath. \TODO{Confirm which of these remain in

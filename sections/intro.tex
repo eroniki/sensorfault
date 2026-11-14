@@ -47,10 +47,12 @@ the residual covariance $\Sigma_r$, which must be calibrated, not assumed.
 This paper proposes \emph{view-level fault rejection} for monocular-depth reconstruction: a
 \emph{gate} that performs fault detection and exclusion (FDE) on views before pose graph
 optimisation and fusion. The gate tests each depth map once against a single shared Gaussian
-surface (a set of Gaussian splats) that is fitted from the other views and rendered at that
-view, instead of against every overlapping view, so that its cost grows with the number of
-views rather than the number of view pairs, and the surface, refitted on the kept depth maps,
-doubles as the fused output. The gate, including this consensus and its integrity statements,
+surface of planar Gaussian primitives, built from the depth maps alone in closed form and
+fused in information form, from which the view's own contribution is removed by an exact
+subtraction and which is rendered at that view, instead of against every overlapping view, so
+that its cost grows with the number of views rather than the number of view pairs, and the
+surface of the kept depth maps doubles as the fused output, with a posterior, a protection
+level and a view count in every region. The gate, including this consensus and its integrity statements,
 is the contribution.
 
 To make the setting concrete we embed the gate in a test bed in which one depth model is
@@ -83,7 +85,7 @@ eliminated Byzantine accelerometers from a vibration-based localisation by build
 consensus of per-sensor PDFs \cite{flt_ambarkutuk}, and used a joint likelihood over several
 sensors for dispersive wave propagation \cite{flt_ambarkutuk2024}. Testing a unit against a
 model that was fitted without it is the idea behind cross-validation and the jackknife; the
-gate applies it to depth sources, with a splat surface as the model. To our knowledge,
+gate applies it to depth sources, with a Gaussian surface as the model, for which leaving a view out is exact. To our knowledge,
 integrity monitoring of this kind has not been applied to the views of a learned-depth
 reconstruction; this statement rests on a limited literature search.
 
@@ -104,7 +106,8 @@ as an ablation, because models trained on overlapping data may fail on the same 
 visibility-aware rasteriser \cite{gs_3dgs}; 2D Gaussian splatting uses oriented planar
 disks with depth-distortion and normal-consistency terms for surface accuracy
 \cite{gs_2dgs}; 3DGS-MCMC treats the Gaussians as MCMC samples and replaces densification
-by relocation, which allows a fixed primitive budget \cite{gs_mcmc}. DN-Splatter adds
+by relocation, which allows a fixed primitive budget \cite{gs_mcmc}; we use it only as an
+ablation of our closed-form surface. DN-Splatter adds
 depth and normal priors, including monocular ones, to splatting of indoor scenes
 \cite{gs_dnsplatter}. SpotLessSplats and RobustSplat mask transient distractors from
 photometric evidence \cite{gs_spotless,gs_robustsplat}. These fit a surface to given
@@ -209,7 +212,7 @@ earlier Byzantine sensor elimination (BSE) \cite{flt_ambarkutuk}, which localise
 footsteps from the signal energies of floor-mounted accelerometers: each sensor gave a
 PDF of the location over a grid, the PDFs were multiplied, and a consensus set was grown
 greedily from the best pair under an entropy criterion. Here the sources are views, the
-PDF of a source is a per-pixel depth distribution, the consensus is a rendered splat
+PDF of a source is a per-pixel depth distribution, the consensus is a rendered Gaussian
 surface instead of a product of source PDFs, and the admission test is corrected
 (Section~\ref{sec:method:admission}); the earlier set-growing consensus survives only in
 the pairwise comparison variant (Appendix~\ref{app:pairwise}). The cost of the pairwise
@@ -250,10 +253,11 @@ reconstruction. The following points summarise the contributions.
         (Sections~\ref{sec:method:forward},~\ref{sec:method:detection},~\ref{sec:method:elim}
         and~\ref{sec:method:pl}).
   \item \textbf{A shared Gaussian surface as the consensus} (addresses C3 and C7): every
-        depth map is tested once against a fixed-budget surface fitted from the other views
-        and rendered at its view, by cross-fitting so that a view never meets a surface fitted
-        to it, at a cost that grows with the number of views, and refitted on the kept depth
-        maps as the fused output (Sections~\ref{sec:method:surface} and~\ref{sec:method:cost}).
+        depth map is tested once against a closed-form surface of Gaussian primitives built
+        from the depth maps, with the view's own information subtracted exactly (the RAIM
+        solution separation), rendered at its view, at a cost that grows with the number of
+        views, and re-fused from the kept depth maps as the output with a posterior,
+        protection level and view count per region (Sections~\ref{sec:method:surface} and~\ref{sec:method:cost}).
   \item \textbf{Visibility-aware comparison with alignment} (addresses C3 and C5): depth is
         compared after a scale-and-shift fit, on pixels the surface supports and that are
         visible at the view (Section~\ref{sec:method:consensus}).

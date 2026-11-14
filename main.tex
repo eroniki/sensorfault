@@ -50,14 +50,16 @@ intrinsics and surface uncertainty, it derives a gate that tests the whitened re
 view, with a stated false-alarm rate, a minimum detectable bias and an effective number of pixels
 that follow from the residual covariance. The gate excludes a faulty view before pose graph
 optimisation and fusion and raises a no-consensus alarm when it cannot decide. Each depth map,
-produced by one metric model per image, is tested once against a shared Gaussian surface fitted
-from the other views, so the cost grows with the number of views. A pre-registered protocol
+produced by one metric model per image, is tested once against a shared surface of Gaussian
+primitives built from the depth maps in closed form, from which the view's own information is
+subtracted exactly, as in RAIM solution separation, so the cost grows with the number of views
+and each region reports a posterior, a protection level and a view count. A pre-registered protocol
 states ten falsifiable hypotheses, including where gating does not help.
 \textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 
 \begin{keywords}
-3D reconstruction, fault detection and exclusion, Gaussian splatting, integrity monitoring,
+3D reconstruction, fault detection and exclusion, Gaussian surfaces, integrity monitoring,
 monocular depth estimation, pose graph optimisation, robust estimation.
 \end{keywords}
 

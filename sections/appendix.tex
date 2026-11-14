@@ -46,7 +46,7 @@ surface normal,
   v_{n}(r,\theta)=\sigma_r^{2}\cos^{2}\theta+r^{2}\sigma_\varphi^{2}\sin^{2}\theta,
   \label{eq:vn}
 \end{equation}
-stays bounded as $\theta\to\pi/2$; it initialises the splat covariances and floors their scale.
+stays bounded as $\theta\to\pi/2$; it floors the extent and bounds the offset variance $\sigma_h^{2}$ of the primitives.
 The derivation assumes a locally planar surface, small errors and independent Gaussian errors.
 
 \section{Proof of the Proposition}
@@ -139,10 +139,20 @@ The sensitivity of the matched statistic is first order in $\delta$ and that of 
 which is the reason for the sub-noise advantage; the unaggregated filter, which decides per pixel, is
 weaker still.
 
-\emph{Surface term.} For $K$ surfaces the delete-a-group jackknife covariance
-$\tfrac{K-1}{K}\sum_k(\mathbf{s}_k-\bar{\mathbf{s}})(\mathbf{s}_k-\bar{\mathbf{s}})^{\top}$ is positive semi-definite of rank at
-most $K-1$. A small $K$ gives a noisy estimate, so a floor is added; its adequacy is part of the
-calibration check (H6).
+\emph{Surface term.} The closed-form surface gives the diagonal
+$\Sigma_{\mathrm{surf}}=a^{2}\,\mathrm{diag}\,v_{S,i}(u)$, positive definite whenever the composite
+variance is positive. It ignores the spatial correlation of the surface error and the shared pose
+error of a view across its primitives, so it is a lower bound on the true surface covariance;
+its adequacy is part of the calibration check (H6). The delete-a-group jackknife over $K$
+fitted surfaces is used only in the fixed-budget MCMC ablation (H7).
+
+\emph{Leave-view-out and protection level of a primitive.} With information $\lambda=\sum_i\lambda_i$,
+$\mathrm{Cov}(h-h_{-j})=1/\lambda_{-j}-1/\lambda=\lambda_j/(\lambda\lambda_{-j})$, so the
+separation statistic is $(h-h_{-j})^{2}\lambda\lambda_{-j}/\lambda_j$ with
+$h-h_{-j}=(\lambda_j/\lambda)(h_j-h_{-j})$, which equals $(h_j-h_{-j})^{2}\lambda_j\lambda_{-j}/\lambda$, the innovation statistic.
+A fault of size $\Delta$ in view $j$ moves $h$ by $(\lambda_j/\lambda)\Delta$, and a fault is
+detected with probability $1-\beta_{\mathrm{md}}$ when
+$\Delta\ge(z_\alpha+z_{\beta_{\mathrm{md}}})\sqrt{1/\lambda_j+1/\lambda_{-j}}$, which gives \eqref{eq:plh}.
 
 \emph{Protection level.} The faults that the energy test misses satisfy
 $\boldsymbol\phi^{\top}M\boldsymbol\phi\le\lambda_0$. The linear output $q=q_0+\mathbf{s}^{\top}\boldsymbol\phi$ is

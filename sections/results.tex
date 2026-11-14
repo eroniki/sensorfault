@@ -8,7 +8,7 @@ experiment code before submission.}}
 The subsections follow the hypotheses of Section~\ref{sec:setup:hyp}: the regime map (H1) in
 Section~\ref{sec:results:h1}, the consequence for accuracy (H2) in
 Section~\ref{sec:results:h2}, the statistics (H3) in Section~\ref{sec:results:h3},
-cross-fitting, alignment and support (H4) in Section~\ref{sec:results:h4}, placement and soft
+leave-view-out, alignment and support (H4) in Section~\ref{sec:results:h4}, placement and soft
 down-weighting (H5) in Section~\ref{sec:results:h5}, the price of monitoring and the reference
 points (H6) in Section~\ref{sec:results:h6}, shared surface versus pairwise checks (H7) in
 Section~\ref{sec:results:h7}, pose faults (H8) in Section~\ref{sec:results:h8}, the protection
@@ -79,12 +79,12 @@ Oracle gate                           & \todocell & \todocell & \todocell \\
 \label{sec:results:h3}
 \todofig{power-fer}{Detection power at a fixed 5\% false-alarm rate for the region-scan, energy, combined and evidence statistics, for a bias confined to a region and for a diffuse smooth warp, by regime (H3).}
 
-\subsection{Cross-Fitting, Alignment and Support Ablations (H4)}
+\subsection{Leave-View-Out, Alignment and Support Ablations (H4)}
 \label{sec:results:h4}
 \begin{table}[t]
 \caption{\textbf{[TODO]} Ablations of the shared-surface gate: clean-run false-alarm
-rate and detection power with and without cross-fitting, the support mask and the
-grazing gate, against exact leave-one-view-out refitting and the literal Algorithm~1 of
+rate and detection power with and without leave-view-out subtraction, the support mask and the
+grazing gate, against explicit leave-one-view-out refitting of the MCMC surface and the literal Algorithm~1 of
 our earlier work.}
 \label{tab:ablate}
 \centering
@@ -93,11 +93,11 @@ our earlier work.}
 \toprule
 Variant & FA (\%) & Power (\%) \\
 \midrule
-Full gate (cross-fitted)              & \todocell & \todocell \\
-No cross-fitting (joint fit)          & \todocell & \todocell \\
+Full gate (leave-view-out)             & \todocell & \todocell \\
+No leave-view-out (joint surface)     & \todocell & \todocell \\
 No support mask                       & \todocell & \todocell \\
 No grazing gate                       & \todocell & \todocell \\
-Exact leave-one-view-out (ref.)       & \todocell & \todocell \\
+Explicit refit, MCMC (ref.)           & \todocell & \todocell \\
 Literal Alg.~1                        & \todocell & \todocell \\
 \bottomrule
 \end{tabular}
@@ -134,12 +134,12 @@ COLMAP SfM                            & --- & --- & \todocell & \todocell & \tod
 
 \subsection{Shared Surface versus Pairwise Checks (H7)}
 \label{sec:results:h7}
-\todofig{scaling}{Gate wall-clock time and peak GPU memory versus the number of views $N$ (log--log), for the shared-surface gate and the pairwise gate at sparse and dense co-visibility, with the measured break-even degree (H7a).}
+\todofig{scaling}{Gate wall-clock time and peak GPU memory versus the number of views $N$ (log--log), for the closed-form shared-surface gate and the pairwise gate at sparse and dense co-visibility, with the measured break-even degree (H7a).}
 
 \begin{table}[t]
-\caption{\textbf{[TODO]} Detection power at 5\% false alarm for the shared-surface gate
-(fixed $N_s$, $K$ folds), the pairwise gate, and the shared-surface gate with adaptive
-densification at matched size (H7b, H7c).}
+\caption{\textbf{[TODO]} Detection power at 5\% false alarm for the closed-form shared-surface gate,
+the pairwise gate, a single-covariance variant, and the fixed-budget MCMC surface with explicit
+leave-view-out refits (H7b, H7c).}
 \label{tab:h7}
 \centering
 \small
@@ -148,11 +148,9 @@ densification at matched size (H7b, H7c).}
 Variant & Power (\%) & Time (s) \\
 \midrule
 Pairwise gate                         & \todocell & \todocell \\
-Surface, fixed $N_s$, $K=3$           & \todocell & \todocell \\
-Surface, fixed $N_s$, $K=4$           & \todocell & \todocell \\
-Surface, fixed $N_s$, $K=6$           & \todocell & \todocell \\
-Surface, adaptive densification       & \todocell & \todocell \\
-Surface, exact leave-one-view-out     & \todocell & \todocell \\
+Surface, closed form                  & \todocell & \todocell \\
+Surface, single covariance            & \todocell & \todocell \\
+Surface, MCMC fixed budget + refits   & \todocell & \todocell \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -207,7 +205,9 @@ Gate, ensemble                        & \todocell & \todocell \\
 
 \subsection{Breakdown Conditions}
 \label{sec:results:break}
-\todofig{breakdown}{Detection power and error versus the fraction of faulty views, including the model-level case where all views fail alike, very few views, small $n_{\mathrm{eff}}$, and faulty views that dominate the surface in a region.}
+\todofig{breakdown}{Detection power and error versus the fraction of faulty views, including the model-level case where all views fail alike, very few views, small $n_{\mathrm{eff}}$, faulty views that dominate the surface in a region, and association failure (cold start and view order).}
+
+\todofig{region-outputs}{Per-region outputs of the surface: posterior standard deviation, protection level and view count over a scene, with the realised error and the untestable regions (fewer than three views) marked (H7c).}
 
 \subsection{Natural Failures}
 \label{sec:results:nat}

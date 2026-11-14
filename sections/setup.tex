@@ -36,7 +36,7 @@ monocular models are expected to fail. Access requires accepting the dataset ter
 varied. Its terms do not clearly permit redistributing renderings, so only the
 generator, seeds and configurations are released.
 
-\runin{View counts for the cost study (H6).} The scaling study needs scenes with tens to
+\runin{View counts for the cost study (H7).} The scaling study needs scenes with tens to
 hundreds of views and a controllable co-visibility degree $\bar d$. It uses Replica
 renderings, where the number of views and the overlap are set by the trajectory,
 frames subsampled from ScanNet++ capture sequences, and the multi-camera videos of ETH3D,
@@ -144,13 +144,14 @@ more than the pixel fraction that removes 5\% of healthy views).
         reference for natural failures), as an upper bound.
   \item \textbf{Gate variants:} a chi-square (energy) gate and the evidence gate of
         Section~\ref{sec:method:admission}, a region-scan gate, and their combination, each
-        against the shared surface (cross-fitted, fixed $N_s$) and against a \emph{pairwise}
+        against the closed-form shared surface (leave-view-out by subtraction)
+        and against a \emph{pairwise}
         consensus that warps the neighbouring views into the view under test
         (Appendix~\ref{app:pairwise}); three ablations of the shared surface: no
-        cross-fitting (the surface is fitted to all views, including the view under test),
-        adaptive densification instead of a fixed $N_s$ (at matched final size), and exact
-        leave-one-view-out refitting (one refit per view, as an expensive reference for
-        cross-fitting); and, as a context for the choice of dropping over correcting, an
+        leave-view-out (the surface contains the view under test, a joint fit),
+        a fixed-budget 3DGS-MCMC surface \cite{gs_mcmc} fitted by optimisation in place of the closed
+        form (with explicit leave-view-out refits as its reference), and a single-covariance
+        variant in which extent and uncertainty are not separated; and, as a context for the choice of dropping over correcting, an
         estimate-and-correct baseline that refits the alignment of every view without
         dropping any.
   \item \textbf{Ensemble ablation (H10).} Cross-model voting (per-pixel median or majority
@@ -162,8 +163,8 @@ more than the pixel fraction that removes 5\% of healthy views).
         maps and therefore do not see the injected faults; they are reported to place
         the test bed in context, and no claim is made to beat them.
 \end{itemize}
-All methods fuse their kept depth with the same fixed-$N_s$ surface fit (the baselines without
-gating, with a robust kernel in the fit); a TSDF of the same depth is a secondary check.
+All methods fuse their kept depth with the same closed-form surface (the baselines without
+gating, with a robust kernel in the information weights); a TSDF of the same depth is a secondary check.
 Every method is timed. The test bed is an offline pipeline, and we report latency and memory
 per stage and state which methods do not meet a per-frame real-time budget.
 
@@ -236,11 +237,11 @@ state where the gate is expected \emph{not} to help.
         in any pre-registered regime (the fallback is to report the gate with the chi-square
         statistic, with the entropy relation as an equivalence result) or (b)~either gap is below
         10 points.
-  \item[H4 (cross-fitting, alignment and support).] Testing a depth map against a
-        surface that was fitted \emph{without} its view, after a scale-and-shift fit of
+  \item[H4 (leave-view-out, alignment and support).] Testing a depth map against a
+        surface from which its view has been \emph{subtracted}, after a scale-and-shift fit of
         the depth map to the rendering, and only on pixels the surface supports, keeps the
-        false-alarm rate on clean data at or below 5\%; fitting the surface to all
-        views, including the view under test, lets the surface absorb the fault and
+        false-alarm rate on clean data at or below 5\%; testing against a joint surface that
+        contains the view lets the surface absorb the fault and
         lowers detection power by at least 10 points, and removing the support mask at
         least doubles the false-alarm rate. \emph{Falsified if} the ablations leave
         the rate and the power unchanged.
@@ -263,21 +264,22 @@ state where the gate is expected \emph{not} to help.
         misspecified and the minimum detectable bias of H1 cannot be trusted), the price of gating
         on clean data exceeds 5\%, or availability falls below 90\%.
   \item[H7 (shared surface versus pairwise checks).] (a)~\emph{Efficiency:} the wall-clock
-        time of the shared-surface gate grows linearly with the number of views (log--log
+        time of the closed-form shared-surface gate grows linearly with the number of views (log--log
         slope below 1.2), whereas the pairwise gate grows with $N\bar d$ (slope above 1.5 on
         dense overlap graphs), and for $N\ge100$ views at mean co-visibility degree
         $\bar d\ge10$ the shared-surface gate is at least 2$\times$ faster; for sparse
         graphs the pairwise gate is expected to be cheaper, and the break-even degree is
         reported. (b)~\emph{Robustness:} at 5\% false alarm, the shared-surface gate's
         detection power is within 5 points of the pairwise gate's (non-inferiority) in the
-        regimes of H1, and cross-fitting with $K\in\{3,4,6\}$ folds is within 3 points of
-        exact leave-one-view-out refitting. (c)~\emph{Fixed budget:} with adaptive
-        densification at matched final size, detection power drops by at least 10 points
-        because the surface adds a layer that fits the faulty view, and there is a
-        sweet spot in $N_s$. \emph{Falsified if} (a)~the speed-up is below 2$\times$ at
+        regimes of H1. (c)~\emph{Closed form versus optimised:} the closed-form surface is
+        within 3 points of the fixed-budget MCMC surface with explicit leave-view-out refits
+        at a fraction of its cost, and each region yields a posterior, a protection level and
+        a view count whose coverage is reported. (d)~\emph{Association:} the gate is robust to
+        the order of the views, and the cold start and association failure are measured as
+        breakdown scenarios. \emph{Falsified if} (a)~the speed-up is below 2$\times$ at
         dense overlap or the slopes do not separate, (b)~the pairwise gate is more than
-        5 points better, or (c)~adaptive densification is within 5 points of the fixed
-        budget.
+        5 points better, or (c)~the closed form is more than 3 points worse than the
+        optimised surface.
   \item[H8 (pose faults).] (a)~For spoofed pose priors and glitches, the gate detects at
         least 80\% of the views whose pose error exceeds the minimum detectable bias that
         \eqref{eq:mdb} implies through the pose Jacobian \eqref{eq:Jq}, and excluding them lowers the
@@ -331,21 +333,21 @@ preregistration file and tagged in version control before any test scene is proc
 the runner refuses the test split without that tag. The measurement model is calibrated once per depth model on clean development data
 (Section~\ref{sec:method:calibration}): $\sigma(r,\tau,\theta)$, $\ell$ and $\nu$ by maximum
 likelihood of the residuals against the laser reference depth, $\Sigma_q$ from the marginal
-covariances of the provisional pose graph, and $\Sigma_{\mathrm{surf}}$ online from the $K$
-cross-fitted surfaces; the confidence-covariate variant uses Metric3D v2 or UniDepthV2, which
+covariances of the provisional pose graph, and $\Sigma_{\mathrm{surf}}$ online from the composite variance of the closed-form surface; the confidence-covariate variant uses Metric3D v2 or UniDepthV2, which
 output a confidence, as ablation models. The gate threshold is then calibrated by permutation on
 clean development runs, with $n_{\mathrm{eff}}$ computed from $\Sigma_r$ by \eqref{eq:neff}, to a
 5\% per-view false-alarm rate. At least six
 scenes (three development, three test) and five seeds are used per dataset. The
 test bed uses an off-the-shelf feature matcher, a Gauss--Newton or Levenberg--Marquardt
-pose-graph solver \cite{opt_g2o,opt_factorgraphs,opt_theseus}, and a depth-only splat fit
-with a fixed number of splats $N_s$, $K\in\{3,4,6\}$ contiguous folds and a fixed number of
-iterations $n_{\mathrm{it}}$, with a TSDF \cite{fus_curless,fus_kinectfusion} as a secondary
-check. Cross-fitting folds are blocks of neighbouring views along the view order (or
-clusters of the co-visibility graph). Depth is computed once per view and cached, so the
+pose-graph solver \cite{opt_g2o,opt_factorgraphs,opt_theseus}, and the closed-form Gaussian surface of Section~\ref{sec:method:surface}, with a TSDF
+\cite{fus_curless,fus_kinectfusion} as a secondary check. The surface has no iterations and no
+folds; its parameters are the association gate $(\tau_h,\tau_{\mathrm{ext}},\cos_{\min})$,
+the footprint scale of the extent, and the support $\tau_\alpha$ and $s_{\min}$. The
+fixed-budget MCMC ablation uses a fixed $N_s$ and a fixed number of iterations $n_{\mathrm{it}}$.
+Depth is computed once per view and cached, so the
 default setup runs $N$ model inferences per scene and the ensemble ablation $MN$; the
-$K+1$ surface fits, the pose graph and, for the reference points, MASt3R-SfM and VGGT are the
-other costs, and their memory on an 8~GB card is checked before the scenes are fixed. The sensitivities of H9 are estimated by perturbing a view and refitting, one refit per perturbed view, and are computed on a subset of scenes.
-\TODO{Choose and cite the matcher, the solver and the splat rasteriser; fix $N_s$, $n_{\mathrm{it}}$,
+surface build and render, the pose graph and, for the reference points, MASt3R-SfM and VGGT are the
+other costs, and their memory on an 8~GB card is checked before the scenes are fixed. The sensitivities of H9 are the closed-form slopes of \eqref{eq:plh} for primitives and, for scalar outputs, estimated by perturbing a view and re-fusing.
+\TODO{Choose and cite the matcher and the solver; fix the association gate, the footprint, $N_s$ and $n_{\mathrm{it}}$ (MCMC ablation only),
   $\tau_\alpha$ and $s_{\min}$ on development scenes; add the GPU model, wall-clock time and
   GPU-hours per experiment once runs exist.}
