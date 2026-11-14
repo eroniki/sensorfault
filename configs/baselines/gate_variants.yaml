@@ -1,5 +1,5 @@
-# Design v2.5: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
-# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 baselines:
 - id: no_gate
   family: floor
@@ -9,50 +9,31 @@ baselines:
   family: upper_bound
   fuser: oracle_gate
   params: {}
-- id: gate_surface_evidence
+- id: gate
   family: gate
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: evidence, surface: closed_form_gaussian_primitives, leave_view_out: subtraction,
-    densification: none}
-- id: gate_surface_chi2
-  family: gate
-  fuser: view_gate
-  params: {consensus: shared_surface, statistic: energy_whitened_projected, surface: closed_form_gaussian_primitives,
-    leave_view_out: subtraction, densification: none}
-- id: gate_surface_region_scan
-  family: gate
-  fuser: view_gate
-  params: {consensus: shared_surface, statistic: region_scan_matched, surface: closed_form_gaussian_primitives,
-    leave_view_out: subtraction, densification: none}
-- id: gate_surface_combined
-  family: gate
-  fuser: view_gate
-  params: {consensus: shared_surface, statistic: combined_region_scan_energy, surface: closed_form_gaussian_primitives,
-    leave_view_out: subtraction, densification: none}
-- id: gate_pairwise_evidence
-  family: gate
-  fuser: view_gate
-  params: {consensus: pairwise, statistic: evidence}
-- id: gate_pairwise_chi2
-  family: gate
-  fuser: view_gate
-  params: {consensus: pairwise, statistic: energy_whitened_projected}
-- id: gate_surface_joint_fit
+  params: {uncertainty: rendered_9x9, leave_view_out: subtraction, spawn: none, statistic: combined_region_scan_energy}
+- id: gate_joint
   family: ablation
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: evidence, surface: closed_form_gaussian_primitives, leave_view_out: none_joint_surface,
-    densification: none}
-- id: gate_surface_single_covariance
+  params: {leave_view_out: none_joint}
+- id: gate_keep_unsupported
   family: ablation
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: evidence, surface: closed_form_gaussian_primitives, leave_view_out: subtraction,
-    densification: none, extent_uncertainty_separated: false}
-- id: gate_surface_mcmc_fixed_budget
+  params: {spawn: keep_view_j_only_surfels}
+- id: gate_unwhitened
   family: ablation
   fuser: view_gate
-  params: {consensus: shared_surface, statistic: evidence, surface: 3dgs_mcmc_fixed_budget, leave_view_out: explicit_refit,
-    densification: none_relocation_only}
-- id: estimate_and_correct
-  family: context
-  fuser: estimate_and_correct
-  params: {}
+  params: {uncertainty: constant_sigma}
+- id: gate_deflated
+  family: ablation
+  fuser: view_gate
+  params: {information_deflation: n_eff_over_n}
+- id: gate_fisherrf_diag
+  family: ablation
+  fuser: view_gate
+  params: {uncertainty: fisherrf_style_diagonal_fisher}
+- id: gate_bayesrays
+  family: ablation
+  fuser: view_gate
+  params: {uncertainty: bayes_rays_style_perturbation_field}

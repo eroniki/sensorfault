@@ -1,21 +1,11 @@
-# Design v2.5: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
-# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 default:
   id: depth_pro
   ref: est_depthpro
   output: metric
-  why: ['absolute-scale (metric) depth, so views are comparable without a free per-view scale fit', no
-      camera intrinsics or metadata needed (per its abstract), 'fast: 2.25 MP depth map in 0.3 s on a
-      standard GPU (per its authors)', sharp boundaries help the surface fit]
-  checks_before_use: [licence of the weights TODO, GPU memory on an 8 GB card TODO, dev-scene error vs
-      laser reference compared with the alternatives; switch if disfavoured TODO]
-metric_alternatives:
-- {id: unidepth, ref: est_unidepth, output: metric}
-- {id: metric3d_v2, ref: est_metric3dv2, output: metric}
-ablation_only:
-- {id: moge, ref: est_moge, output: affine_invariant_point_map, optional: true}
-ensemble_sizes:
-  M2: [depth_pro, unidepth]
-  M3: [depth_pro, unidepth, metric3d_v2]
-  M4: [depth_pro, unidepth, metric3d_v2, moge]
-training_data_overlap: only coarsely documented; H10a measures joint failures instead of assuming overlap
+  confidence_output: no (fit sigma(.) on dev)
+  checks_before_use: [weights licence TODO, GPU memory on 8 GB TODO]
+confidence_models:
+- {id: metric3d_v2, ref: est_metric3dv2, confidence_output: 'yes (ViT models, per public README 2026-11-14)'}
+- {id: unidepth_v2, ref: est_unidepth, confidence_output: yes (per public README 2026-11-14)}

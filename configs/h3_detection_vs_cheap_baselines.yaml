@@ -1,0 +1,26 @@
+# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: h3_detection_vs_cheap_baselines
+status: preregistered_draft
+design: v3_rendered_uncertainty_gate
+hypothesis:
+  id: H3
+  prediction: At 5% per-view false alarm (calibrated on clean dev), on natural and injected regional failures
+    in reflective regions, the gate detects at least 15 points more faulty views than the best of aligned
+    RMS, depth-model confidence, the robust-loss residual and the SpotLessSplats/RobustNeRF masks used
+    as view scores. On textureless failures no gain is predicted (H2).
+  falsification_criterion: Falsified if the gain on reflective-region failures is below 15 points or its
+    CI includes 0.
+  independent_variables: [fault_type, area_fraction, magnitude_sigma, appearance_class]
+  controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
+  levels:
+    area_fraction: [0.02, 0.05, 0.1, 0.2, 0.4]
+    magnitude_sigma: [2, 4, 8, 16]
+    appearance_class: [reflective_or_glass, textureless_wall]
+baselines: [gate, aligned_rms, depth_confidence, spotless_splats, robustnerf_loss, robust_depth_huber,
+  oracle_gate]
+metrics:
+  primary: [detection_power_at_fa_0.05, false_alarm_rate, untestable_rate]
+  gain_points: 15
+implemented: false

@@ -1,0 +1,14 @@
+# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+baselines:
+- id: aligned_rms
+  family: cheap_view_test
+  fuser: aligned_rms_view_test
+  params: {reference: leave-j-out render of the other views, alignment: per-view scale and offset, score: rms,
+    whitening: false}
+- id: depth_confidence
+  family: cheap_view_test
+  fuser: depth_confidence_score
+  params:
+    models: [metric3d_v2, unidepth_v2]
+    score: mean_low_confidence_area

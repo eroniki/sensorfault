@@ -1,0 +1,24 @@
+# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+extends: base.yaml
+id: h4_reconstruction_with_and_without_gate
+status: preregistered_draft
+design: v3_rendered_uncertainty_gate
+hypothesis:
+  id: H4
+  prediction: Depth-supervised splatting on ETH3D and ScanNet++ with the gate improves held-out laser-depth
+    AbsRel and surface F-score by >=10% relative over no gate and over the best of SpotLessSplats, RobustNeRF
+    loss and robust depth losses on scenes with natural failures, and changes them by <=2% on clean scenes.
+  falsification_criterion: Falsified if the paired CI of the improvement includes 0 on failure scenes,
+    or clean scenes degrade by more than 2%.
+  independent_variables: [method, dataset]
+  controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
+  levels:
+    dataset: [eth3d, scannetpp]
+baselines: [no_gate, oracle_gate, gate, aligned_rms, depth_confidence, spotless_splats, robustnerf_loss,
+  robust_depth_huber, robust_depth_gm]
+metrics:
+  primary: [heldout_laser_depth_absrel, fscore, surface_accuracy, surface_completeness]
+  gain_relative: 0.1
+  clean_tolerance_relative: 0.02
+implemented: false

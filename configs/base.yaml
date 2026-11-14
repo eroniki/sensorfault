@@ -1,131 +1,76 @@
-# Design v2.5: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
-# Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 # Shared defaults. Experiment configs `extends: base.yaml`.
 project: sensorfault
-design: v2_view_level_gate
+design: v3_rendered_uncertainty_gate
 status: preregistered_draft
 seeds:
   master: [101, 102, 103, 104, 105]
 scenes:
   source: eth3d
-  split_rule: dev scenes are used for ALL threshold tuning; test scenes are touched only after git tag
-    prereg-v1
+  split_rule: dev scenes for ALL threshold tuning and the residual measurement; test scenes only after
+    git tag prereg-v1
   dev: [courtyard, electro, kicker]
   test: [delivery_area, facade, office, pipes, relief, terrace]
-depth_model: {default: depth_pro, file: depth_models/depth_models.yaml, one_model_per_image: true, selection_rule: confirm
-    on dev scenes vs laser reference; never on test scenes}
-ensemble_ablation:
-  M: [2, 3, 4]
-  only_used_by: [h10_ensemble_ablation]
+secondary_dataset: {source: scannetpp, scenes: TODO after accepting the dataset terms}
+poses: dataset poses (ETH3D calibrated, ScanNet++ registered); pose faults are out of scope
+depth_model:
+  default: depth_pro
+  file: depth_models/depth_models.yaml
+  one_model_per_image: true
+  confidence_models_for_baseline: [metric3d_v2, unidepth_v2]
+surface:
+  representation: 2dgs_surfels
+  renderer: gsplat
+  rendered: [expected_depth, alpha_weights, accumulated_opacity]
+  shape_covariance: rendering only (mu, R, scales, opacity)
+  fit: depth-supervised splatting of all views at dataset poses
+appearance: {block: separate (colour / SH per surfel), updates_geometry: false, colour_reaches_geometry: only
+    through the depth model, implementation: photometric loss gradients are stopped at the geometry parameters,
+  gate_inputs: depth only}
+uncertainty:
+  state: [d_mu_x, d_mu_y, d_mu_z, d_phi_1, d_phi_2, d_phi_3, d_log_s_1, d_log_s_2, d_log_s_3]
+  dim: 9
+  rotation_error: tangent space (body frame), R <- R exp([d_phi]x)
+  form: information, one 9x9 block per surfel
+  rendered_subblock: [normal_offset_nu, tilt_tau1, tilt_tau2]
+  fusion: Lambda_k += sum_u a^2 (w_uk J_uk)^T (w_uk J_uk) / sigma_u^2 (alpha-weighted rasteriser Jacobians)
+  leave_view_out: subtraction of view j information (exact for the linearised model)
+  tested_view_spawns: 'nothing: surfels without enough information from the other views are dropped from
+    the leave-j-out render'
+  support_rule: normal-offset information from other views >= lam_min (TODO fix on dev)
+  untestable: pixels with no supported surfel (unseen by other views)
+  correspondences: none
+  limitation: 'independent per-surfel blocks ignore cross-surfel, within-view and shared-pose correlations:
+    rendered variance is overconfident'
+  deflation_ablation: scale view information by n_eff/n
+  theory_module: src/sensorfault/eval/gaussian_uncertainty.py
+measurement_model:
+  nominal: d_hat = a*d + b + eps (per-view scale/offset absorbed by alignment)
+  eps: {covariance: Sigma_eps = D C D, D: 'diag sigma(range, texture, grazing_angle)', C: (1-nu) K_ell
+      + nu I}
+  residual_variance: sigma_d^2(u) + a^2 * rendered variance of the leave-j-out surface
+  calibration:
+    first_task: true
+    fit_on: ETH3D dev, Depth Pro, aligned residuals vs laser depth
+    fit: ['sigma(range,texture,grazing)', ell, nu, tails]
+  fault_definition: a regional deviation the nominal model cannot explain; whole-view affine errors are
+    absorbed and are NOT faults
 integrity:
   false_alarm_per_view: 0.05
   missed_detection: 0.1
-  z_alpha: 1.96
-  z_beta: 1.2816
-  availability_target: 0.9
-  neff_estimation: residual_autocorrelation_on_clean_dev
-  threshold_calibration: clean_run_permutation
-  statistics: [energy_whitened_projected, region_scan_matched, evidence]
-  alarms: [no_consensus_per_view, scene_level_if_more_than_half_rejected]
+  threshold_calibration: clean_run_permutation_on_dev
+  statistics: [energy_whitened, region_scan_matched]
+  alarms: [untestable_view, scene_level_if_more_than_half_rejected]
   theory_module: src/sensorfault/eval/detection_theory.py
-measurement_model:
-  nominal: 'd_hat = a*d + b + eps  (a,b: monocular scale/offset ambiguity; prior around (1,0) for a metric
-    model, none for affine-invariant)'
-  eps: {distribution: zero-mean Gaussian vector over the view, covariance: Sigma_eps = D C D, D: 'diag
-      sigma(range, texture, grazing_angle)', C: (1-nu) K_ell + nu I, K_ell: 'gaussian kernel exp(-|u-v|^2/(2
-      ell^2)), ell in pixels', nugget_nu: 'fit on clean dev data (must be >0: without it any sharp-edged
-      pattern looks infinitely detectable)'}
-  pose_error: {xi: 'N(0, Sigma_q), 6x6', source: marginal covariances of the provisional pose graph, jacobian: 'J_q
-      n x 6, analytic (tests/core/test_measurement_model.py), rotation row norm = r tan(theta)'}
-  intrinsics_error: {zeta: 'N(0, Sigma_K), small', jacobian: J_K n x p}
-  surface_uncertainty: {Sigma_surf: 'a^2 diag(v_S(u)): composite variance of the closed-form surface (diagonal
-      by assumption)', note: ignores spatial correlation of surface error and shared per-view pose error;
-      information fusion treats observations as independent; adequacy checked in H6}
-  sources_of_uncertainty: [U1 scale_offset_ambiguity, 'U2 heteroscedastic_noise_sigma(r,tau,theta)', U3
-      spatial_correlation_ell_nu, U4 pose_error, U5 intrinsics_error, U6 surface_composite_variance]
-  residual_covariance: Sigma_r = Sigma_eps + J_q Sigma_q J_q^T + J_K Sigma_K J_K^T + Sigma_surf
-  nuisance_projection: M = Sigma_r^-1 - Sigma_r^-1 A (A^T Sigma_r^-1 A)^-1 A^T Sigma_r^-1 with A=[d,1];
-    T = r0^T M r0 ~ chi2(n-2) under the nominal model
-  fault_definition: any deviation phi with M phi != 0 (the nominal model cannot explain it); pure scale/offset
-    errors, incl. a uniform bias over a whole view, are NOT faults (absorbed by the alignment)
-  n_eff: tr(C_r)^2 / tr(C_r^2), C_r = correlation of Sigma_r (computed, not hand-set)
-  calibration:
-    fit_once_per_depth_model_on_clean_dev: ['sigma(range,texture,grazing)', ell, nu]
-    method: maximum likelihood of residuals vs laser reference depth (no surface term)
-    alternative: use a model that outputs confidence as a covariate of sigma(.)
-    confidence_outputs_per_public_readme_checked_2026_11_14: {depth_pro: no (depth + focal length), unidepth_v2: lists
-        a confidence output, metric3d_v2: 'yes (depth and normal confidence, ViT models)', moge: binary
-        validity mask only, depth_anything_v2: none documented, marigold: none documented (multi-pass
-        ensembling option)}
-  adequacy_check: {mean_T_over_dof: 1 +/- 0.1 on fault-free views, false_alarm_in: '[0.5*alpha, 1.5*alpha]
-      without per-scene retuning'}
-regime_map:
-  delta_sigma: [0.1, 0.2, 0.3, 0.5, 1, 2, 4]
-  fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.8]
-  mask_layout: [contiguous, scattered]
-  sign: [+, '-']
-  affine_control: {fraction_f: 1.0, also: bias proportional to sigma(d), prediction: 'not detected (power
-      <= alpha+5 points) and not harmful (error within 5% of clean): absorbed by the per-view alignment'}
-  regimes:
-    sub_noise: {delta_le: 0.5, f_ge: 0.2, f_le: 0.8}
-    sparse_outlier: {delta_ge: 4, f_le: 0.02}
-  detectability: 'kappa^2 = phi^T M phi; for iid pixels kappa^2 = n f (1-f) delta^2: peaks at f=1/2, zero
-    at f=1'
-shared_surface:
-  representation: gaussian_planar_primitives
-  inputs: depth_maps_only
-  colour: out_of_scope
-  why_not_sdf: closed form from a depth map, built-in uncertainty
-  primitive:
-    extent:
-      centre: mu
-      normal: n
-      tangent_halfwidths: [s_u, s_v]
-      used_for: rendering_weights_only
-      union_on_fusion: max_never_shrinks
-    uncertainty: {offset: h = n^T mu, variance: sigma_h^2 = n^T P n, information: lambda = 1/sigma_h^2,
-      P: J_d sigma_d^2 J_d^T + J_q Sigma_q J_q^T + J_K Sigma_K J_K^T, normal_uncertainty: ignored (stated
-        limitation)}
-    opacity: alpha
-  forward: {ray: 'r = K^-1 [u v 1]^T', centre: mu = R d r + t, normal: 'cross product of back-projected
-      image-axis tangents, oriented to camera', extent: 's = footprint * d/f, stretched by 1/cos(theta)'}
-  fusion: {form: information, lambda: sum lambda_i, h: sum lambda_i h_i / lambda, leave_view_out: 'exact
-      subtraction of lambda_j, h_j (= RAIM solution separation = leave-one-out innovation)', refits: 0,
-    folds: 0}
-  backward: {ray_plane_depth: d_k = (h_-j - n^T c_j)/(n^T R_j r_u), variance: sigma_h^2/(n^T R_j r)^2
-      + J_pose Sigma_q J_pose^T, composite: alpha compositing with extent-only weights w_k = alpha_k G(u;
-      Sigma_ext) T_k, composite_depth: sum w d_k / sum w, composite_variance: sum w sigma_k^2 / sum w
-      (+ optional between-primitive spread), gate_residual: 'r = d_hat - (a d(u) + b), Var = sigma_d^2
-      + a^2 sigma^2(u)'}
-  association: {rule: 'projective: render into new view, ray hits primitive within gate -> update, else
-      spawn', normal_cos_min: TODO fix on dev, offset_gate_tau_h: TODO, extent_gate_tau_ext: TODO, soft_weight: w_k
-      lambda_i, visibility: from transmittance, admission: render-and-compare gate decides entry}
-  densification: none (primitives added only by association failure; no adaptive densification)
-  fixed_budget_mcmc: ablation only (gate_surface_mcmc_fixed_budget), not the default
-  support: {alpha_threshold: TODO, min_supported_fraction: TODO}
-  region_outputs: [posterior_mean_var, protection_level, n_views_availability]
-  min_views_for_test: 3
-  output: surface re-fused from kept depth maps is the fused output; TSDF of same depth is a secondary
-    check
-testbed: {pose_graph: differentiable_renderable, soft_downweighting_is_baseline: true, render_based_constraint: optional}
-shared_inputs_for_all_methods: [images, matches, depth_maps, fault_realisations, pose_graph_solver]
 metrics:
-  model_adequacy: [mean_T_over_dof, false_alarm_vs_alpha, fitted_sigma_ell_nu, n_eff_per_view, kappa_per_pattern]
-  integrity: [detection_power_at_fa_0.05, empirical_mdb, mdb_predicted_from_measured_Sigma_r, false_alarm_rate,
-    missed_detection_rate, no_consensus_rate, availability, elimination_curve_auc]
-  pose: [ate_rmse_sim3, rpe, pose_auc_at_5_10_30deg]
-  surface: [accuracy, completeness, fscore]
-  depth: [absrel, delta1_after_alignment]
-  protection_level: [pl_exceedance_rate]
-  cost: [runtime_s_per_stage, gpu_mem_gb_per_stage, loglog_slope_vs_N]
+  measurement: [fitted_sigma_ell_nu, tail_index, failure_area_fraction, failure_magnitude_sigma, failure_harm]
+  detection: [detection_power_at_fa_0.05, false_alarm_rate, untestable_rate, availability, elimination_curve_auc]
+  reconstruction: [heldout_laser_depth_absrel, surface_accuracy, surface_completeness, fscore]
+  repetition: [cross_view_error_correlation_textureless, cross_view_error_correlation_reflective, cross_view_error_correlation_textured]
+  calibration: [mean_T_over_dof_raw, mean_T_over_dof_deflated, false_alarm_vs_alpha]
+  cost: [runtime_s_per_stage, gpu_mem_gb_per_stage]
 stats: {bootstrap: scene_level, bootstrap_n: 10000, paired_test: wilcoxon_signed_rank, alpha: 0.05}
-tuning:
-  dev_only: true
-  budget_reported: true
-  null_calibration: {target_false_alarm: 0.05, method: clean_run_permutation, n_permutations: 200}
-implemented: {configs: true, detection_theory: true, measurement_model_theory: true, fault_injectors: false,
-  view_gate: false, testbed_pipeline: false, note: 'Implemented: configs, registry stubs (baselines/gate_testbed.py),
-    grid-form admission test (elim/admission.py), detection + measurement-model theory (eval/detection_theory.py,
-    tested). Not implemented: fitting sigma(.), ell, nu on real residuals; Sigma_r assembly on images;
-    the gate.'}
+implemented: {configs: true, detection_theory: true, gaussian_uncertainty_theory: true, residual_measurement: false,
+  splatting_pipeline: false, view_gate: false}
 output_dir: outputs

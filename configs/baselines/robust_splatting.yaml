@@ -1,0 +1,19 @@
+# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+baselines:
+- id: spotless_splats
+  family: robust_splatting
+  fuser: spotless_splats
+  params: {as_released: true, depth_supervised: true}
+- id: robustnerf_loss
+  family: robust_splatting
+  fuser: robustnerf_loss
+  params: {trimmed_robust_loss: true, applied_to: depth_and_colour}
+- id: robust_depth_huber
+  family: robust_depth_loss
+  fuser: robust_depth_loss
+  params: {loss: huber}
+- id: robust_depth_gm
+  family: robust_depth_loss
+  fuser: robust_depth_loss
+  params: {loss: geman_mcclure}
