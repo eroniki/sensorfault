@@ -16,9 +16,9 @@ latexmk -pdf main.tex        # output: build/main.pdf (needs TeX Live; uses ./la
 `draft_v0.pdf` is the last committed build.
 
 ## Outline (follows the section pattern of the author's Sensors 23(23):9309 and 24(23):7744; IEEE Access mandates none)
-Abstract + Index Terms; I Introduction (A Relevant Literature, B Challenges, C Baseline Study and
+Abstract + Index Terms; I Introduction (A Relevant Literature, B Challenges (C1-C6), C Baseline Study and
 Fundamental Differences, D Summary of the Contributions, E Organization); II Method (A Definitions and
-Notation, B Forward Problem, C Inverse Problem, D View-Level Gate, E Test Bed); III Experiments
+Notation, B Forward Problem, C Inverse Problem, D View-Level Gate (shared-surface consensus by cross-fitting), E Test Bed); III Experiments
 (A Experimental Setup, B Hypotheses and Breakdown Scenarios, C Implementation); IV Results;
 V Conclusions and Future Work (with Limitations); Appendices A-B.
 

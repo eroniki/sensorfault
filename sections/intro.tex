@@ -16,8 +16,11 @@ denotes a source whose depth is wrong in a spatially structured way (a smooth wa
 failed region, an inconsistent scale), as opposed to sparse pixel noise.
 
 This paper proposes a \emph{view-level gate}: a test that decides which depth sources
-to trust \emph{before} pose graph optimisation and fusion. The gate is the
-contribution. To make the setting concrete we embed it in a test bed whose depth maps
+to trust \emph{before} pose graph optimisation and fusion. The gate tests each source once
+against a single shared Gaussian-splat surface rendered at that view, instead of against
+every overlapping view, so that its cost grows with the number of views rather than the
+number of view pairs, and the surface, refitted on the admitted sources, doubles as the
+fused output. The gate, including this consensus, is the contribution. To make the setting concrete we embed it in a test bed whose depth maps
 come from an ensemble of monocular estimators applied to RGB images, whose poses come
 from a partly end-to-end pose graph optimisation, and which serves as an alternative to
 a classical structure-from-motion (SfM) pipeline. The pipeline is the test bed: it
@@ -37,6 +40,18 @@ in whether they carry metric scale, and none of these works states when a predic
 should not be used for downstream geometry. Ensembles are a standard route to
 predictive uncertainty \cite{ens_deepensembles}; here the members are different
 estimators, and we use their disagreement as evidence.
+
+\runin{Gaussian splatting as a surface.}
+3D Gaussian splatting represents a scene by anisotropic Gaussians rendered with a
+visibility-aware rasteriser \cite{gs_3dgs}; 2D Gaussian splatting uses oriented planar
+disks with depth-distortion and normal-consistency terms for surface accuracy
+\cite{gs_2dgs}; 3DGS-MCMC treats the Gaussians as MCMC samples and replaces densification
+by relocation, which allows a fixed primitive budget \cite{gs_mcmc}. DN-Splatter adds
+depth and normal priors, including monocular ones, to splatting of indoor scenes
+\cite{gs_dnsplatter}. SpotLessSplats and RobustSplat mask transient distractors from
+photometric evidence \cite{gs_spotless,gs_robustsplat}. These fit a surface to given
+supervision and, at most, mask pixels or regions of it; none uses the rendered surface as
+the reference against which whole depth sources are admitted or rejected.
 
 \runin{SfM, view graphs and multi-view consistency.}
 Incremental and global SfM estimate poses from feature matches
@@ -83,8 +98,10 @@ Pixel filters, robust kernels and voting decide at a different unit and stage fr
 gate: pixel filters per pixel and after poses are fixed, kernels per constraint and after
 the constraint exists, voting per pixel across sources. A coherent view-level fault is
 neither sparse nor independent across pixels, so none of these is designed to attribute
-it to a source. To our knowledge, a gate that decides trust per depth source before pose
-graph optimisation has not been studied in this setting; this statement rests on a
+it to a source, and comparing every view with every overlapping view makes the check cost
+grow with the number of view pairs. To our knowledge, a gate that decides trust per depth
+source before pose graph optimisation, against a shared splat surface, has not been studied
+in this setting; this statement rests on a
 limited literature search and will be re-checked before submission.
 \TODO{Final literature pass over IEEE Xplore and Google Scholar: depth-prior filtering in SfM or SLAM,
   and uncertainty-aware use of monocular depth in pose graphs.}
@@ -119,12 +136,18 @@ Several challenges limit current approaches.
         criterion that rewards the precision of the combined estimate, as the entropy
         test of our earlier work does as published, cannot distinguish an agreeing
         source from a sharp but biased one.
+  \item[\textbf{C6.}] \textbf{Pairwise checks do not scale with overlap.} Comparing every
+        view with every overlapping view costs in proportion to the number of view
+        pairs, which grows faster than the number of views when overlap is dense. A
+        single shared surface avoids this, but a surface fitted to the source under
+        test would absorb its fault, so it must be fitted without the views it is tested
+        on and must not be free to grow a second layer.
 \end{enumerate}
 
 \subsection{Baseline Study and Overview of the Fundamental Differences}
 \label{sec:intro:baseline}
 The gate must beat three families of baselines, which act at different units and
-stages (Table~\ref{tab:diff}): robust kernels in the pose graph, the geometric
+stages and at different cost (Table~\ref{tab:diff}): robust kernels in the pose graph, the geometric
 consistency filter of COLMAP \cite{fus_colmap_mvs}, and plain voting. MASt3R-SfM and
 VGGT are reference points. The consensus criterion adapted for the gate comes from our
 earlier Byzantine sensor elimination (BSE) \cite{flt_ambarkutuk}, which localised
@@ -132,20 +155,22 @@ footsteps from the signal energies of floor-mounted accelerometers: each sensor 
 PDF of the location over a grid, the PDFs were multiplied, and a consensus set was grown
 greedily from the best pair under an entropy criterion. Here the sources are
 estimator--view pairs, the PDFs are per-pixel depth distributions, and the admission
-test is corrected (Section~\ref{sec:method:gate}).
+test is corrected (Section~\ref{sec:method:admission}).
 \begin{table}[t]
-\caption{\textbf{Where each method decides.}}
+\caption{\textbf{Where each method decides and what it costs.} $N$ views, mean co-visibility degree $\bar d$, $K$ folds.}
 \label{tab:diff}
 \centering
 \small
-\begin{tabular}{p{0.22\columnwidth}p{0.20\columnwidth}p{0.22\columnwidth}p{0.20\columnwidth}}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{0.21\columnwidth}p{0.20\columnwidth}p{0.24\columnwidth}p{0.20\columnwidth}}
 \toprule
-Method & Decision unit & Stage & Needs poses \\
+Method & Decision unit & Stage & Cost \\
 \midrule
-Robust kernel & Constraint (graph edge) & Inside the pose graph, after edges are built & Estimated jointly \\
-COLMAP consistency filter & Pixel & After poses, before fusion & Yes \\
-Plain voting & Pixel, across sources & Before or after fusion & Optional \\
-\textbf{Gate (this work)} & \textbf{Depth source (estimator, view)} & \textbf{Before the pose graph and fusion} & \textbf{Provisional only} \\
+Robust kernel & Constraint (graph edge) & Inside the pose graph, after edges are built & Per edge \\
+COLMAP consistency filter & Pixel & After poses, before fusion & $\propto N\bar d$ \\
+Plain voting & Pixel, across sources & Before or after fusion & $\propto N M$ \\
+Gate, pairwise (variant) & Depth source & Before the pose graph & $\propto N\bar d$ \\
+\textbf{Gate, shared surface (this work)} & \textbf{Depth source (estimator, view)} & \textbf{Before the pose graph and fusion} & $\propto N$, plus $K{+}1$ fits \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -159,17 +184,22 @@ the contributions.
         estimator--view pair is admitted or rejected before pose graph optimisation
         and fusion, with \emph{no consensus} as an explicit outcome
         (Section~\ref{sec:method:gate}).
-  \item \textbf{Leave-one-source-out comparison with alignment and visibility}
-        (addresses C2 and C4): sources are compared after a scale-and-shift fit that
-        excludes the source under test, on pixels visible in both views
-        (Section~\ref{sec:method:gate}).
+  \item \textbf{A shared Gaussian-splat surface as the consensus} (addresses C2 and C6):
+        every source is tested once against a fixed-budget surface rendered at its view,
+        fitted by cross-fitting so that a source never meets a surface fitted to it, at a
+        cost that grows with the number of views, and refitted on the admitted sources
+        as the fused output (Sections~\ref{sec:method:surface} and~\ref{sec:method:cost}).
+  \item \textbf{Visibility-aware comparison with alignment} (addresses C2 and C4): sources
+        are compared after a scale-and-shift fit, on pixels the surface supports and that are
+        visible at the view (Section~\ref{sec:method:consensus}).
   \item \textbf{A corrected admission criterion} (addresses C5): a Bayes-factor test
         with an analysis of when the entropy criterion reduces to a leave-one-out
-        chi-square test and when it does not (Section~\ref{sec:method:gate}).
+        chi-square test and when it does not (Section~\ref{sec:method:admission}).
   \item \textbf{A test bed and a pre-registered protocol}: an RGB-plus-monocular-depth
-        ensemble pipeline with a partly end-to-end pose graph, five falsifiable
+        ensemble pipeline with a partly end-to-end pose graph, six falsifiable
         hypotheses, injected and natural view-level faults, explicit breakdown scenarios,
-        and the three baseline families (Sections~\ref{sec:method:pipeline} and~\ref{sec:setup}).
+        and the three baseline families plus a pairwise gate
+        (Sections~\ref{sec:method:pipeline} and~\ref{sec:setup}).
 \end{itemize}
 \TODO{Replace the preceding list by result-bearing contributions once H1--H5
   are evaluated; keep only claims supported by the final tables.}
@@ -178,7 +208,8 @@ the contributions.
 \label{sec:intro:org}
 The rest of the paper is organized as follows. Section~\ref{sec:method} presents the
 method: the notation, the forward model of a depth source, the inverse problem of pose
-graph optimisation with depth sources, the view-level gate, and the test-bed pipeline.
+graph optimisation with depth sources, the view-level gate with its shared-surface
+consensus, and the test-bed pipeline.
 Section~\ref{sec:setup} describes the experiments, and Section~\ref{sec:results} reports
 the results. Section~\ref{sec:conclusion} presents the conclusions, the limitations and
 future work. Derivations and proofs are in the appendices.

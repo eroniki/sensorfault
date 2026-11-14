@@ -3,8 +3,9 @@
 
 The experiments evaluate whether the view-level gate improves trajectory and fused-surface
 accuracy when some depth sources are wrong in a coherent, view-level way, whether it
-beats the three baseline families that act at other units and stages, and where it
-should not help. All experiments use public datasets, public pretrained models and public
+beats the three baseline families that act at other units and stages, whether testing
+against a shared surface is cheaper than and as reliable as testing against every
+overlapping view, and where the gate should not help. All experiments use public datasets, public pretrained models and public
 code. The protocol, hypotheses and decision thresholds are written down and tagged in the
 code repository before any test scene is run (Section~\ref{sec:setup:protocol}). Below
 are the details of the experiments employed in this study.
@@ -90,17 +91,25 @@ budget reported. Re-implementations are labelled as such and released.
   \item \textbf{No gate, no robust kernel;} and an \textbf{oracle gate} that excludes
         exactly the faulty sources (from the injection manifest, or from the laser
         reference for natural failures), as an upper bound.
-  \item \textbf{Gate variants:} a leave-one-source-out chi-square gate (the statistic
-        $T_k$ of \eqref{eq:Ts} with a calibrated threshold) and the evidence gate of
-        Section~\ref{sec:method:admission}; and, as a context for the choice of
-        exclusion over correction, an estimate-and-correct baseline that refits the
-        alignment of every source without excluding any.
+  \item \textbf{Gate variants:} a chi-square gate (the statistic $T_k$ of \eqref{eq:Ts}
+        with a calibrated threshold) and the evidence gate of
+        Section~\ref{sec:method:admission}, each against the shared surface
+        (cross-fitted, fixed $N_s$) and against a \emph{pairwise} consensus that warps the
+        neighbouring views into the view under test (Appendix~\ref{app:pairwise}); three
+        ablations of the shared surface: no cross-fitting (the surface is fitted to all
+        views, including the source under test), adaptive densification instead of a
+        fixed $N_s$ (at matched final size), and exact leave-one-view-out refitting
+        (one refit per view, as an expensive reference for cross-fitting); and, as a
+        context for the choice of exclusion over correction, an estimate-and-correct
+        baseline that refits the alignment of every source without excluding any.
   \item \textbf{Reference points, not rivals.} MASt3R-SfM \cite{rec_mast3rsfm} and VGGT
         \cite{rec_vggt}, run as released on the same images, with classical COLMAP SfM
         \cite{fus_colmap_sfm} as a classical reference. They do not use our depth
         sources and therefore do not see the injected faults; they are reported to place
         the test bed in context, and no claim is made to beat them.
 \end{itemize}
+All methods fuse their depth with the same fixed-$N_s$ surface fit (the baselines without
+gating, with a robust kernel in the fit); a TSDF of the same depth is a secondary check.
 Every method is timed. The test bed is an offline pipeline, and we report latency and memory
 per stage and state which methods do not meet a per-frame real-time budget.
 
@@ -116,7 +125,9 @@ after alignment. The gate is scored per source: precision and recall against the
 labels, the false-exclusion rate on fault-free data, power at a fixed 5\% false-exclusion
 rate, and the \emph{elimination curve AUC}, the normalised partial area under power versus
 clean-run false-exclusion rate on $[0,0.2]$ (it equals the ROC AUC at
-$\mathrm{FER}_{\max}=1$). Intervals are scene-level bootstrap confidence intervals, with
+$\mathrm{FER}_{\max}=1$). Gate cost is reported as wall-clock time and peak GPU memory
+against the number of views $N$ (log--log slope), the number of surface fits, and the mean
+co-visibility degree $\bar d$. Intervals are scene-level bootstrap confidence intervals, with
 paired Wilcoxon tests against baselines and scenes as the unit.
 
 \subsection{Hypotheses and Breakdown Scenarios}
@@ -134,19 +145,21 @@ The following predictions are pre-registered. Each states what would falsify it.
         \emph{Falsified if} the paired confidence interval of the improvement includes zero
         in those regimes.
   \item[H2 (evidence criterion versus chi-square).] At a fixed 5\% false-exclusion rate,
-        the evidence criterion exceeds the leave-one-source-out chi-square gate by at
+        the evidence criterion exceeds the chi-square gate by at
         least 10 points of detection power, only where heteroscedastic depth noise,
         grazing geometry, occlusion or non-Gaussian residuals break the chi-square
         assumptions, and ties under idealised Gaussian noise (Proposition~\ref{prop:loo}).
         \emph{Falsified if} there is no gain in any pre-registered regime; the fallback is
         to report the gate with the chi-square statistic, with the entropy relation as an
         equivalence result.
-  \item[H3 (alignment and visibility).] Fitting the alignment without the source under test
-        and comparing only on pixels visible in both views keeps the false-exclusion rate
-        on clean data at or below 5\%; fitting the alignment jointly lets the fit absorb
-        the fault and lowers detection power by at least 10 points, and removing the
-        visibility mask at least doubles the false-exclusion rate. \emph{Falsified if}
-        the ablations leave the rate and the power unchanged.
+  \item[H3 (cross-fitting, alignment and visibility).] Testing a source against a
+        surface that was fitted \emph{without} its view, after a scale-and-shift fit of
+        the source to the rendering, and only on pixels the surface supports, keeps the
+        false-exclusion rate on clean data at or below 5\%; fitting the surface to all
+        views, including the source under test, lets the surface absorb the fault and
+        lowers detection power by at least 10 points, and removing the support mask at
+        least doubles the false-exclusion rate. \emph{Falsified if} the ablations leave
+        the rate and the power unchanged.
   \item[H4 (placement and complementarity).] Gating before pose graph optimisation gives
         lower trajectory error than applying the same statistic after the graph, and the
         gate combined with a robust kernel is at least as accurate as either alone.
@@ -157,6 +170,22 @@ The following predictions are pre-registered. Each states what would falsify it.
         without it (the price of gating); on natural failures the gated test bed narrows
         the gap to the reference points MASt3R-SfM and VGGT, which are reported as context.
         \emph{Falsified if} the price of gating on clean data exceeds 5\%.
+  \item[H6 (shared surface versus pairwise checks).] (a)~\emph{Efficiency:} the wall-clock
+        time of the shared-surface gate grows linearly with the number of views (log--log
+        slope below 1.2), whereas the pairwise gate grows with $N\bar d$ (slope above 1.5 on
+        dense overlap graphs), and for $N\ge100$ views at mean co-visibility degree
+        $\bar d\ge10$ the shared-surface gate is at least 2$\times$ faster; for sparse
+        graphs the pairwise gate is expected to be cheaper, and the break-even degree is
+        reported. (b)~\emph{Robustness:} at 5\% false exclusion, the shared-surface gate's
+        detection power is within 5 points of the pairwise gate's (non-inferiority) in the
+        regimes of H1, and cross-fitting with $K\in\{3,4,6\}$ folds is within 3 points of
+        exact leave-one-view-out refitting. (c)~\emph{Fixed budget:} with adaptive
+        densification at matched final size, detection power drops by at least 10 points
+        because the surface adds a layer that fits the faulty source, and there is a
+        sweet spot in $N_s$. \emph{Falsified if} (a)~the speed-up is below 2$\times$ at
+        dense overlap or the slopes do not separate, (b)~the pairwise gate is more than
+        5 points better, or (c)~adaptive densification is within 5 points of the fixed
+        budget.
 \end{description}
 
 \paragraph{Breakdown scenarios.} The following are tested and reported as honest
@@ -164,7 +193,9 @@ negatives: a majority of estimators failing in the same way on a view (common-mo
 failure, expected because estimators share training data); $M=2$, where attribution is
 unidentifiable and the gate returns no consensus; faults below the detection floor;
 sparse independent outliers, where pixel methods should win or tie; views with too little
-overlap for a cross-view comparison; and provisional poses of poor quality.
+overlap for the surface to support them (the gate must return no consensus); faulty views
+that supply most of the coverage of a region, so that the surface follows the fault; and
+provisional poses of poor quality, which corrupt the surface as well as the gate.
 
 \subsection{Implementation}
 \label{sec:setup:protocol}
@@ -174,8 +205,12 @@ the runner refuses the test split without that tag. The gate threshold is calibr
 permutation on clean development runs to a 5\% per-view false-exclusion rate. At least six
 scenes (three development, three test) and five seeds are used per dataset. The
 test bed uses an off-the-shelf feature matcher, a Gauss--Newton or Levenberg--Marquardt
-pose-graph solver \cite{opt_g2o,opt_factorgraphs,opt_theseus}, and TSDF fusion
-\cite{fus_curless,fus_kinectfusion}. Code, configurations, seeds and fault manifests are
+pose-graph solver \cite{opt_g2o,opt_factorgraphs,opt_theseus}, and a depth-only splat fit
+with a fixed number of splats $N_s$, $K\in\{3,4,6\}$ contiguous folds and a fixed number of
+iterations $n_{\mathrm{it}}$, with a TSDF \cite{fus_curless,fus_kinectfusion} as a secondary
+check. Cross-fitting folds are blocks of neighbouring views along the view order (or
+clusters of the co-visibility graph). Code, configurations, seeds and fault manifests are
 released; restricted datasets are not redistributed.
-\TODO{Choose and cite the matcher and the solver; add the GPU model, wall-clock time and
+\TODO{Choose and cite the matcher, the solver and the splat rasteriser; fix $N_s$, $n_{\mathrm{it}}$,
+  $\tau_\alpha$ and $s_{\min}$ on development scenes; add the GPU model, wall-clock time and
   GPU-hours per experiment once runs exist.}

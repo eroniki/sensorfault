@@ -8,9 +8,10 @@ experiment code before submission.}}
 The subsections follow the hypotheses of Section~\ref{sec:setup:hyp}: H1 in
 Section~\ref{sec:results:h1}, H2 in Section~\ref{sec:results:h2}, H3 in
 Section~\ref{sec:results:h3}, H4 in Section~\ref{sec:results:h4}, H5 and the reference
-points in Section~\ref{sec:results:h5}, the breakdown scenarios in
-Section~\ref{sec:results:break}, natural failures in Section~\ref{sec:results:nat}, and
-runtime in Section~\ref{sec:results:time}.
+points in Section~\ref{sec:results:h5}, H6 (shared surface versus pairwise checks) in
+Section~\ref{sec:results:h6}, the breakdown scenarios in Section~\ref{sec:results:break},
+natural failures in Section~\ref{sec:results:nat}, and runtime in
+Section~\ref{sec:results:time}.
 
 \subsection{View-Level Gate versus the Three Baselines (H1)}
 \label{sec:results:h1}
@@ -21,6 +22,7 @@ seeds with 95\% bootstrap CI.}
 \label{tab:h1}
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccc}
 \toprule
 Method & Warp & Region & Non-affine & Clean \\
@@ -29,8 +31,9 @@ No gate (quadratic)               & \todocell & \todocell & \todocell & \todocel
 Robust kernel (best) & \todocell & \todocell & \todocell & \todocell \\
 COLMAP filter             & \todocell & \todocell & \todocell & \todocell \\
 Plain voting                          & \todocell & \todocell & \todocell & \todocell \\
-Gate, LOO $\chi^2$         & \todocell & \todocell & \todocell & \todocell \\
-Gate, evidence             & \todocell & \todocell & \todocell & \todocell \\
+Gate, surface $\chi^2$                & \todocell & \todocell & \todocell & \todocell \\
+Gate, surface evid.                   & \todocell & \todocell & \todocell & \todocell \\
+Gate, pairwise evid.                  & \todocell & \todocell & \todocell & \todocell \\
 Oracle gate                           & \todocell & \todocell & \todocell & \todocell \\
 \bottomrule
 \end{tabular}
@@ -42,14 +45,15 @@ Oracle gate                           & \todocell & \todocell & \todocell & \tod
 
 \subsection{Evidence Criterion versus Chi-Square (H2)}
 \label{sec:results:h2}
-\todofig{power-fer}{Detection power at a fixed 5\% false-exclusion rate for the evidence gate and the leave-one-source-out chi-square gate, by regime (H2).}
+\todofig{power-fer}{Detection power at a fixed 5\% false-exclusion rate for the evidence gate and the chi-square gate, by regime (H2).}
 
-\subsection{Alignment and Visibility Ablations (H3)}
+\subsection{Cross-Fitting, Alignment and Support Ablations (H3)}
 \label{sec:results:h3}
 \begin{table}[t]
-\caption{\textbf{[TODO]} Ablations: clean-run false-exclusion rate and detection power with
-the alignment fitted with or without the source under test, with and without the
-visibility mask, and with the literal Algorithm~1 of our earlier work.}
+\caption{\textbf{[TODO]} Ablations of the shared-surface gate: clean-run false-exclusion
+rate and detection power with and without cross-fitting, the support mask and the
+grazing gate, against exact leave-one-view-out refitting and the literal Algorithm~1 of
+our earlier work.}
 \label{tab:ablate}
 \centering
 \small
@@ -57,11 +61,12 @@ visibility mask, and with the literal Algorithm~1 of our earlier work.}
 \toprule
 Variant & FER (\%) & Power (\%) \\
 \midrule
-Full gate                             & \todocell & \todocell \\
-Joint alignment & \todocell & \todocell \\
-No visibility mask                    & \todocell & \todocell \\
+Full gate (cross-fitted)              & \todocell & \todocell \\
+No cross-fitting (joint fit)          & \todocell & \todocell \\
+No support mask                       & \todocell & \todocell \\
 No grazing gate                       & \todocell & \todocell \\
-Literal Alg.~1    & \todocell & \todocell \\
+Exact leave-one-view-out (ref.)       & \todocell & \todocell \\
+Literal Alg.~1                        & \todocell & \todocell \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -92,9 +97,34 @@ COLMAP SfM (ref.)                & \todocell & \todocell & \todocell \\
 \end{tabular}
 \end{table}
 
+\subsection{Shared Surface versus Pairwise Checks (H6)}
+\label{sec:results:h6}
+\todofig{scaling}{Gate wall-clock time and peak GPU memory versus the number of views $N$ (log--log), for the shared-surface gate and the pairwise gate at sparse and dense co-visibility, with the measured break-even degree (H6a).}
+
+\begin{table}[t]
+\caption{\textbf{[TODO]} Detection power at 5\% false exclusion for the shared-surface gate
+(fixed $N_s$, $K$ folds), the pairwise gate, and the shared-surface gate with adaptive
+densification at matched size (H6b, H6c).}
+\label{tab:h6}
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+Variant & Power (\%) & Time (s) \\
+\midrule
+Pairwise gate                         & \todocell & \todocell \\
+Surface, fixed $N_s$, $K=3$           & \todocell & \todocell \\
+Surface, fixed $N_s$, $K=4$           & \todocell & \todocell \\
+Surface, fixed $N_s$, $K=6$           & \todocell & \todocell \\
+Surface, adaptive densification       & \todocell & \todocell \\
+Surface, exact leave-one-view-out     & \todocell & \todocell \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Breakdown Conditions}
 \label{sec:results:break}
-\todofig{breakdown}{Error versus the fraction of estimators failing together on a view and versus $M$, including the $M=2$ non-identifiable case and common-mode failures.}
+\todofig{breakdown}{Error versus the fraction of estimators failing together on a view and versus $M$, including the $M=2$ non-identifiable case, common-mode failures, and faulty views that dominate the surface in a region.}
 
 \subsection{Natural Failures}
 \label{sec:results:nat}

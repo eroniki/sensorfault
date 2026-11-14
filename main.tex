@@ -39,22 +39,21 @@
 
 \begin{abstract}
 Image-based 3D reconstruction increasingly relies on monocular depth estimators as a
-geometric prior, but an estimator can fail coherently on some views, for example on
-reflective surfaces, producing a smooth warp or a failed region rather than sparse
-pixel noise. Pixel-wise consistency filters, robust kernels in the pose graph, and
+geometric prior, but an estimator can fail coherently on some views, producing a smooth
+warp or a failed region rather than sparse pixel noise. Pixel-wise consistency filters, robust kernels in the pose graph, and
 plain voting decide at the wrong unit or too late, after the faulty depth has entered
 the graph. This paper proposes a view-level gate that decides which depth sources, that
 is, which estimator outputs on which views, to trust before pose graph optimisation and
-fusion. The gate compares each source with the consensus of the others after a fit that
-excludes the source under test, on pixels visible in both views, and admits a source
-only if its mean log Bayes factor against the consensus passes a calibrated threshold;
-it returns no consensus when attribution is not identifiable. The test corrects an
+fusion. The gate tests each source once against a single shared Gaussian-splat surface
+rendered at its view, fitted with a fixed number of splats on other views, so that its
+cost grows with the number of views rather than view pairs and the surface doubles as the
+fused output. A source is admitted only if its mean log Bayes factor against the rendering
+passes a calibrated threshold; otherwise the gate returns no consensus. The test corrects an
 entropy criterion from earlier work on Byzantine sensor elimination, which cannot
 distinguish an agreeing source from a sharp but biased one. The gate is evaluated in a
-test bed with an ensemble of monocular depth estimators, a partly end-to-end pose graph,
-and fusion, against robust kernels, the COLMAP geometric consistency filter, and plain
-voting, with learned reconstruction systems as reference points. A pre-registered
-protocol states five falsifiable hypotheses and explicit breakdown scenarios.
+test bed with monocular depth estimators and a partly end-to-end pose graph, against robust
+kernels, the COLMAP geometric consistency filter, plain voting, and a pairwise gate. A
+pre-registered protocol states six falsifiable hypotheses and breakdown scenarios.
 \textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 

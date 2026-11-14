@@ -15,6 +15,11 @@ which is \eqref{eq:vres}. The derivation assumes a locally planar surface, small
 ($\sigma_\varphi\tan\theta\ll1$) and independent Gaussian $\sigma_r$ and $\sigma_\varphi$.
 The regularisation \eqref{eq:vreg} replaces $\tan^{2}\theta$ by
 $\sin^{2}\theta/(\cos^{2}\theta+\epsilon^{2})$, which is bounded, and clips the result.
+In the ray frame the point error is $\delta r\,\ray+r\,\delta\varphi\,\mathbf{u}$ with
+$\mathbf{u}\perp\ray$ in the plane of incidence; its component along $\nrm$ is
+$\delta r\cos\theta+r\,\delta\varphi\sin\theta$ up to sign, with variance
+$\sigma_r^{2}\cos^{2}\theta+r^{2}\sigma_\varphi^{2}\sin^{2}\theta$, which is \eqref{eq:vn} and
+remains bounded as $\theta\to\pi/2$.
 
 \section{Proof of the Proposition}
 \label{app:proof}
@@ -26,3 +31,38 @@ d^{\top}\mathrm{Cov}(d)^{-1}d
 \end{align*}
 The evidence $\int p_C f_k$ is the Gaussian density of $\nu$ under $\mathcal{N}(0,S)$,
 whose negative logarithm is $\tfrac12\nu^{\top}S^{-1}\nu+\tfrac12\log\det(2\pi S)$.
+
+\section{Pairwise Gate (Comparison Variant)}
+\label{app:pairwise}
+The pairwise gate replaces the shared surface by the consensus of the other sources of the
+view and of its neighbours. For view $i$ the candidate sources are the $M$ estimator
+outputs $(m,i)$; for each neighbour $j$ with provisional pose, the consensus depth of $j$
+is warped into view $i$ and acts as an additional source that is never itself gated. For a
+candidate $k$, let $\hat D_{-k}$ be the consensus of the other sources after a robust
+scale-and-shift fit of each of them to a common reference, with variance $v_{-k}$ (the
+inverse-variance combination of the aligned sources). The candidate is aligned to
+$\hat D_{-k}$ by its own robust affine fit, and the statistic is \eqref{eq:Ts} with
+$\hat S_i,v_{S,i}$ replaced by $\hat D_{-k},v_{-k}$. The consensus now has several members,
+so a set is grown as in our earlier work: with $F_C=\prod_{i\in C}f_{i,u}$, $Z_C=\int F_C$,
+$p_C=F_C/Z_C$ and $H(C)=-\!\int p_C\log p_C$, Algorithm~\ref{alg:pairwise} seeds with the pair
+of largest pairwise evidence, expands with the compatible source of largest mean log Bayes
+factor (which removes the order dependence), and returns the minimum-entropy set among
+admissible sets with at most $F<M/2$ removals. Its cost is $C_{\mathrm{pair}}$ of
+Section~\ref{sec:method:cost}.
+
+\begin{algorithm}[t]
+\caption{Pairwise view-level admission (comparison variant)}
+\label{alg:pairwise}
+\begin{algorithmic}[1]
+\REQUIRE aligned depth PDFs $\{f_{k,u}\}_{k=1}^{M}$ of one view with warped neighbours, removal budget $F<M/2$, threshold $\tau$
+\STATE $(i^\star,j^\star)\gets\argmax_{i\ne j}\bar\ell_{j}(\{i\})$
+\IF{$\bar\ell_{j^\star}(\{i^\star\})<\tau$}
+  \RETURN no consensus
+\ENDIF
+\STATE $C\gets\{i^\star,j^\star\}$
+\WHILE{$\exists\,k\notin C:\ \bar\ell_k(C)\ge\tau$}
+  \STATE $k^\star\gets\argmax_{k\notin C}\bar\ell_k(C)$; \ $C\gets C\cup\{k^\star\}$
+\ENDWHILE
+\STATE Among admissible sets $C'$ with $M-|C'|\le F$, \textbf{return} $\argmin_{C'}H(C')$
+\end{algorithmic}
+\end{algorithm}
