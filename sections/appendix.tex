@@ -1,25 +1,53 @@
 \appendices
 
-\section{Derivation of the Residual Variance}
+\section{Pose Jacobian and the Residual Variance}
 \label{app:variance}
-Let a ray with unit direction $\ray$ meet a locally planar surface with unit normal
-$\nrm$ at perpendicular distance $h$ from the camera, with incidence angle $\theta$
-($\cos\theta=|\nrm\cdot\ray|$). The range to the plane is $r(\theta)=h/\cos\theta$,
-so $\mathrm{d}r/\mathrm{d}\theta=h\sin\theta/\cos^{2}\theta=r\tan\theta$ exactly. A
-pointing error $\delta\varphi$ in the plane of incidence therefore changes the
-intersection range by $\delta r\approx r\tan\theta\,\delta\varphi$, whereas the
-out-of-plane component has no first-order effect. With $\delta\varphi$ independent of
-the range noise,
-$\mathrm{Var}(r_{\mathrm{meas}}-r_{\mathrm{plane}})=\sigma_r^{2}+r^{2}\sigma_\varphi^{2}\tan^{2}\theta$,
-which is \eqref{eq:vres}. The derivation assumes a locally planar surface, small errors
-($\sigma_\varphi\tan\theta\ll1$) and independent Gaussian $\sigma_r$ and $\sigma_\varphi$.
-The regularisation \eqref{eq:vreg} replaces $\tan^{2}\theta$ by
-$\sin^{2}\theta/(\cos^{2}\theta+\epsilon^{2})$, which is bounded, and clips the result.
-In the ray frame the point error is $\delta r\,\ray+r\,\delta\varphi\,\mathbf{u}$ with
-$\mathbf{u}\perp\ray$ in the plane of incidence; its component along $\nrm$ is
-$\delta r\cos\theta+r\,\delta\varphi\sin\theta$ up to sign, with variance
-$\sigma_r^{2}\cos^{2}\theta+r^{2}\sigma_\varphi^{2}\sin^{2}\theta$, which is \eqref{eq:vn} and
-remains bounded as $\theta\to\pi/2$.
+Let a pixel ray with unit direction $\boldsymbol\ell$ meet a locally planar surface with unit
+normal $\boldsymbol\nu$ (oriented so that $\boldsymbol\nu\cdot\boldsymbol\ell>0$) at depth $r$ along
+the ray, with incidence angle $\theta$, $\cos\theta=\boldsymbol\nu\cdot\boldsymbol\ell$. For a perturbation of
+the camera pose by a translation $\delta\mathbf{t}$ and a rotation $\delta\boldsymbol\omega$, a point
+in the old camera frame has the new coordinates $\mathbf{x}'\approx\mathbf{x}-\delta\mathbf{t}-\delta\boldsymbol\omega\times\mathbf{x}$.
+The plane $\boldsymbol\nu^{\top}\mathbf{x}=c$ becomes, to first order,
+$\boldsymbol\nu^{\top}\mathbf{x}'+\delta\boldsymbol\omega^{\top}(\mathbf{x}'\times\boldsymbol\nu)=c-\boldsymbol\nu^{\top}\delta\mathbf{t}$, and
+the ray $\mathbf{x}'=r'\boldsymbol\ell$ meets it at
+$r'=(c-\boldsymbol\nu^{\top}\delta\mathbf{t})/(\boldsymbol\nu\cdot\boldsymbol\ell+\delta\boldsymbol\omega^{\top}(\boldsymbol\ell\times\boldsymbol\nu))$.
+The row of $J_q$ for this pixel is therefore
+\begin{equation}
+  \frac{\partial r}{\partial\delta\mathbf{t}}=-\frac{\boldsymbol\nu^{\top}}{\boldsymbol\nu\cdot\boldsymbol\ell},\qquad
+  \frac{\partial r}{\partial\delta\boldsymbol\omega}=-\frac{r\,(\boldsymbol\ell\times\boldsymbol\nu)^{\top}}{\boldsymbol\nu\cdot\boldsymbol\ell},
+  \label{eq:Jq}
+\end{equation}
+which we verified against exact ray--plane intersection by finite differences. The norm of the
+rotation row is $r\,|\boldsymbol\ell\times\boldsymbol\nu|/|\boldsymbol\nu\cdot\boldsymbol\ell|=r\tan\theta$ exactly,
+since $\mathrm{d}r/\mathrm{d}\theta=h\sin\theta/\cos^{2}\theta=r\tan\theta$ for a plane at
+perpendicular distance $h$, $r=h/\cos\theta$. For an isotropic rotation error of standard
+deviation $\sigma_\varphi$ the diagonal of the pose term of \eqref{eq:Sigmar} is therefore
+\begin{equation}
+  v_{\mathrm{res}}(r,\theta)=\sigma_r^{2}+\bigl(r\,\sigma_\varphi\tan\theta\bigr)^{2},
+  \label{eq:vres}
+\end{equation}
+the variance of the discrepancy between the measured depth and the intersection of the nominal
+ray with the surface, which is the independent-pixel special case of the covariance. It
+diverges at grazing incidence, and its linearisation fails once $\sigma_\varphi\tan\theta\gtrsim0.3$,
+so $\tan^{2}\theta$ is replaced by $\sin^{2}\theta/(\cos^{2}\theta+\epsilon^{2})$ with
+$\epsilon\approx\cos80^{\circ}$, the result is clipped, and rays with $\theta>85^{\circ}$ are
+gated,
+\begin{equation}
+  \tilde v_{\mathrm{res}}=\operatorname{clip}\!\Bigl(\sigma_{r}^{2}
+  +r^{2}\sigma_{\varphi}^{2}\,\tfrac{\sin^{2}\theta}{\cos^{2}\theta+\epsilon^{2}},\;
+  v_{\min},\,v_{\max}\Bigr).
+  \label{eq:vreg}
+\end{equation}
+The point error is not the same as this depth discrepancy: in the ray frame
+$(\ray,\mathbf{u},\mathbf{v})$ the covariance of the back-projected point is
+$\mathrm{diag}(\sigma_r^2,(r\sigma_\varphi)^2,(r\sigma_\varphi)^2)$, whose component along the
+surface normal,
+\begin{equation}
+  v_{n}(r,\theta)=\sigma_r^{2}\cos^{2}\theta+r^{2}\sigma_\varphi^{2}\sin^{2}\theta,
+  \label{eq:vn}
+\end{equation}
+stays bounded as $\theta\to\pi/2$; it initialises the splat covariances and floors their scale.
+The derivation assumes a locally planar surface, small errors and independent Gaussian errors.
 
 \section{Proof of the Proposition}
 \label{app:proof}
@@ -67,34 +95,60 @@ and variance of $p_C$. Its cost is $C_{\mathrm{pair}}$ of Section~\ref{sec:metho
 
 \section{Detection Analysis}
 \label{app:detection}
-Let $\rho_u$, $u=1,\dots,n_{\mathrm{eff}}$, be standardised residuals, independent with unit variance.
+\emph{Projected, whitened statistics.} Under the nominal model $\mathbf{r}_0=A\boldsymbol\eta+\mathbf{n}$
+with $\mathbf{n}\sim\mathcal{N}(\mathbf{0},\Sigma_r)$. The matrix $M$ of \eqref{eq:M} satisfies
+$MA=0$ and $M\Sigma_rM=M$, so $\mathbf{r}_0^{\top}M\mathbf{r}_0=\mathbf{n}^{\top}M\mathbf{n}\sim\chi^{2}_{n-2}$ whatever
+$\boldsymbol\eta$ is. A fault $\boldsymbol\phi=\beta\mathbf{g}$ adds $\beta\mathbf{g}$ to $\mathbf{n}$, so the matched
+statistic $z=\mathbf{g}^{\top}M\mathbf{r}_0/\kappa$ with $\kappa^{2}=\mathbf{g}^{\top}M\mathbf{g}$ has mean $\beta\kappa$ and unit
+variance, and the energy statistic is non-central $\chi^{2}_{n-2}(\beta^{2}\kappa^{2})$. The power of the
+two-sided matched test is $\Phi(\beta\kappa-z_\alpha)+\Phi(-\beta\kappa-z_\alpha)$, which is at least
+$1-\beta_{\mathrm{md}}$ when $\beta\kappa\ge z_\alpha+z_{\beta_{\mathrm{md}}}$, giving \eqref{eq:mdb}. For the energy
+test, $\lambda_0$ solves $\Pr[\chi^{2}_{n-2}(\lambda_0)>\chi^{2}_{n-2,1-\alpha}]=1-\beta_{\mathrm{md}}$; for
+$n=1000$, $\alpha=0.05$ and $\beta_{\mathrm{md}}=0.1$ it is $138.8$, against $130.7$ from the leading-order
+estimate $\sqrt{2(n-2)}(z_{\alpha}^{\mathrm{one}}+z_{\beta_{\mathrm{md}}})$. For independent unit-variance pixels
+and an offset nuisance, $M=I-\mathbf{1}\mathbf{1}^{\top}/n$, so a mask of fraction $f$ gives
+$\kappa^{2}=nf(1-f)$, zero at $f=1$, and the entries of Table~\ref{tab:mdb} follow from
+$(z_\alpha+z_{\beta_{\mathrm{md}}})/\sqrt{nf(1-f)}$, $(z_{\alpha/R}+z_{\beta_{\mathrm{md}}})/\sqrt{nf(1-f)}$ with $R=100$,
+and $\sqrt{\lambda_0}/\sqrt{nf(1-f)}$. A uniform pattern, and a pattern $\sigma(\mathbf{d})\mathbf{1}$ with
+$\sigma$ affine in depth, lie in $\mathrm{span}([\mathbf{d},\mathbf{1}])$ and have $\kappa=0$. With a Monte Carlo
+check on a correlated field ($\ell=2$, $\nu=0.2$, $n=150$) the false-alarm rate and the power of the
+matched statistic agree with theory to within the sampling error.
 
-\emph{Mean-shift statistic.} Under a bias $\delta$ on a fraction $f$ of the pixels,
-$\mathbb{E}[\rho_u]=\delta$ on $f n_{\mathrm{eff}}$ pixels and $0$ elsewhere, so
-$z=n_{\mathrm{eff}}^{-1/2}\sum_u\rho_u\sim\mathcal{N}(f\delta\sqrt{n_{\mathrm{eff}}},1)$. A two-sided test
-at false-alarm probability $\alpha$ has power $\Phi(f\delta\sqrt{n_{\mathrm{eff}}}-z_\alpha)+\Phi(-f\delta\sqrt{n_{\mathrm{eff}}}-z_\alpha)$,
-which is at least $1-\beta$ when $f\delta\sqrt{n_{\mathrm{eff}}}\ge z_\alpha+z_\beta$, giving
-\eqref{eq:mdb}. A Monte Carlo check with $n_{\mathrm{eff}}=1000$, $\delta=0.3$, $f=0.5$ gives a
-false-alarm rate of 0.051 and a power of 0.997, as predicted.
-
-\emph{Energy statistic.} For a zero-mean field of rms amplitude $\delta$ on a fraction $f$ of
-the pixels, $\mathbb{E}[T]=1+f\delta^{2}$ and $\mathrm{Var}[T]\approx(2+4f\delta^{2})/n_{\mathrm{eff}}$, so to
-leading order the field is detected when $f\delta^{2}\sqrt{n_{\mathrm{eff}}/2}\ge z_\alpha+z_\beta$, that is
-$\delta_{\min}=\bigl(\sqrt2(z_\alpha+z_\beta)/(f\sqrt{n_{\mathrm{eff}}})\bigr)^{1/2}\propto n_{\mathrm{eff}}^{-1/4}$. For
-$\alpha=0.05$, $\beta=0.1$, $n_{\mathrm{eff}}=1000$ and $f=1$ this is $0.38$. The mean of such a field is
-zero, so the mean-shift statistic is blind to it: in a Monte Carlo check with an rms amplitude of
-$0.5\sigma$ and $n_{\mathrm{eff}}=1000$, the energy statistic has a power of 0.998 at 5\% false alarm,
-and the mean-shift statistic of 0.118, close to the false-alarm rate.
+\emph{Effective number of pixels.} For $\boldsymbol\rho\sim\mathcal{N}(\mathbf{0},C)$ with unit diagonal, the
+energy $\boldsymbol\rho^{\top}\boldsymbol\rho$ has mean $n=\mathrm{tr}(C)$ and variance $2\,\mathrm{tr}(C^{2})$, so
+$\mathrm{Var}[\boldsymbol\rho^{\top}\boldsymbol\rho/n]=2\,\mathrm{tr}(C^{2})/n^{2}=2/n_{\mathrm{eff}}$ with
+$n_{\mathrm{eff}}=\mathrm{tr}(C)^{2}/\mathrm{tr}(C^{2})$, which is $n$ for $C=I$ and $1$ for $C=\mathbf{1}\mathbf{1}^{\top}$.
+A mean statistic has the variance $\mathbf{1}^{\top}C\mathbf{1}/n^{2}$, hence the different effective number
+$n^{2}/\mathbf{1}^{\top}C\mathbf{1}$, which for the Gaussian kernel is $n/(2\pi\ell^{2})$ against
+$n/(\pi\ell^{2})$ for the energy statistic: correlation hurts a mean more than an energy. On a
+$40\times40$ grid with $\ell=1.5$, $2$ and $3$, $n_{\mathrm{eff}}=236$, $135$ and $62$ against the closed form
+$226$, $127$ and $57$ (the closed form ignores the boundary). With a nugget $\nu$,
+$\mathrm{tr}(C^{2})\approx n[(1-\nu)^{2}\pi\ell^{2}+2\nu(1-\nu)+\nu^{2}]$. Without a nugget the
+covariance is numerically singular and any sharp-edged pattern appears infinitely detectable, so
+the nugget is part of the model.
 
 \emph{Pixel-wise filter.} A pixel is flagged when $|\rho_u|>k$. The flagging probability is
 $g(\delta)=\Phi(\delta-k)+\Phi(-\delta-k)$ with $g(0)=2\Phi(-k)=P_{\mathrm{fa}}$, $g'(0)=0$ and
 $g''(0)=2k\phi(k)$, so $g(\delta)-P_{\mathrm{fa}}\approx k\phi(k)\delta^{2}$. For $k=3$ and $\delta=0.3$,
-$g=0.0040$ against $P_{\mathrm{fa}}=0.0027$. Counting the flagged pixels of the view gives the
-statistic $z_{\mathrm{cnt}}=f\,(g(\delta)-P_{\mathrm{fa}})\sqrt{n_{\mathrm{eff}}}/\sqrt{P_{\mathrm{fa}}(1-P_{\mathrm{fa}})}$.
-With $n_{\mathrm{eff}}=1000$ and $\delta=0.3$, $z_{\mathrm{cnt}}=0.76f$ against $z=9.5f$, a ratio of 12.4. The ratio
-$R(\delta)=(g(\delta)-P_{\mathrm{fa}})/(\delta\sqrt{P_{\mathrm{fa}}(1-P_{\mathrm{fa}})})$ of the count
-statistic to the mean-shift statistic is below one for small $\delta$ and reaches one at
-$\delta\approx1.65$ for $k=3$, so the count is the better statistic only for larger bias, and
-the unaggregated filter, which makes a decision per pixel, is weaker still. The first-order
-sensitivity of the mean-shift statistic ($\propto\delta$) against the second-order sensitivity of
-the count ($\propto\delta^{2}$) is the reason for the sub-noise advantage of the gate.
+$g=0.0040$ against $P_{\mathrm{fa}}=0.0027$. Counting the flagged pixels of the view gives the statistic
+$z_{\mathrm{cnt}}=f\,(g(\delta)-P_{\mathrm{fa}})\sqrt{n}/\sqrt{P_{\mathrm{fa}}(1-P_{\mathrm{fa}})}$, and the ratio of the
+matched statistic $\delta\sqrt{nf(1-f)}$ to it is
+$R(\delta,f)=\delta\sqrt{(1-f)/f}\,\sqrt{P_{\mathrm{fa}}(1-P_{\mathrm{fa}})}/(g(\delta)-P_{\mathrm{fa}})$, equal to
+12.4 at $\delta=0.3$, $f=0.5$ and to 24.9 at $f=0.2$, and reaching one at $\delta=1.65$ and $2.30$.
+The sensitivity of the matched statistic is first order in $\delta$ and that of the count second order,
+which is the reason for the sub-noise advantage; the unaggregated filter, which decides per pixel, is
+weaker still.
+
+\emph{Surface term.} For $K$ surfaces the delete-a-group jackknife covariance
+$\tfrac{K-1}{K}\sum_k(\mathbf{s}_k-\bar{\mathbf{s}})(\mathbf{s}_k-\bar{\mathbf{s}})^{\top}$ is positive semi-definite of rank at
+most $K-1$. A small $K$ gives a noisy estimate, so a floor is added; its adequacy is part of the
+calibration check (H6).
+
+\emph{Protection level.} The faults that the energy test misses satisfy
+$\boldsymbol\phi^{\top}M\boldsymbol\phi\le\lambda_0$. The linear output $q=q_0+\mathbf{s}^{\top}\boldsymbol\phi$ is
+maximised on this ellipsoid, for $\mathbf{s}$ orthogonal to the nuisance directions in the metric of
+$\Sigma_r$, by $\boldsymbol\phi^{*}=c\,\tilde\Sigma_r\mathbf{s}$ with $\tilde\Sigma_r=\Sigma_r-A(A^{\top}\Sigma_r^{-1}A)^{-1}A^{\top}$,
+which satisfies $\tilde\Sigma_rM\tilde\Sigma_r=\tilde\Sigma_r$, giving the maximum
+$\sqrt{\lambda_0\,\mathbf{s}^{\top}\tilde\Sigma_r\mathbf{s}}$ of \eqref{eq:pl}. For independent pixels it is
+$\sqrt{\lambda_0}\,\sigma\,\|\mathbf{s}-\bar{s}\mathbf{1}\|$. The tests of the code verify the maximum by random
+search on the boundary and by attaining it with $\boldsymbol\phi^{*}$.

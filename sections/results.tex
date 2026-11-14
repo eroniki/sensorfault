@@ -18,27 +18,28 @@ natural failures in Section~\ref{sec:results:nat}, and runtime in Section~\ref{s
 
 \subsection{Regime Map: Per-Pixel Bias versus Fraction of the View (H1)}
 \label{sec:results:h1}
-\todofig{regime-map}{Detection power at 5\% false alarm over the per-pixel bias $\delta$ (in units of $\sigma$) and the fraction $f$ of the view affected, for the best pixel-wise filter, the best robust kernel or soft weight, and the gate, with the predicted minimum-detectable-bias contour of \eqref{eq:mdb} overlaid. Expected: pixel filters and kernels detect only at large $\delta$, the gate detects the sub-noise, large-$f$ corner, and the two overlap or reverse at large $\delta$ and small $f$ (H1).}
+\todofig{regime-map}{Detection power at 5\% false alarm over the per-pixel bias $\delta$ (in units of $\sigma$) and the fraction $f\in(0,0.8]$ of the view affected, for the best pixel-wise filter, the best robust kernel or soft weight, and the gate, with the minimum-detectable-bias contour of \eqref{eq:mdb} computed from the measured $\Sigma_r$ overlaid, and the affine control ($f=1$) marked. Expected: pixel filters and kernels detect only at large $\delta$, the gate detects the sub-noise region around $f=\tfrac12$ and nothing at $f=1$, and the two overlap or reverse at large $\delta$ and small $f$ (H1).}
 
 \begin{table}[t]
 \caption{\textbf{[TODO]} Detection power (\%) at 5\% false alarm at selected cells of the
-regime map: the sub-noise corner ($\delta=0.3$, $f=1$), a partial fault ($\delta=0.5$,
-$f=0.2$) and the sparse-outlier corner ($\delta=4$, $f=0.02$); and the empirical minimum
-detectable bias against the prediction of \eqref{eq:mdb}.}
+regime map: the sub-noise region ($\delta=0.3$, $f=0.5$), a partial fault ($\delta=0.5$,
+$f=0.2$), the sparse-outlier corner ($\delta=4$, $f=0.02$) and the affine control ($\delta=0.3$,
+$f=1$, predicted undetected and harmless); and the empirical minimum detectable bias against the
+prediction of \eqref{eq:mdb} from the measured $\Sigma_r$.}
 \label{tab:h1}
 \centering
 \small
 \setlength{\tabcolsep}{2pt}
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-Method & $0.3\sigma$, $f{=}1$ & $0.5\sigma$, $f{=}0.2$ & $4\sigma$, $f{=}0.02$ \\
+Method & $0.3\sigma$, $.5$ & $0.5\sigma$, $.2$ & $4\sigma$, $.02$ & $0.3\sigma$, $1$ \\
 \midrule
-Best pixel filter                     & \todocell & \todocell & \todocell \\
-Pixel-count test                      & \todocell & \todocell & \todocell \\
-Best robust kernel                    & \todocell & \todocell & \todocell \\
-Soft view weights                     & \todocell & \todocell & \todocell \\
-Gate (surface, evidence)              & \todocell & \todocell & \todocell \\
-Empirical / predicted MDB             & \todocell & \todocell & \todocell \\
+Best pixel filter                     & \todocell & \todocell & \todocell & \todocell \\
+Pixel-count test                      & \todocell & \todocell & \todocell & \todocell \\
+Best robust kernel                    & \todocell & \todocell & \todocell & \todocell \\
+Soft view weights                     & \todocell & \todocell & \todocell & \todocell \\
+Gate (surface, evidence)              & \todocell & \todocell & \todocell & \todocell \\
+Empirical / predicted MDB             & \todocell & \todocell & \todocell & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -74,9 +75,9 @@ Oracle gate                           & \todocell & \todocell & \todocell \\
 
 \todofig{regimes}{Trajectory and fused-surface error versus fraction of faulty views, scattered versus clustered, for each baseline family and the gate (H2).}
 
-\subsection{Mean-Shift versus Energy Statistic, and Evidence versus Chi-Square (H3)}
+\subsection{Region Scan versus Energy Statistic, and Evidence versus Chi-Square (H3)}
 \label{sec:results:h3}
-\todofig{power-fer}{Detection power at a fixed 5\% false-alarm rate for the mean-shift, energy, combined and evidence statistics, for a uniform bias and for a zero-mean warp, by regime (H3).}
+\todofig{power-fer}{Detection power at a fixed 5\% false-alarm rate for the region-scan, energy, combined and evidence statistics, for a bias confined to a region and for a diffuse smooth warp, by regime (H3).}
 
 \subsection{Cross-Fitting, Alignment and Support Ablations (H4)}
 \label{sec:results:h4}
@@ -106,8 +107,10 @@ Literal Alg.~1                        & \todocell & \todocell \\
 \label{sec:results:h5}
 \todofig{placement}{Trajectory error for gating before the pose graph, gating after it, soft per-view down-weighting inside the differentiable optimisation, a robust kernel alone, and the gate combined with a robust kernel, in the sub-noise regime (H5).}
 
-\subsection{Price of Monitoring and Reference Points (H6)}
+\subsection{Adequacy of the Measurement Model, Price of Monitoring and Reference Points (H6)}
 \label{sec:results:h6}
+\todofig{adequacy}{Adequacy of the nominal model on fault-free views: histogram of $T_i/(n-2)$ against its nominal value of one, the false-alarm rate against $\alpha$, and the fitted $\sigma(r,\tau,\theta)$, $\ell$, $\nu$ and the resulting $n_{\mathrm{eff}}$ per view (H6).}
+
 \begin{table}[t]
 \caption{\textbf{[TODO]} Fault-free scenes and natural failures: false-alarm rate,
 availability, trajectory and fused-surface error of the test bed with and without the gate,

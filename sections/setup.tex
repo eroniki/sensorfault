@@ -78,9 +78,11 @@ stable hash and at least five master seeds. The grid is:
 \begin{itemize}
   \item \emph{coherent bias (the regime map):} a per-pixel bias of
         $\delta\in\{0.1,0.2,0.3,0.5,1,2,4\}\,\sigma$ on a fraction
-        $f\in\{0.01,0.02,0.05,0.1,0.2,0.5,1\}$ of the pixels of one view, either in a contiguous
+        $f\in\{0.01,0.02,0.05,0.1,0.2,0.5,0.8\}$ of the pixels of one view, either in a contiguous
         region or scattered at random (the two differ in the effective number of independent
-        pixels), with both signs;
+        pixels), with both signs; and, as an \emph{affine control}, the same bias on all pixels
+        ($f=1$) and a bias proportional to $\sigma(d)$, which lie in the span of the scale and
+        offset and are predicted to be neither detected nor harmful (H1d);
   \item \emph{smooth warp:} a random low-frequency field added to the inverse depth,
         with amplitude $\alpha\in\{0.25,0.5,1,2\}$ times the standard deviation of the
         inverse depth of the view;
@@ -141,7 +143,7 @@ more than the pixel fraction that removes 5\% of healthy views).
         exactly the faulty views (from the injection manifest, or from the laser
         reference for natural failures), as an upper bound.
   \item \textbf{Gate variants:} a chi-square (energy) gate and the evidence gate of
-        Section~\ref{sec:method:admission}, a mean-shift gate, and their combination, each
+        Section~\ref{sec:method:admission}, a region-scan gate, and their combination, each
         against the shared surface (cross-fitted, fixed $N_s$) and against a \emph{pairwise}
         consensus that warps the neighbouring views into the view under test
         (Appendix~\ref{app:pairwise}); three ablations of the shared surface: no
@@ -167,10 +169,14 @@ per stage and state which methods do not meet a per-frame real-time budget.
 
 \subsubsection{Metrics and statistics}
 \label{sec:setup:metrics}
-Integrity metrics are the primary ones. Per view and per fault cell, the gate is scored by its
+Integrity metrics are the primary ones, and the measurement model is checked first: the fitted
+$\sigma(\cdot)$, $\ell$ and $\nu$ of each model, the effective number of pixels of
+\eqref{eq:neff} per view, the mean of $T_i/(n-2)$ on fault-free views and the false-alarm rate
+against $\alpha$ (the adequacy of the nominal model). Per view and per fault cell, the gate is scored by its
 \emph{detection power} at a fixed 5\% false-alarm probability (the regime map is the
 heatmap of power over $(\delta,f)$), the \emph{empirical minimum detectable bias} (the smallest
-$\delta$ with power $0.9$, to be compared with \eqref{eq:mdb}), the false-alarm and
+$\delta$ with power $0.9$, to be compared with \eqref{eq:mdb} computed from the measured
+$\Sigma_r$), the false-alarm and
 missed-detection rates, the rate of no-consensus alarms, and \emph{availability}, the fraction
 of views that are tested and kept. Precision and recall against the oracle labels and the
 \emph{elimination curve AUC}, the normalised partial area under power versus clean-run
@@ -198,16 +204,20 @@ state where the gate is expected \emph{not} to help.
   \item[H1 (regime map: where pixel filters and robust kernels fail and the gate does not).]
         With one metric model whose depth carries a coherent bias of $\delta\sigma$ on a
         fraction $f$ of one view, at 5\% false alarm: (a)~the gate's empirical minimum
-        detectable bias follows \eqref{eq:mdb} within a factor of 2, with $n_{\mathrm{eff}}$
-        estimated on clean data; (b)~in the sub-noise regime ($\delta\le0.5$, $f\ge0.2$) the
-        gate detects at least 80\% of the faulty views, whereas the best pixel-wise filter,
-        robust kernel and soft weight each detect at most 20\%; (c)~in the sparse-outlier
-        regime ($\delta\ge4$, $f\le0.02$) the best pixel filter detects at least as many
-        views as the gate, and the gate is not expected to win. \emph{Falsified if}
-        (a)~the empirical and predicted minimum detectable bias differ by more than a factor
-        of 2, (b)~the detection gap at $\delta=0.3$, $f=1$ is below 30 points or its interval
-        includes zero, or (c)~the gate beats the best pixel filter by 10 points or more in the
-        sparse-outlier regime.
+        detectable bias follows \eqref{eq:mdb} computed from the measured $\Sigma_r$ within a
+        factor of 2; (b)~in the sub-noise regime ($\delta\le0.5$, $0.2\le f\le0.8$) the gate
+        detects at least 80\% of the faulty views, whereas the best pixel-wise filter, robust
+        kernel and soft weight each detect at most 20\%; (c)~in the sparse-outlier regime
+        ($\delta\ge4$, $f\le0.02$) the best pixel filter detects at least as many views as the
+        gate, and the gate is not expected to win; (d)~a uniform bias ($f=1$) and a bias
+        proportional to $\sigma$ are neither detected (power at most the false-alarm rate plus 5
+        points) nor harmful (no increase of the trajectory or fused-surface error above the
+        clean value by more than 5\%), because the per-view alignment absorbs them.
+        \emph{Falsified if} (a)~the empirical and predicted minimum detectable bias differ by
+        more than a factor of 2, (b)~the detection gap at $\delta=0.3$, $f=0.5$ is below 30 points
+        or its interval includes zero, (c)~the gate beats the best pixel filter by 10 points or
+        more in the sparse-outlier regime, or (d)~the uniform bias is detected or degrades the
+        output.
   \item[H2 (consequence for the trajectory and the fused surface).] In the sub-noise regime
         of H1, the gated pipeline reduces the absolute trajectory error and the fused-surface
         error by at least 25\% relative to the best tuned of the robust kernels, soft weights,
@@ -219,12 +229,13 @@ state where the gate is expected \emph{not} to help.
         chi-square (energy) gate by at least 10 points of detection power, only where
         heteroscedastic depth noise, grazing geometry, occlusion or non-Gaussian residuals break
         the chi-square assumptions, and ties under idealised Gaussian noise
-        (Proposition~\ref{prop:loo}). (b)~The mean-shift statistic beats the energy statistic by
-        at least 20 points for a uniform bias, the energy statistic beats the mean-shift
-        statistic by at least 20 points for a zero-mean warp, and the combined gate loses at most
-        3 points to the better of the two. \emph{Falsified if} (a)~there is no gain in any
-        pre-registered regime (the fallback is to report the gate with the chi-square statistic,
-        with the entropy relation as an equivalence result) or (b)~either gap is below 10 points.
+        (Proposition~\ref{prop:loo}). (b)~The region-scan statistic beats the energy statistic by at
+        least 20 points for a bias confined to a region, the energy statistic beats the scan by at
+        least 20 points for a smooth warp that is diffuse over the view, and the combined gate
+        loses at most 3 points to the better of the two. \emph{Falsified if} (a)~there is no gain
+        in any pre-registered regime (the fallback is to report the gate with the chi-square
+        statistic, with the entropy relation as an equivalence result) or (b)~either gap is below
+        10 points.
   \item[H4 (cross-fitting, alignment and support).] Testing a depth map against a
         surface that was fitted \emph{without} its view, after a scale-and-shift fit of
         the depth map to the rendering, and only on pixels the surface supports, keeps the
@@ -240,12 +251,17 @@ state where the gate is expected \emph{not} to help.
         as accurate as either alone. \emph{Falsified if} soft down-weighting matches the gate in
         the sub-noise regime (it would then suffice), if gating after the graph matches gating
         before it, or if the combination is worse than the better component.
-  \item[H6 (price of monitoring on clean data, and reference points).] On fault-free data the
-        per-view false-alarm rate is at most 5\%, availability is at least 90\%, and the gate
+  \item[H6 (adequacy of the measurement model, price of monitoring on clean data, and reference
+        points).] The nominal model is adequate: on fault-free views the mean of $T_i/(n-2)$ is
+        $1\pm0.1$ and the false-alarm rate is within $[0.5\alpha,1.5\alpha]$ without per-scene
+        retuning, with $\sigma(\cdot)$, $\ell$ and $\nu$ fitted once on development scenes. On
+        fault-free data the per-view false-alarm rate is at most 5\%, availability is at least 90\%, and the gate
         changes trajectory and fused-surface error by at most 5\% relative to the pipeline
         without it; on natural failures the gated test bed narrows the gap to the reference
         points MASt3R-SfM and VGGT, which are reported as context. \emph{Falsified if} the
-        price of gating on clean data exceeds 5\% or availability falls below 90\%.
+        mean of $T_i/(n-2)$ leaves $1\pm0.1$ or the false-alarm rate leaves its band (the model is
+        misspecified and the minimum detectable bias of H1 cannot be trusted), the price of gating
+        on clean data exceeds 5\%, or availability falls below 90\%.
   \item[H7 (shared surface versus pairwise checks).] (a)~\emph{Efficiency:} the wall-clock
         time of the shared-surface gate grows linearly with the number of views (log--log
         slope below 1.2), whereas the pairwise gate grows with $N\bar d$ (slope above 1.5 on
@@ -264,7 +280,7 @@ state where the gate is expected \emph{not} to help.
         budget.
   \item[H8 (pose faults).] (a)~For spoofed pose priors and glitches, the gate detects at
         least 80\% of the views whose pose error exceeds the minimum detectable bias that
-        \eqref{eq:mdb} implies through \eqref{eq:vres}, and excluding them lowers the
+        \eqref{eq:mdb} implies through the pose Jacobian \eqref{eq:Jq}, and excluding them lowers the
         trajectory error relative to robust kernels. (b)~For large false loop closures,
         switchable constraints, dynamic covariance scaling and max-mixtures, which were
         designed for them, match the gate within 5 points, and the gate is not expected to win.
@@ -274,11 +290,11 @@ state where the gate is expected \emph{not} to help.
         baseline by more than 10 points, or (c)~the interval of the gap in (c) includes zero.
   \item[H9 (protection level; optional).] Under single-fault injections that satisfy
         assumptions A1--A4 of Section~\ref{sec:method:pl}, with a fault at the minimum detectable
-        bias, the realised error of the output $q$ exceeds the protection level \eqref{eq:pl} in at
-        most $\beta+5$ points of the runs; under two faulty views in a region or a model-level
-        fault, where the assumptions fail, the exceedance rate is more than $2\beta$, which
+        bias, the realised error of the output $q$ exceeds the protection level \eqref{eq:pl}, computed
+        from the measured $\Sigma_r$, in at most $\beta_{\mathrm{md}}+5$ points of the runs; under two faulty views in a region or a model-level
+        fault, where the assumptions fail, the exceedance rate is more than $2\beta_{\mathrm{md}}$, which
         documents where the bound does not hold. \emph{Falsified if} the exceedance under single
-        faults is above $\beta+5$ points.
+        faults is above $\beta_{\mathrm{md}}+5$ points.
   \item[H10 (ensemble ablation).] (a)~\emph{Shared failures:} on natural failures, models
         that overlap in training data fail on the same views more often than independence
         predicts: for each pair of models the lift of the joint failure frequency is at
@@ -312,8 +328,14 @@ the surface as well as the gate.
 \label{sec:setup:protocol}
 Hypotheses, thresholds, metrics, the tuning protocol and the dev/test split are fixed in a
 preregistration file and tagged in version control before any test scene is processed;
-the runner refuses the test split without that tag. The gate threshold is calibrated by
-permutation on clean development runs, with $n_{\mathrm{eff}}$ estimated from the residual autocorrelation, to a 5\% per-view false-alarm rate. At least six
+the runner refuses the test split without that tag. The measurement model is calibrated once per depth model on clean development data
+(Section~\ref{sec:method:calibration}): $\sigma(r,\tau,\theta)$, $\ell$ and $\nu$ by maximum
+likelihood of the residuals against the laser reference depth, $\Sigma_q$ from the marginal
+covariances of the provisional pose graph, and $\Sigma_{\mathrm{surf}}$ online from the $K$
+cross-fitted surfaces; the confidence-covariate variant uses Metric3D v2 or UniDepthV2, which
+output a confidence, as ablation models. The gate threshold is then calibrated by permutation on
+clean development runs, with $n_{\mathrm{eff}}$ computed from $\Sigma_r$ by \eqref{eq:neff}, to a
+5\% per-view false-alarm rate. At least six
 scenes (three development, three test) and five seeds are used per dataset. The
 test bed uses an off-the-shelf feature matcher, a Gauss--Newton or Levenberg--Marquardt
 pose-graph solver \cite{opt_g2o,opt_factorgraphs,opt_theseus}, and a depth-only splat fit

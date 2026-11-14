@@ -2,10 +2,12 @@
 \label{sec:conclusion}
 We have proposed view-level fault detection and exclusion, in the spirit of receiver autonomous
 integrity monitoring, for monocular-depth reconstruction. A coherent view-level fault adds a
-small bias to every pixel of a view; below the noise at each pixel it is invisible to pixel-wise
-filters and to robust kernels, but aggregated over the view's co-visible pixels it is a large
-test statistic, with a minimum detectable bias that falls as the square root of the number of
-effectively independent pixels and the fraction of the view affected. One metric depth model is
+small, spatially structured bias that the monocular scale and offset cannot absorb; below the
+noise at each pixel it is invisible to pixel-wise filters and to robust kernels, but aggregated
+over the view's co-visible pixels, whitened by the covariance of an explicit measurement model and
+projected orthogonally to the scale and offset, it is a large test statistic, with a minimum
+detectable bias that falls as $1/\sqrt{n_{\mathrm{eff}}f(1-f)}$ and an effective number of pixels
+that follows from the correlation of the residual. One metric depth model is
 applied to each image, and the gate tests each depth map once against a single shared Gaussian
 surface, fitted with a fixed number of splats from the other views and rendered at its view, at
 a cost that grows with the number of views rather than the number of view pairs. A depth map is
@@ -38,11 +40,15 @@ model-level fault, where all views are wrong in the same way, makes the surface 
 faulty depth and is undetectable from depth alone, and a minority assumption is needed in every
 region. Second, with very few views, or in regions that few other views observe, the surface
 cannot test a view and the gate can only raise a no-consensus alarm. Third, the detection floor
-is $\delta_{\min}\propto 1/(f\sqrt{n_{\mathrm{eff}}})$, and $n_{\mathrm{eff}}$ is the weak point:
-the residuals of learned depth are spatially correlated, heavy-tailed and heteroscedastic,
-so $n_{\mathrm{eff}}$ must be estimated and the threshold calibrated on clean data, and a
-smooth, textureless scene has a small $n_{\mathrm{eff}}$ and a high floor; the Gaussian
-analysis of Section~\ref{sec:method:detection} is a guide, not a guarantee. Fourth, the
+is $\beta_{\min}=(z_\alpha+z_{\beta_{\mathrm{md}}})/\kappa$, and the whole analysis is only as good
+as the measurement model: the residuals of learned depth are heteroscedastic, spatially
+correlated, possibly heavy-tailed, and perturbed by pose, intrinsics and surface errors, so
+$\sigma(\cdot)$, $\ell$, $\nu$ and $\Sigma_{\mathrm{surf}}$ must be calibrated on clean data and
+their adequacy checked (H6); a misspecified $\ell$ or tail changes the floor and the false-alarm
+rate. The surface covariance is estimated from a small number $K$ of surfaces and is noisy. A
+smooth, textureless scene has a small $n_{\mathrm{eff}}$ and a high floor for diffuse faults, and a
+uniform bias is not a fault at all, because the scale and offset absorb it, which also means that
+a view whose true fault is nearly affine is neither detected nor, by the same token, harmful. Fourth, the
 protection level is conditional on a fault being present and rests on four assumptions
 (a single faulty view, calibrated noise, a linear response, an uncorrupted surface) that fail
 exactly in the regimes where detection is hardest; unlike RAIM, we have no prior fault

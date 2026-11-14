@@ -40,19 +40,19 @@
 \begin{abstract}
 Monocular-depth reconstruction uses a depth model's prediction for each image as a geometric
 prior, but a model can fail coherently on some views, as on glass, sky and out-of-distribution
-scenes. Such a fault adds a small bias to every pixel of a view: below the noise at each pixel,
-so pixel-wise consistency filters cannot see it, yet large when aggregated over the view's
-co-visible pixels. Robust kernels only down-weight a bad view and make no statement about
-trust. This paper proposes view-level fault rejection in the spirit of receiver autonomous
-integrity monitoring: a gate that detects a faulty view, excludes it before pose graph
-optimisation and fusion, and raises a no-consensus alarm when it cannot decide. Each depth map,
+scenes. Such a fault adds a small, spatially structured bias that the monocular scale and offset
+cannot absorb: below the noise at each pixel, so pixel-wise consistency filters cannot see it,
+yet large when aggregated over the view's co-visible pixels. Robust kernels only down-weight a
+bad view and make no statement about trust. This paper proposes view-level fault rejection in the
+spirit of receiver autonomous integrity monitoring. Starting from an explicit measurement model,
+with scale and offset ambiguity, heteroscedastic and spatially correlated depth noise, pose,
+intrinsics and surface uncertainty, it derives a gate that tests the whitened residual of each
+view, with a stated false-alarm rate, a minimum detectable bias and an effective number of pixels
+that follow from the residual covariance. The gate excludes a faulty view before pose graph
+optimisation and fusion and raises a no-consensus alarm when it cannot decide. Each depth map,
 produced by one metric model per image, is tested once against a shared Gaussian surface fitted
-from the other views with a fixed number of splats, so that the cost grows with the number of
-views and the surface doubles as the fused output. We state the minimum detectable bias and,
-under stated assumptions, a conditional protection level. The gate is evaluated in a
-differentiable, renderable pose-graph test bed against robust kernels, soft down-weighting, a
-COLMAP consistency filter, voting and a pairwise gate, under depth and pose faults. A
-pre-registered protocol states ten falsifiable hypotheses, including where gating does not help.
+from the other views, so the cost grows with the number of views. A pre-registered protocol
+states ten falsifiable hypotheses, including where gating does not help.
 \textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 

@@ -20,22 +20,28 @@ denotes a fault that moves a whole view coherently: a bias or warp of its depth,
 in its pose.
 
 \paragraph{Core argument.}
-A coherent view-level fault adds a small bias to \emph{every pixel} of one view. At a
-per-pixel magnitude below the noise, for example $0.3\sigma$, each pixel looks healthy:
-pixel-wise consistency filters, which test one pixel at a time against a threshold of
-several $\sigma$, see almost nothing, because the probability that a pixel crosses the
-threshold hardly changes. Aggregated over the $n$ co-visible pixels of the view, the same
-bias is a large test statistic, because a consistent shift of $\delta\sigma$ in each of $n_{\mathrm{eff}}$
-effectively independent pixels shifts their mean by $\delta\sqrt{n_{\mathrm{eff}}}$ standard
-errors (Section~\ref{sec:method:detection}). The gate therefore wins exactly when faults are
-sub-noise per pixel but coherent across a view, which is how monocular depth fails on glass,
-sky and out-of-distribution scenes, and it should not win, and is not expected to, when a
-fault is large but confined to a few pixels, where pixel filters are the right tool. Robust
-kernels, the other standard defence, only down-weight a constraint when its residual is
-large, so a sub-noise coherent bias passes through them, and even when they act they give no
-statement about trust: they neither exclude the view nor tell the user that the output should
-not be relied on. The gate excludes the view and can raise a \emph{no consensus} alarm,
-as RAIM does.
+A coherent view-level fault adds a small, spatially structured bias across a view: a shift of the
+depth over part of it, a warp, or a pose error that moves the whole rendering. None of these is
+explained by the monocular scale and offset, which the alignment absorbs; a bias that is
+uniform over the whole view is only an offset, and not a fault at all. At a per-pixel magnitude
+below the noise, for example $0.3\sigma$, each pixel still looks healthy: pixel-wise
+consistency filters, which test one pixel at a time against a threshold of several $\sigma$, see
+almost nothing, because the probability that a pixel crosses the threshold hardly changes.
+Aggregated over the view's co-visible pixels, whitened by the covariance that an explicit
+measurement model predicts and projected orthogonally to the scale and offset, the same
+pattern is a large test statistic. For a bias on a fraction $f$ of $n_{\mathrm{eff}}$ effectively
+independent pixels its non-centrality grows as $n_{\mathrm{eff}}f(1-f)\delta^{2}$, so the minimum
+detectable bias is $\propto1/\sqrt{n_{\mathrm{eff}}f(1-f)}$ (Section~\ref{sec:method:detection}),
+about $0.2\sigma$ at $f=\tfrac12$ for $n_{\mathrm{eff}}=10^{3}$. The gate therefore wins exactly
+when faults are sub-noise per pixel but coherent across part of a view, which is how monocular
+depth fails on glass, sky and out-of-distribution scenes, and it should not win, and is not
+expected to, when a fault is large but confined to a few pixels, where pixel filters are the right
+tool. Robust kernels, the other standard defence, only down-weight a constraint when its residual
+is large, so a sub-noise coherent bias passes through them, and even when they act they give no
+statement about trust: they neither exclude the view nor tell the user that the output should not
+be relied on. The gate excludes the view and can raise a \emph{no consensus} alarm, as RAIM does.
+The claim is only as good as the measurement model: the minimum detectable bias is derived from
+the residual covariance $\Sigma_r$, which must be calibrated, not assumed.
 
 \paragraph{Approach.}
 This paper proposes \emph{view-level fault rejection} for monocular-depth reconstruction: a
@@ -151,22 +157,25 @@ the check cost grow with the number of view pairs.
 Several challenges limit current approaches.
 \begin{enumerate}
   \item[\textbf{C1.}] \textbf{Coherent faults are sub-noise per pixel.} A fault that moves a
-        whole view (a depth bias or warp, a pose prior error, a false loop closure) adds a
-        small shift to every pixel, so each pixel stays within its noise and a per-pixel
-        filter has almost no power. The evidence is in the aggregate over the view, and its
-        strength depends on the number of effectively independent pixels and on the fraction
-        of the view that is affected (Section~\ref{sec:method:detection}).
+        view coherently (a depth bias or warp over part of it, a pose prior error, a false loop
+        closure) adds a small shift to many pixels, so each pixel stays within its noise and a
+        per-pixel filter has almost no power. The evidence is in the aggregate over the view, and
+        its strength depends on the number of effectively independent pixels, on the fraction of
+        the view that is affected, and on what the scale and offset of the monocular depth can
+        explain (Section~\ref{sec:method:detection}).
   \item[\textbf{C2.}] \textbf{Down-weighting gives no trust statement.} Robust kernels and soft
         view weights reduce the influence of a constraint with a large residual; they do not
         exclude the view, do not state a false-alarm or missed-detection probability, and do not
         tell the user when the output should not be relied on. An integrity monitor needs
         detection, exclusion and an alarm.
-  \item[\textbf{C3.}] \textbf{Monocular depth has no exact reference scale.} Even metric
-        models are only approximately metric, and some outputs are affine-invariant, so a
-        view's depth can be compared with the others only after fitting a scale and shift.
-        That fit can absorb part of a fault and make the faulty view look consistent, so
-        the comparison must be made against a reference, and after an alignment, that were
-        fitted without the view under test.
+  \item[\textbf{C3.}] \textbf{Monocular depth has no exact reference scale, and its errors
+        are not iid Gaussian.} Even metric models are only approximately metric, and some outputs
+        are affine-invariant, so a view's depth can be compared with the others only after fitting
+        a scale and shift. That fit can absorb part of a fault and make the faulty view look
+        consistent, so the comparison must be made against a reference, and after an alignment,
+        that were fitted without the view under test. The residual is also heteroscedastic and
+        spatially correlated, and pose, intrinsics and surface errors add to it, so the test must
+        be derived from an explicit covariance and not from one iid Gaussian $\sigma$.
   \item[\textbf{C4.}] \textbf{A single model gives no redundancy within a view.} Only
         other views can expose a failure, and an ensemble does not obviously help: models
         trained on overlapping data may fail on the same views, so a majority of an
@@ -230,12 +239,16 @@ Gate, pairwise (variant) & View & Before the pose graph & Excludes; no consensus
 This paper presents view-level fault detection and exclusion for monocular-depth
 reconstruction. The following points summarise the contributions.
 \begin{itemize}
-  \item \textbf{An integrity-monitoring formulation} (addresses C1 and C2): a view-level
-        test with a stated false-alarm rate, a minimum detectable bias that depends on the
-        number of effectively independent pixels and the affected fraction, exclusion of the
-        faulty view before pose graph optimisation and fusion, and a \emph{no consensus}
-        alarm; and, under stated assumptions, a conditional protection level on the fused
-        output (Sections~\ref{sec:method:detection},~\ref{sec:method:elim} and~\ref{sec:method:pl}).
+  \item \textbf{An explicit measurement model and a gate derived from it} (addresses C1, C2
+        and C3): scale and offset ambiguity, heteroscedastic and spatially correlated depth noise,
+        pose, intrinsics and surface uncertainty, propagated to the residual covariance
+        $\Sigma_r$; tests on the whitened, nuisance-projected residual with a stated false-alarm
+        rate; an effective number of pixels $n_{\mathrm{eff}}=\mathrm{tr}(C)^{2}/\mathrm{tr}(C^{2})$ and a minimum
+        detectable bias that follow from $\Sigma_r$ instead of being set by hand; exclusion of the
+        faulty view before pose graph optimisation and fusion; a \emph{no consensus} alarm; and,
+        under stated assumptions, a conditional protection level on the fused output
+        (Sections~\ref{sec:method:forward},~\ref{sec:method:detection},~\ref{sec:method:elim}
+        and~\ref{sec:method:pl}).
   \item \textbf{A shared Gaussian surface as the consensus} (addresses C3 and C7): every
         depth map is tested once against a fixed-budget surface fitted from the other views
         and rendered at its view, by cross-fitting so that a view never meets a surface fitted
@@ -264,8 +277,9 @@ reconstruction. The following points summarise the contributions.
 \subsection{Organization of the Paper}
 \label{sec:intro:org}
 The rest of the paper is organized as follows. Section~\ref{sec:method} presents the
-method: the notation, the forward model of a (possibly faulty) view, the inverse problem of
-pose graph optimisation, the view-level gate with its detection theory, shared-surface
+method: the notation, the measurement model of a (possibly faulty) view and the residual
+covariance derived from it, the inverse problem of pose graph optimisation, the view-level gate
+with its detection theory, shared-surface
 consensus, exclusion and protection level, and the test-bed pipeline.
 Section~\ref{sec:setup} describes the experiments, and Section~\ref{sec:results} reports
 the results. Section~\ref{sec:conclusion} presents the conclusions, the limitations and
