@@ -1,4 +1,4 @@
-# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 # Shared defaults. Experiment configs `extends: base.yaml`.
 project: sensorfault
@@ -25,17 +25,51 @@ integrity:
   availability_target: 0.9
   neff_estimation: residual_autocorrelation_on_clean_dev
   threshold_calibration: clean_run_permutation
-  statistics: [mean_shift, energy, evidence]
+  statistics: [energy_whitened_projected, region_scan_matched, evidence]
   alarms: [no_consensus_per_view, scene_level_if_more_than_half_rejected]
   theory_module: src/sensorfault/eval/detection_theory.py
+measurement_model:
+  nominal: 'd_hat = a*d + b + eps  (a,b: monocular scale/offset ambiguity; prior around (1,0) for a metric
+    model, none for affine-invariant)'
+  eps: {distribution: zero-mean Gaussian vector over the view, covariance: Sigma_eps = D C D, D: 'diag
+      sigma(range, texture, grazing_angle)', C: (1-nu) K_ell + nu I, K_ell: 'gaussian kernel exp(-|u-v|^2/(2
+      ell^2)), ell in pixels', nugget_nu: 'fit on clean dev data (must be >0: without it any sharp-edged
+      pattern looks infinitely detectable)'}
+  pose_error: {xi: 'N(0, Sigma_q), 6x6', source: marginal covariances of the provisional pose graph, jacobian: 'J_q
+      n x 6, analytic (tests/core/test_measurement_model.py), rotation row norm = r tan(theta)'}
+  intrinsics_error: {zeta: 'N(0, Sigma_K), small', jacobian: J_K n x p}
+  surface_uncertainty: {Sigma_surf: 'delete-a-group jackknife over the K cross-fitted surfaces, rank <=
+      K-1, plus a floor', note: small K gives a noisy estimate; adequacy checked in H6}
+  sources_of_uncertainty: [U1 scale_offset_ambiguity, 'U2 heteroscedastic_noise_sigma(r,tau,theta)', U3
+      spatial_correlation_ell_nu, U4 pose_error, U5 intrinsics_error, U6 surface_spread]
+  residual_covariance: Sigma_r = Sigma_eps + J_q Sigma_q J_q^T + J_K Sigma_K J_K^T + Sigma_surf
+  nuisance_projection: M = Sigma_r^-1 - Sigma_r^-1 A (A^T Sigma_r^-1 A)^-1 A^T Sigma_r^-1 with A=[d,1];
+    T = r0^T M r0 ~ chi2(n-2) under the nominal model
+  fault_definition: any deviation phi with M phi != 0 (the nominal model cannot explain it); pure scale/offset
+    errors, incl. a uniform bias over a whole view, are NOT faults (absorbed by the alignment)
+  n_eff: tr(C_r)^2 / tr(C_r^2), C_r = correlation of Sigma_r (computed, not hand-set)
+  calibration:
+    fit_once_per_depth_model_on_clean_dev: ['sigma(range,texture,grazing)', ell, nu]
+    method: maximum likelihood of residuals vs laser reference depth (no surface term)
+    alternative: use a model that outputs confidence as a covariate of sigma(.)
+    confidence_outputs_per_public_readme_checked_2026_11_14: {depth_pro: no (depth + focal length), unidepth_v2: lists
+        a confidence output, metric3d_v2: 'yes (depth and normal confidence, ViT models)', moge: binary
+        validity mask only, depth_anything_v2: none documented, marigold: none documented (multi-pass
+        ensembling option)}
+  adequacy_check: {mean_T_over_dof: 1 +/- 0.1 on fault-free views, false_alarm_in: '[0.5*alpha, 1.5*alpha]
+      without per-scene retuning'}
 regime_map:
   delta_sigma: [0.1, 0.2, 0.3, 0.5, 1, 2, 4]
-  fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1]
+  fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.8]
   mask_layout: [contiguous, scattered]
   sign: [+, '-']
+  affine_control: {fraction_f: 1.0, also: bias proportional to sigma(d), prediction: 'not detected (power
+      <= alpha+5 points) and not harmful (error within 5% of clean): absorbed by the per-view alignment'}
   regimes:
-    sub_noise: {delta_le: 0.5, f_ge: 0.2}
+    sub_noise: {delta_le: 0.5, f_ge: 0.2, f_le: 0.8}
     sparse_outlier: {delta_ge: 4, f_le: 0.02}
+  detectability: 'kappa^2 = phi^T M phi; for iid pixels kappa^2 = n f (1-f) delta^2: peaks at f=1/2, zero
+    at f=1'
 shared_surface:
   representation: gaussian_splats
   n_splats: TODO fix on dev scenes
@@ -52,8 +86,9 @@ shared_surface:
 testbed: {pose_graph: differentiable_renderable, soft_downweighting_is_baseline: true, render_based_constraint: optional}
 shared_inputs_for_all_methods: [images, matches, depth_maps, fault_realisations, pose_graph_solver]
 metrics:
-  integrity: [detection_power_at_fa_0.05, empirical_mdb, false_alarm_rate, missed_detection_rate, no_consensus_rate,
-    availability, elimination_curve_auc]
+  model_adequacy: [mean_T_over_dof, false_alarm_vs_alpha, fitted_sigma_ell_nu, n_eff_per_view, kappa_per_pattern]
+  integrity: [detection_power_at_fa_0.05, empirical_mdb, mdb_predicted_from_measured_Sigma_r, false_alarm_rate,
+    missed_detection_rate, no_consensus_rate, availability, elimination_curve_auc]
   pose: [ate_rmse_sim3, rpe, pose_auc_at_5_10_30deg]
   surface: [accuracy, completeness, fscore]
   depth: [absrel, delta1_after_alignment]
@@ -64,7 +99,9 @@ tuning:
   dev_only: true
   budget_reported: true
   null_calibration: {target_false_alarm: 0.05, method: clean_run_permutation, n_permutations: 200}
-implemented: {configs: true, detection_theory: true, fault_injectors: false, view_gate: false, testbed_pipeline: false,
-  note: 'Implemented: configs, registry stubs (baselines/gate_testbed.py), grid-form admission test (elim/admission.py),
-    detection theory (eval/detection_theory.py).'}
+implemented: {configs: true, detection_theory: true, measurement_model_theory: true, fault_injectors: false,
+  view_gate: false, testbed_pipeline: false, note: 'Implemented: configs, registry stubs (baselines/gate_testbed.py),
+    grid-form admission test (elim/admission.py), detection + measurement-model theory (eval/detection_theory.py,
+    tested). Not implemented: fitting sigma(.), ell, nu on real residuals; Sigma_r assembly on images;
+    the gate.'}
 output_dir: outputs

@@ -25,6 +25,7 @@ HYP = [
 ]
 BREAK = [
     "scenewide_model_failure",
+    "misspecified_measurement_model",
     "few_views",
     "sub_noise",
     "small_n_eff",
@@ -75,16 +76,45 @@ def test_hypotheses_match_the_manuscript_ids():
     ]
 
 
-def test_h1_is_the_regime_map_with_both_regimes_and_the_pixel_competitors():
+def test_h1_is_the_regime_map_with_the_affine_control_and_no_uniform_fault():
     c = load_config(CFG / "h1_regime_map_subnoise_bias.yaml")
     lv = c["hypothesis"]["levels"]
-    assert 0.3 in lv["delta_sigma"] and 1 in lv["fraction_f"] and 0.02 in lv["fraction_f"]
+    assert 0.3 in lv["delta_sigma"] and 0.5 in lv["fraction_f"] and 0.02 in lv["fraction_f"]
+    # a bias on ALL pixels is an offset: it must not be in the fault grid, only in the control
+    assert 1 not in lv["fraction_f"] and max(lv["fraction_f"]) < 1
+    assert "uniform_bias_f1" in lv["affine_control"]
     assert {"colmap_geom_consistency", "pixel_count_test", "soft_view_weights"} <= set(
         c["baselines"]
     )
-    rm = load_config(CFG / "base.yaml")["regime_map"]["regimes"]
-    assert rm["sub_noise"]["delta_le"] == 0.5 and rm["sparse_outlier"]["delta_ge"] == 4
-    assert c["metrics"]["subnoise_gap_points"] == 30
+    rm = load_config(CFG / "base.yaml")["regime_map"]
+    assert rm["regimes"]["sub_noise"] == {"delta_le": 0.5, "f_ge": 0.2, "f_le": 0.8}
+    assert rm["regimes"]["sparse_outlier"]["delta_ge"] == 4
+    assert rm["affine_control"]["fraction_f"] == 1.0
+    assert c["metrics"]["subnoise_gap_points"] == 30 and c["metrics"]["mdb_tolerance_factor"] == 2
+    g = yaml.safe_load((CFG / "faults" / "view_fault_grid.yaml").read_text())
+    assert max(g["depth_faults"]["coherent_bias"]["fraction_f"]) < 1
+    assert g["depth_faults"]["affine_control"]["uniform_bias_f1"] is True
+
+
+def test_measurement_model_block_lists_the_six_uncertainty_sources_and_matches_theory():
+    import numpy as np
+
+    from sensorfault.eval import detection_theory as dt
+
+    mm = load_config(CFG / "base.yaml")["measurement_model"]
+    assert [u.split()[0] for u in mm["sources_of_uncertainty"]] == [f"U{i}" for i in range(1, 7)]
+    assert "Sigma_surf" in mm["residual_covariance"] and "J_q" in mm["residual_covariance"]
+    assert "NOT faults" in mm["fault_definition"]
+    assert mm["n_eff"].startswith("tr(C_r)^2 / tr(C_r^2)")
+    assert mm["calibration"]["fit_once_per_depth_model_on_clean_dev"][0].startswith("sigma")
+    conf = mm["calibration"]["confidence_outputs_per_public_readme_checked_2026_11_14"]
+    assert conf["depth_pro"].startswith("no") and conf["metric3d_v2"].startswith("yes")
+    # the configured regimes are consistent with the theory: with n_eff=1000 the gate can
+    # detect the sub-noise corner and cannot detect the affine control
+    n, d = 1000, 0.5
+    kap = float(np.sqrt(n * 0.5 * 0.5))
+    assert dt.mdb_scan(kap, 100) < d  # detectable at delta = 0.5, f = 0.5
+    assert dt.mdb_matched_projected(0.0) == float("inf")  # f = 1 control: undetectable
 
 
 def test_integrity_block_matches_the_detection_theory_defaults():
@@ -95,6 +125,7 @@ def test_integrity_block_matches_the_detection_theory_defaults():
     assert ig["z_alpha"] == pytest.approx(dt.z_alpha(ig["false_alarm_per_view"]), abs=1e-2)
     assert ig["z_beta"] == pytest.approx(dt.z_beta(ig["missed_detection"]), abs=1e-3)
     assert "no_consensus_per_view" in ig["alarms"]
+    assert "region_scan_matched" in ig["statistics"] and "mean_shift" not in ig["statistics"]
 
 
 def test_h5_soft_downweighting_is_a_baseline_and_h8_has_loop_closure_baselines():
@@ -158,6 +189,7 @@ def test_fault_grid_has_the_regime_map_and_targets_views_not_estimators():
     g = yaml.safe_load((CFG / "faults" / "view_fault_grid.yaml").read_text())
     assert set(g["depth_faults"]) == {
         "coherent_bias",
+        "affine_control",
         "smooth_warp",
         "region_failure",
         "nonaffine_distortion",

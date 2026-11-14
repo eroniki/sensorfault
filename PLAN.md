@@ -1,8 +1,8 @@
-# View-level fault detection and exclusion for learned-depth reconstruction — research plan (design v2.3)
+# View-level fault detection and exclusion for learned-depth reconstruction — research plan (design v2.4)
 
 Target: IEEE Access, solo author, 14–18 evening weeks (~10 h/wk), one 8 GB consumer GPU (RTX 2070 on this machine).
 Title (fixed): *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface*.
-Status: v2.3 of 2026-11-14. Framing = **integrity monitoring (RAIM-style FDE) on views**. Kept from v2.2: one metric depth model per image (default Depth Pro), shared splat-surface consensus (cross-fitted, fixed budget, doubles as fused output), "gate is the contribution, pipeline is the test bed". Design v1 (physical-sensor faults) is in `configs/legacy_sensor_faults/`. Items marked **[UNVERIFIED]** come from memory or abstract-only reads.
+Status: v2.4 of 2026-11-14. **v2.4 derives the gate from an explicit measurement model** (nominal measurement with scale/offset ambiguity, heteroscedastic spatially-correlated noise, pose, intrinsics and surface uncertainty → residual covariance Σ_r → whitened, nuisance-projected tests; n_eff, MDB and protection level computed from Σ_r, not assumed). Framing = **integrity monitoring (RAIM-style FDE) on views**. Kept: one metric depth model per image (default Depth Pro), shared splat-surface consensus (cross-fitted, fixed budget, doubles as fused output), "gate is the contribution, pipeline is the test bed". Design v1 (physical-sensor faults) is in `configs/legacy_sensor_faults/`. Items marked **[UNVERIFIED]** come from memory or abstract-only reads.
 Hygiene: public datasets, public pretrained models and public code only.
 
 ---
@@ -15,21 +15,36 @@ Hygiene: public datasets, public pretrained models and public code only.
 |---|---|
 | redundant satellite ranges | other views of the same scene (a single model gives no redundancy within a view) |
 | fault: a faulty satellite | view-level fault: depth bias/warp/failed region **or** pose fault (spoofed prior, glitch, false loop closure) |
-| consistency test on residuals (range comparison, parity, residual, solution separation) | per-view test of depth vs the rendered shared surface; mean-shift + energy statistics |
+| consistency test on residuals (range comparison, parity, residual, solution separation) | per-view test of the whitened, nuisance-projected residual against the rendered shared surface: energy T = r₀ᵀMr₀ ~ χ²(n−2) and a matched region scan |
 | threshold from false-alarm probability | per-view false-alarm α (5%), threshold calibrated on clean dev data |
-| minimum detectable bias for missed-detection β | δ_min = (z_α+z_β)/(f·√n_eff) |
+| minimum detectable bias for missed-detection β | β_min = (z_α+z_β)/κ, κ² = φᵀMφ (detectability of the fault pattern after whitening by Σ_r and projecting out scale/offset); iid pixels: κ² = n·f(1−f)·δ² |
 | exclusion | g_i = 0 (drop the view's depth from PGO and fusion) |
 | alert / loss of integrity | no-consensus alarm (unsupported view) and scene-level alarm (>½ views rejected) |
 | availability | fraction of views tested and kept |
 | protection level | conditional PL = max_i |s_i|·δ_min,i·σ + z_q·σ_q (single fault; assumptions A1–A4) |
 
-**Core argument.** A coherent view-level fault adds a small bias to *every pixel* of one view. At sub-noise per-pixel size (e.g. 0.3σ) a pixel filter (|ρ|>k=3) sees almost nothing: flagging probability 0.0040 vs 0.0027 null. Aggregated over the view's n_eff effectively independent co-visible pixels the same bias shifts the mean by fδ√n_eff standard errors. **The gate wins exactly when faults are sub-noise per pixel but coherent across a view** (glass, sky, out-of-distribution scenes). It should *not* win when a fault is large but confined to few pixels (pixel filters are the right tool) or for large false loop closures (switchable constraints / DCS / max-mixtures were built for them).
+**Core argument (corrected in v2.4).** A coherent view-level fault adds a small, *spatially structured* bias across a view (over part of it, a warp, or a pose error that moves the whole rendering) that **the monocular scale and offset cannot absorb**. At sub-noise per-pixel size (e.g. 0.3σ) a pixel filter (|ρ|>k=3) sees almost nothing: flagging probability 0.0040 vs 0.0027 null. Aggregated over the view's co-visible pixels, **whitened by Σ_r and projected orthogonally to span{[d,1]}**, the same pattern is a large statistic. **The gate wins exactly when faults are sub-noise per pixel but coherent across part of a view that the scale/offset cannot absorb** (glass, sky, out-of-distribution scenes). It should *not* win when a fault is large but confined to few pixels (pixel filters are the right tool) or for large false loop closures (switchable constraints / DCS / max-mixtures were built for them).
 
-**Verified numbers (code: `src/sensorfault/eval/detection_theory.py`, tests in `tests/core/test_detection_theory.py`; Monte Carlo cross-checked).**
-- δ=0.3, k=3: pixel flag prob 0.00395 vs 0.0027 null; second-order excess kφ(k)δ².
-- n_eff=1000: mean-shift SNR 9.49·f vs aggregated pixel-count SNR 0.76·f — ratio ≈12.4. The count overtakes the mean shift only above δ≈1.65σ (k=3).
-- MDB (α=0.05, β=0.1, z_α+z_β=3.24), n_eff=1000: 0.10σ (f=1), 0.51σ (f=0.2), 2.05σ (f=0.05). MDB ∝ 1/(f√n_eff). Energy statistic (zero-mean warps): MDB ∝ n_eff^{-1/4} (0.38σ at n_eff=1000, f=1); mean-shift is blind to zero-mean warps (MC power 0.118 vs energy 0.998 at rms 0.5σ).
-- **The weak point is n_eff**: learned-depth residuals are spatially correlated, heavy-tailed and heteroscedastic; n_eff and the threshold must be calibrated on clean data. The Gaussian analysis is a guide, not a guarantee.
+**Correction that follows from the measurement model.** With a free per-view offset b (and scale a), a bias that is **uniform over the whole view (f=1), or proportional to σ(d) when σ is affine in depth, lies in span([d,1])**: it is absorbed by the alignment in the gate *and* by the per-view alignment variables in the PGO. It is **not a fault, is not detected, and is not harmful** (this is the affine control, H1d). The earlier statement "a bias on every pixel of a view, f=1, is detected" was wrong. Detectability of a bias on a fraction f of independent pixels is κ² = n·f(1−f)·δ²: peaks at f=½, **vanishes at f=1**. Real failures (glass, sky regions; warps) are partial or non-affine, which is why the regime map uses f ≤ 0.8 and a separate f=1 control.
+
+**Verified numbers (code: `src/sensorfault/eval/detection_theory.py`; tests in `tests/core/test_detection_theory.py` and `tests/core/test_measurement_model.py`; Monte Carlo cross-checked).**
+- Pixel filter, δ=0.3, k=3: flag prob 0.00395 vs 0.0027 null; second-order excess kφ(k)δ².
+- MDB (α=0.05, β=0.1, z_α+z_β=3.24), n=1000 independent pixels, bias on fraction f (offset nuisance removed):
+
+| f | matched (region known) | scan, R=100 | energy (unknown pattern) |
+|---|---|---|---|
+| 0.05 | 0.47σ | 0.69σ | 1.71σ |
+| 0.2 | 0.26σ | 0.38σ | 0.93σ |
+| 0.5 | 0.21σ | 0.30σ | 0.75σ |
+| 1 | ∞ (absorbed) | ∞ | ∞ |
+
+  (the earlier table "0.10σ at f=1, n_eff=1000" assumed a free mean and is **withdrawn**.) Energy λ₀ = 138.8 at 998 dof (exact noncentral χ²; leading-order 130.7).
+- Matched statistic vs aggregated pixel-count test at δ=0.3: ratio 12.4 (f=0.5), 24.9 (f=0.2); the count overtakes only above δ≈1.65σ (f=0.5) / 2.30σ (f=0.2).
+- Energy statistic detects a zero-mean warp (rms 0.5σ, n=1000: power 0.998) that a mean statistic cannot (0.118) — and the signed mean is not used at all once the offset is fitted.
+- n_eff = tr(C)²/tr(C²) (energy); mean statistic n_mean = n²/(1ᵀC1). Gaussian-kernel closed forms (with nugget ν): n_eff ≈ n/[(1−ν)²πℓ²+2ν(1−ν)+ν²] (grid check within ~9%); n=10⁵, ℓ=6, ν=0.2 → ≈1.4×10³.
+- **A nugget is required**: without it Σ is numerically singular and any sharp-edged pattern looks infinitely detectable (κ≈4.8×10⁵ in a test). Sharp-edged region faults are *more* detectable than n_eff suggests (correlated noise cannot imitate an edge); smooth warps *less*.
+- Pose Jacobian of rendered depth: ∂r/∂δt = −νᵀ/(ν·ℓ), ∂r/∂δω = −r(ℓ×ν)ᵀ/(ν·ℓ); verified against exact ray–plane intersection; rotation-row norm = r·tanθ, so the earlier pointing-error variance (rσ_φ tanθ)² is the diagonal special case of Σ_r.
+- **The weak point is the measurement model itself** (Gaussianity, heavy tails, calibration of σ(·), ℓ, ν, noisy Σ_surf from small K).
 
 **Why not robust kernels / soft down-weighting.** They down-weight when a residual is large (a sub-noise coherent bias passes through) and give no trust statement: no exclusion, no false-alarm/missed-detection probability, no alarm. Soft per-view weights inside the differentiable PGO are the closest relative and are a **baseline (H5)**; if they match the gate in the sub-noise regime the paper's premise fails — H5 is written to find out.
 
@@ -73,15 +88,30 @@ Source read via Europe PMC XML (MDPI blocked); typeset math was flattened, so a 
 
 ---
 
+## 3a. Measurement model (the gate is derived from it)
+
+Nominal measurement per view: **d̂ = a·d + b + ε**. Explicit uncertainty sources:
+- **U1** scale/offset ambiguity (a, b): nuisance; prior around (1,0) for a metric model, none for affine-invariant; absorbed by alignment.
+- **U2** heteroscedastic noise σ(range, texture, grazing angle) (e.g. log σ = γ₀ + γ₁ log r + γ₂ g(τ) + γ₃ tan²θ).
+- **U3** spatial correlation: Σ_ε = D C D, C = (1−ν)K_ℓ + νI, Gaussian kernel with length scale ℓ (pixels) and nugget ν.
+- **U4** pose error ξ ~ N(0, Σ_q) (from the provisional pose graph's marginal covariances) → J_q Σ_q J_qᵀ (rank ≤ 6).
+- **U5** small intrinsics error ζ ~ N(0, Σ_K) → J_K Σ_K J_Kᵀ (larger if the model estimates the focal length, e.g. Depth Pro).
+- **U6** surface uncertainty Σ_surf = delete-a-group jackknife over the K cross-fitted surfaces, (K−1)/K Σ_k (s_k − s̄)(s_k − s̄)ᵀ, rank ≤ K−1, plus a floor (small K ⇒ noisy).
+- Not modelled: occlusion (mask), dynamics, non-Gaussian tails (absorbed by threshold calibration).
+
+Residual against the rendered surface: r₀ ≈ Aη + ε + J_qξ + J_Kζ + e_S, **Σ_r = Σ_ε + J_qΣ_qJ_qᵀ + J_KΣ_KJ_Kᵀ + Σ_surf**, A = [d, 1]. Whitening/projection: M = Σ_r⁻¹ − Σ_r⁻¹A(AᵀΣ_r⁻¹A)⁻¹AᵀΣ_r⁻¹. Σ_r = scaled stationary kernel + low-rank (≤ 6+p+K−1) ⇒ Woodbury + FFT/CG, near-linear in n; subsample to the correlation length if needed. **A fault is any deviation φ with Mφ ≠ 0** (what the nominal model cannot explain).
+
+**Calibration.** Fit σ(·), ℓ, ν **once per depth model on clean dev data** (max-likelihood of residuals vs laser reference depth, no surface term); Σ_q from the provisional pose graph; Σ_surf online. Or use a model that outputs confidence as a covariate of σ(·). **Public READMEs, checked 2026-11-14:** Metric3D v2 (ViT) returns depth and normal confidence; UniDepthV2 lists a confidence output; **Depth Pro (default) returns depth + focal length only → fit σ(·)**; MoGe returns a binary validity mask, not a confidence; Depth Anything V2 and Marigold document none (Marigold has a multi-pass ensemble option). Adequacy check (H6): on fault-free views mean T/(n−2) = 1±0.1 and false alarm within [0.5α, 1.5α] without per-scene retuning.
+
 ## 3. Gate: statistics, detection theory, surface consensus, alarms, protection level
 
 - Aligned depth of view i: `D~_i = s_i·D_i + t_i` (prior (1,0) for a metric model); healthy `D~ = d + ε`, `σ(d) = σ0 + κ·d` fitted on dev data.
 - Residual weight with pose-induced pointing error: `v_res = σ_r² + (r σ_φ tanθ)²` (regularised, gate θ>85°); normal-direction variance `v_n` initialises splat covariances. Derivations in manuscript Appendix A.
 - **Shared surface:** N_s Gaussians, fixed budget (3DGS-MCMC relocation), depth-only fit (robust kernel + accumulated-alpha + anisotropy cap + depth-distortion/normal-consistency). **Cross-fitting:** K folds of neighbouring views; S_{-f} fitted outside fold f, rendered in f. A view never meets a surface fitted to it.
 - Held-out depth map: robust affine fit to the rendering; pixels with support α≥τ_α, valid, below the grazing gate.
-- **Statistics:** mean-shift z = √n_eff·ρ̄ (uniform bias), energy T (zero-mean warps), evidence (mean log Bayes factor, corrected admission test). n_eff from residual autocorrelation on clean data; thresholds by clean-run permutation to α=5% per view.
+- **Statistics (on the whitened, nuisance-projected residual):** energy T = r₀ᵀMr₀ ~ χ²(n−2) (any pattern, incl. zero-mean warps); matched region scan z_j = g_jᵀMr₀/√(g_jᵀMg_j) over R candidate patterns with Bonferroni threshold; evidence (mean log Bayes factor, corrected admission test; ranks like χ² on whitened residuals). Thresholds by clean-run permutation to α=5% per view. n_eff = tr(C_r)²/tr(C_r²) is *computed* from Σ_r.
 - **Outputs:** g_i; no-consensus alarm (surface does not support the view / too few other views); scene-level alarm (>½ rejected); availability reported next to false-alarm rate.
-- **Conditional protection level (H9, optional, first cut):** PL_q = max_i |s_i|·δ_min,i·σ + z_q·σ_q with s_i from perturb-and-refit. Assumptions A1 single faulty view, A2 calibrated σ and n_eff, A3 linear response, A4 uncorrupted surface. **Conditional on a fault being present** (no prior fault probabilities for learned depth, so no integrity-risk allocation); coverage is *tested*, and expected to fail when A1/A4 fail.
+- **Conditional protection level (H9, optional, first cut):** PL_q = max_i √(λ₀·s_iᵀΣ̃_r s_i) + z_q·σ_q, Σ̃_r = Σ_r − A(AᵀΣ_r⁻¹A)⁻¹Aᵀ, λ₀ = noncentrality of the energy test at missed-detection β (ellipsoid of undetected faults φᵀMφ ≤ λ₀; tests verify the maximiser). iid case: √λ₀·σ·‖s_⊥‖ = slope × MDB. s_i from perturb-and-refit. Assumptions A1 single faulty view, A2 Σ_r calibrated, A3 linear response, A4 uncorrupted surface. **Conditional on a fault being present** (no prior fault probabilities for learned depth); coverage is *tested*, expected to fail when A1/A4 fail. Energy-test-only bound is conservative; the scan tightens it.
 - **Cost:** pairwise `C_pair ≈ N·d̄·P·c_w`; surface `C_surf ≈ ((K+1)·n_it+1)·N·P·c_r`; break-even `d̄* ≈ ((K+1)·n_it+1)·c_r/c_w` — linear in N but a large constant; pairwise cheaper on sparse graphs. Pairwise gate = warp neighbours into view i, build their consensus with the corrected set-growing criterion, test view i against it (manuscript Appendix C).
 - Caveats: provisional poses corrupt surface and gate; faulty views dominating a region make the surface follow the fault; model-level faults are undetectable by construction.
 
@@ -96,7 +126,7 @@ Source read via Europe PMC XML (MDPI blocked); typeset math was flattened, so a 
 | Pixel filters | COLMAP geometric consistency (`consistency_voting` numpy test exists); same flags aggregated into a count test | `colmap_consistency_filter`, `pixel_count_test` |
 | Voting | per-pixel median/majority across the views that observe the pixel (`median_fusion` exists); **cross-model** only in H10 | `plain_voting` (param `rule`) |
 | Floor / bound / context | no gate; oracle gate; estimate-and-correct | `no_gate`, `oracle_gate`, `estimate_and_correct` |
-| Gate variants | surface vs pairwise × {energy, mean-shift, combined, evidence}; ablations: no cross-fit, adaptive densification, exact leave-one-view-out | `view_gate` (params `consensus`, `statistic`, `cross_fit`, `densification`, `sources`) |
+| Gate variants | surface vs pairwise × {energy (whitened, projected), region scan, combined, evidence}; ablations: no cross-fit, adaptive densification, exact leave-one-view-out | `view_gate` (params `consensus`, `statistic`, `cross_fit`, `densification`, `sources`) |
 | Reference points | MASt3R-SfM, VGGT, COLMAP SfM | `mast3r_sfm`, `vggt`, `colmap_sfm` |
 
 Methods that do not exclude (kernels, soft weights, pixel filters) are compared on detection by an **action rate** calibrated to the same 5% false-alarm rate. Same images, matches, depth maps, fault realisations and solver for all; thresholds tuned on dev scenes. **All are stubs** (`src/sensorfault/baselines/gate_testbed.py`); the test bed is not implemented.
@@ -105,19 +135,19 @@ Methods that do not exclude (kernels, soft weights, pixel filters) are compared 
 
 ## 5. Hypotheses (pre-register at week 1; mirrored in configs/h*.yaml and the manuscript)
 
-- **H1 (regime map; key figure).** Sweep per-pixel bias δ∈{0.1..4}σ × fraction f∈{0.01..1}. (a) empirical MDB within ×2 of δ_min; (b) sub-noise regime (δ≤0.5, f≥0.2): gate ≥80% detection, best pixel filter / kernel / soft weight each ≤20%; (c) sparse-outlier regime (δ≥4, f≤0.02): best pixel filter ≥ gate (gate not expected to win). *Falsified if* MDB off by >×2; gap at δ=0.3,f=1 <30 points; or the gate beats the pixel filter by ≥10 points in (c).
+- **H1 (regime map; key figure).** Sweep per-pixel bias δ∈{0.1..4}σ × fraction **f∈{0.01..0.8}**, plus the **affine control (f=1; bias ∝ σ(d))**. (a) empirical MDB within ×2 of β_min computed from the *measured* Σ_r; (b) sub-noise regime (δ≤0.5, 0.2≤f≤0.8): gate ≥80% detection, best pixel filter / kernel / soft weight each ≤20%; (c) sparse-outlier regime (δ≥4, f≤0.02): best pixel filter ≥ gate (gate not expected to win); (d) **affine control: not detected (power ≤ α+5 points) and not harmful (error within 5% of clean)**. *Falsified if* MDB off by >×2; gap at δ=0.3,f=0.5 <30 points; the gate beats the pixel filter by ≥10 points in (c); or the uniform bias is detected or degrades the output.
 - **H2 (consequence).** Sub-noise regime: gating cuts ATE and fused-surface error ≥25% vs the best of {kernels, soft weights, COLMAP filter, voting}, within 20% of oracle; sparse-outlier regime: baselines tie or win.
-- **H3 (statistic).** (a) evidence ≥ energy by ≥10 points only where chi-square assumptions break (else tie → pivot P1); (b) mean-shift beats energy by ≥20 points for uniform bias, energy beats mean-shift by ≥20 points for zero-mean warps, combined within 3 points of the better.
+- **H3 (statistic).** (a) evidence ≥ energy by ≥10 points only where chi-square assumptions break (else tie → pivot P1); (b) region scan beats energy by ≥20 points for a region-confined bias, energy beats scan by ≥20 points for a diffuse smooth warp, combined within 3 points of the better.
 - **H4 (cross-fitting, alignment, support).** Surface fitted without the view + alignment + support mask: clean false alarm ≤5%; joint fit lowers power ≥10 points; no support mask doubles false alarm.
 - **H5 (placement, soft down-weighting, complementarity).** Gate before PGO beats the same statistic after PGO and beats soft per-view down-weighting in the sub-noise regime; gate + kernel ≥ either. *Falsified if soft down-weighting suffices.*
-- **H6 (price of monitoring, reference points).** Clean data: false alarm ≤5%, availability ≥90%, error change ≤5%; natural failures: gap to MASt3R-SfM/VGGT narrows (context only).
+- **H6 (adequacy of the measurement model, price of monitoring, reference points).** Adequacy: mean T/(n−2) = 1±0.1 and false alarm in [0.5α,1.5α] with σ(·), ℓ, ν fitted once on dev scenes (else the model is misspecified and H1a cannot be trusted). Clean data: false alarm ≤5%, availability ≥90%, error change ≤5%; natural failures: gap to MASt3R-SfM/VGGT narrows (context only).
 - **H7 (shared surface vs pairwise).** (a) linear scaling vs N·d̄, ≥2× faster at N≥100, d̄≥10 (pairwise cheaper when sparse; report break-even); (b) power within 5 points of pairwise, K∈{3,4,6} within 3 points of exact leave-one-view-out; (c) adaptive densification loses ≥10 points vs fixed budget.
 - **H8 (pose faults).** (a) ≥80% detection above the implied pose MDB, exclusion lowers ATE vs kernels; (b) **large false loop closures: loop-closure baselines match the gate within 5 points (gate not expected to win)**; (c) small coherent offsets (≤0.5°): gate beats kernels by ≥20 points.
-- **H9 (protection level; optional).** Single-fault coverage: exceedance ≤β+5 points under A1–A4; >2β when assumptions fail.
+- **H9 (protection level; optional).** Single-fault coverage of the ellipsoid PL computed from the measured Σ_r: exceedance ≤β+5 points under A1–A4; >2β when assumptions fail.
 - **H10 (ensemble ablation).** (a) models fail together (lift ≥2, phi ≥0.3); (b) where ≥½ of the models fail cross-model voting detects ≤20% while the single-model gate detects ≥20 points more (converse reported); (c) ensemble gate gains ≥5 points or the M× cost is not justified.
-- **Breakdown (honest negatives).** Model-level fault (undetectable); very few views (no consensus); faults below MDB; small n_eff (smooth/textureless scenes); sparse outliers (baselines win/tie); low overlap; faulty views dominating a region or two faulty views in a region; **large false loop closures**; poor provisional poses.
+- **Breakdown (honest negatives).** Model-level fault (undetectable); very few views (no consensus); faults below MDB; small n_eff (smooth/textureless scenes); **misspecified measurement model (ℓ off ×2, σ(·) off ×1.5, no nugget, heavy tails, tiny K)**; sparse outliers (baselines win/tie); low overlap; faulty views dominating a region or two faulty views in a region; **large false loop closures**; poor provisional poses.
 
-Mapping from v2.2: old H1 → H2 (consequence) + new H1 (regime map); old H2 → H3(a) (+ new mean-shift/energy part); old H3 → H4; old H4 → H5 (+ soft down-weighting); old H5 → H6 (+ availability); old H6 → H7; new H8 (pose faults), H9 (protection level); old H7 → H10.
+Mapping from v2.2: old H1 → H2 (consequence) + new H1 (regime map); old H2 → H3(a) (+ new region-scan/energy part); old H3 → H4; old H4 → H5 (+ soft down-weighting); old H5 → H6 (+ availability); old H6 → H7; new H8 (pose faults), H9 (protection level); old H7 → H10.
 
 ---
 
@@ -131,7 +161,7 @@ Mapping from v2.2: old H1 → H2 (consequence) + new H1 (regime map); old H2 →
 | TUM RGB-D, Tanks & Temples | metric definitions | ATE/RPE and reconstruction metrics. |
 | H7 scaling study | N∈{25,50,100,200}, d̄∈{2,5,10,20} | Replica renderings, subsampled ScanNet++ sequences, ETH3D multi-camera videos. **[UNVERIFIED]** views per scene and achievable d̄. |
 
-Injected faults (deterministic, seeds `SeedSequence([master, hash(view id), fault id])`, ≥5 masters): coherent bias δ×f (contiguous or scattered mask, both signs); smooth warp; region failure; non-affine distortion; spoofed pose prior (1–10 cm, 0.1–1°, constant or drifting, block of views); intermittent glitches (10–50 cm, 2–10°); false loop closures (1,3,5 spurious edges); p∈{10,20,40,60}% of views scattered/clustered; controls: sparse outliers, clean. Ensemble ablation: 1..⌈M/2⌉ models corrupted on the same views, independent vs identical. **Injectors for v2 are not implemented** (v1 injectors cover depth bias/extrinsic drift on physical sensors).
+Injected faults (deterministic, seeds `SeedSequence([master, hash(view id), fault id])`, ≥5 masters): coherent bias δ×f with f ≤ 0.8 (contiguous or scattered mask, both signs) plus the f=1 / ∝σ affine control; smooth warp; region failure; non-affine distortion; spoofed pose prior (1–10 cm, 0.1–1°, constant or drifting, block of views); intermittent glitches (10–50 cm, 2–10°); false loop closures (1,3,5 spurious edges); p∈{10,20,40,60}% of views scattered/clustered; controls: sparse outliers, clean. Ensemble ablation: 1..⌈M/2⌉ models corrupted on the same views, independent vs identical. **Injectors for v2 are not implemented** (v1 injectors cover depth bias/extrinsic drift on physical sensors).
 
 Metrics: integrity first — detection power at 5% false alarm (heatmap over δ×f), empirical MDB vs theory, false-alarm and missed-detection rates, no-consensus rate, availability, elimination-curve AUC, PL exceedance; then ATE/RPE/pose AUC, fused-surface accuracy/completeness/F-score, depth AbsRel/δ1; per-stage runtime/memory/log–log slope. Scene-level bootstrap; paired Wilcoxon.
 
@@ -144,10 +174,10 @@ Metrics: integrity first — detection power at 5% false alarm (heatmap over δ�
 | Wk | Work | Milestone |
 |---|---|---|
 | 1 | Re-read the Sensors PDF equations; verify datasets/licences; Depth Pro licence and 8 GB memory; dev-scene comparison Depth Pro / UniDepth / Metric3D v2 vs laser; prereg tag | M1 |
-| 2 | Depth runner (one model per view); cache depth on ETH3D dev scenes; per-view error vs laser (natural failure labels); **measure real residual n_eff and tail shape vs the Gaussian theory (go/no-go for H1a)** | M2 |
+| 2 | Depth runner (one model per view); cache depth on ETH3D dev scenes; per-view error vs laser (natural failure labels); **go/no-go: measure σ(range, texture, grazing), the correlation length ℓ and the nugget ν on clean residuals (fit once, per the calibration protocol); assemble Σ_r (pose from the provisional graph, Σ_surf from K cross-fitted surfaces); compute n_eff = tr(C)²/tr(C²) and κ for the regime-map patterns; check adequacy (mean T/(n−2) = 1±0.1, false alarm within [0.5α,1.5α]). Go if the predicted MDB at (δ=0.5, f=0.5) is ≤0.5σ and the model is adequate; no-go/pivot P2 if n_eff·f(1−f) is so small that the sub-noise regime is empty, or if the model cannot be made adequate.** | M2 |
 | 3 | Matches; geometry-only graph (provisional poses); metrics harness | M3 |
 | 4 | Differentiable PGO; baselines: kernels, soft weights, COLMAP filter, pixel-count test, voting | M4 |
-| 5 | View-level fault injectors (bias grid, pose faults); depth-only fixed-N splat fit with cross-fitting; mean-shift/energy gate | M5 |
+| 5 | View-level fault injectors (bias grid f≤0.8 + affine control, pose faults); depth-only fixed-N splat fit with cross-fitting; whitened energy + region-scan gate | M5 |
 | **6** | **Gate 1:** H1 regime map on dev scenes (sub-noise corner and sparse corner) | go / pivot |
 | 7 | Evidence gate; H3; H4 | |
 | 8 | H2, H5 (placement, soft down-weighting); H7 scaling vs N and d̄ | |
@@ -159,7 +189,7 @@ Metrics: integrity first — detection power at 5% false alarm (heatmap over δ�
 | 14–16 | Draft, figures, appendix, reproducibility package, AI-use disclosure | submission-ready |
 | 17–18 | Buffer | |
 
-**Gate 1:** go if the gate beats the baselines in the sub-noise corner of H1 and the measured MDB is within ×2 of theory. Pivot P1: evidence ≈ chi-square → chi-square statistic, entropy relation as equivalence result. Pivot P2: no sub-noise advantage (H1b fails) or soft down-weighting suffices (H5) → analysis paper ("when do pixel filters, kernels and soft weights suffice?"). Pivot P3: surface not cheaper or less reliable than pairwise (H7) → keep pairwise, report surface as negative result. **Early risk:** real n_eff much smaller than n (strong correlation) would raise the MDB and shrink the gate's regime.
+**Gate 1:** go if the gate beats the baselines in the sub-noise corner of H1 and the measured MDB is within ×2 of theory. Pivot P1: evidence ≈ chi-square → chi-square statistic, entropy relation as equivalence result. Pivot P2: no sub-noise advantage (H1b fails) or soft down-weighting suffices (H5) → analysis paper ("when do pixel filters, kernels and soft weights suffice?"). Pivot P3: surface not cheaper or less reliable than pairwise (H7) → keep pairwise, report surface as negative result. **Early risk:** real residuals far from the Gaussian model (heavy tails, strong correlation, mis-calibrated σ(·)) raise the MDB, inflate the false-alarm rate and shrink the gate's regime; this is checked in week 2, before any fault experiment.
 **Cut order:** H9 protection level → ScanNet++/Replica sweeps → scene-level alarm refinements → exact leave-one-view-out reference → estimate-and-correct → H10 scenes. **Never cut:** the H1 regime map, breakdown scenarios, clean-data cost (H6), the soft down-weighting baseline (H5), the Eq. 14/Alg. 1 fix.
 
 ---
@@ -190,7 +220,7 @@ Not verified / yours to resolve: Virginia Tech–IEEE read-and-publish agreement
 ## 10. Open items
 - [ ] Re-read the Sensors 23(23):9309 PDF: Alg. 1 inequality directions, entropy normalisation (author to confirm).
 - [ ] Author to confirm the reading of "partly end-to-end" / "differentiable, renderable PGO".
-- [ ] **Measure real residual n_eff, spatial correlation and tails** (week 2) — the theory's weak point.
+- [ ] **Week 2 go/no-go: fit σ(range, texture, grazing), ℓ, ν on clean residuals; assemble Σ_r; compute n_eff and κ; check adequacy** — the theory's weak point is the measurement model.
 - [ ] Verify ETH3D scene names/licence, ScanNet++ terms, the default model's weights licence and GPU memory; views per scene and achievable d̄ for H7.
 - [ ] Literature pass: integrity monitoring for visual/learned navigation; depth-prior filtering in SfM/SLAM; uncertainty-aware monocular depth in pose graphs.
 - [ ] Implement: fault injectors (bias grid, pose faults); pixel-wise gate; soft-weight baseline; test bed pipeline; ETH3D download script.
@@ -201,3 +231,4 @@ Not verified / yours to resolve: Virginia Tech–IEEE read-and-publish agreement
 - 2026-11-13: v2 design (gate = contribution, pipeline = test bed).
 - 2026-11-14: v2.1 shared splat surface restored; v2.2 one metric depth model per image, ensemble → ablation.
 - 2026-11-14: **v2.3 integrity-monitoring framing (RAIM-style FDE).** Core argument made explicit (sub-noise per pixel, coherent per view; MDB ∝ 1/(f√n_eff)); pose faults added; soft down-weighting is a baseline; conditional protection level added (optional); hypotheses reorganised to H1–H10 (new H1 regime map, H8 pose faults, H9 protection level; ties/losses pre-registered where gating should not help); `detection_theory` module + tests; configs and tests regenerated; five RAIM/integrity references added.
+- 2026-11-14: **v2.4 explicit measurement model.** Nominal d̂ = a·d + b + ε with scale/offset ambiguity, heteroscedastic spatially-correlated noise (σ(range, texture, grazing), ℓ, nugget ν), pose, intrinsics and surface uncertainty (jackknife over K cross-fitted surfaces) → Σ_r; tests on whitened, nuisance-projected residuals; n_eff = tr(C)²/tr(C²) computed; MDB, scan and protection level from Σ_r. **Correction:** a bias uniform over a whole view (f=1) or ∝σ(d) is an offset, absorbed by the alignment — not a fault, not detected, not harmful; the regime map now uses f ≤ 0.8 and an f=1 affine control (H1d); the signed-mean statistic is dropped in favour of a region scan; the earlier MDB table is withdrawn. New: calibration protocol and public-README check of which models output confidence; adequacy test in H6; misspecification breakdown; week-2 go/no-go is now measuring σ(·), ℓ, ν. Code: tested measurement-model theory (nugget correlation grid, Σ_r assembly, jackknife surface covariance, projected precision, κ, MDBs, n_eff, pose Jacobian, ellipsoid PL).

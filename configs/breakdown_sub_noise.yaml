@@ -1,4 +1,4 @@
-# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: breakdown_sub_noise

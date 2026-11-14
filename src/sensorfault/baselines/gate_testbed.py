@@ -17,9 +17,10 @@ _STUBS: dict[str, str] = {
     "no_gate": "Test bed with every view's depth trusted and a quadratic pose-graph cost.",
     "oracle_gate": "Upper bound: drops exactly the faulty views (manifest or laser reference).",
     "view_gate": (
-        "The contribution: view-level fault detection and exclusion (integrity monitoring); params: "
-        "consensus in {shared_surface, pairwise}, statistic in {chi2_energy, mean_shift, "
-        "combined_mean_shift_energy, evidence}, cross_fit in {True, False, exact_leave_one_view_out}, "
+        "The contribution: view-level fault detection and exclusion (integrity monitoring) derived from an explicit "
+        "measurement model (Sigma_r, whitened nuisance-projected statistics); params: "
+        "consensus in {shared_surface, pairwise}, statistic in {energy_whitened_projected, "
+        "region_scan_matched, combined_region_scan_energy, evidence}, cross_fit in {True, False, exact_leave_one_view_out}, "
         "densification in {fixed_N, adaptive_matched_final_N}, sources in {one_model_per_view, "
         "ensemble_M_models_per_view}. Admission test per PLAN.md section 2 and "
         "src/sensorfault/elim/admission.py (grid form); detection theory in "

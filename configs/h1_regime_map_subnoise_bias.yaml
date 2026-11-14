@@ -1,4 +1,4 @@
-# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: h1_regime_map_subnoise_bias
@@ -7,29 +7,37 @@ design: v2_view_level_gate
 hypothesis:
   id: H1
   prediction: 'One metric model, a coherent bias of delta*sigma on a fraction f of one view, 5% false
-    alarm: (a) the gate empirical minimum detectable bias follows delta_min=(z_a+z_b)/(f*sqrt(n_eff))
-    within a factor of 2; (b) in the sub-noise regime (delta<=0.5, f>=0.2) the gate detects >=80% of faulty
-    views while the best pixel filter, robust kernel and soft weight each detect <=20%; (c) in the sparse-outlier
-    regime (delta>=4, f<=0.02) the best pixel filter detects at least as many views as the gate (the gate
-    is not expected to win).'
+    alarm: (a) the gate empirical minimum detectable bias follows beta_min=(z_a+z_b)/kappa, kappa^2=phi^T
+    M phi from the MEASURED Sigma_r, within a factor of 2; (b) in the sub-noise regime (delta<=0.5, 0.2<=f<=0.8)
+    the gate detects >=80% of faulty views while the best pixel filter, robust kernel and soft weight
+    each detect <=20%; (c) in the sparse-outlier regime (delta>=4, f<=0.02) the best pixel filter detects
+    at least as many views as the gate (the gate is not expected to win); (d) AFFINE CONTROL: a uniform
+    bias (f=1) and a bias proportional to sigma(d) are neither detected (power <= alpha+5 points) nor
+    harmful (error within 5% of clean) because the per-view alignment absorbs them.'
   falsification_criterion: Falsified if (a) empirical and predicted MDB differ by more than 2x, (b) the
-    detection gap at delta=0.3,f=1 is <30 points or its CI includes 0, or (c) the gate beats the best
-    pixel filter by >=10 points in the sparse-outlier regime.
-  independent_variables: [delta_sigma, fraction_f, mask_layout, n_eff]
-  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set, per_view_false_alarm]
+    detection gap at delta=0.3,f=0.5 is <30 points or its CI includes 0, (c) the gate beats the best pixel
+    filter by >=10 points in the sparse-outlier regime, or (d) the uniform bias is detected or degrades
+    the output.
+  independent_variables: [delta_sigma, fraction_f, mask_layout, n_eff, kappa]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set, per_view_false_alarm,
+    calibrated_measurement_model]
   levels:
     delta_sigma: [0.1, 0.2, 0.3, 0.5, 1, 2, 4]
-    fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1]
+    fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.8]
     mask_layout: [contiguous, scattered]
+    affine_control: [uniform_bias_f1, bias_proportional_to_sigma]
 baselines: [colmap_geom_consistency, pixel_count_test, rk_huber, rk_cauchy, rk_gm_gnc, soft_view_weights,
-  gate_surface_mean_shift, gate_surface_combined, gate_surface_evidence]
+  gate_surface_region_scan, gate_surface_combined, gate_surface_evidence]
 metrics:
-  primary: [detection_power_at_fa_0.05, empirical_mdb]
+  primary: [detection_power_at_fa_0.05, empirical_mdb, mdb_predicted_from_measured_Sigma_r]
   mdb_tolerance_factor: 2
   subnoise_gap_points: 30
   sparse_outlier_gate_win_points: 10
+  affine_control_power_margin_points: 5
+  affine_control_error_margin: 0.05
 implemented: false
 scenario_grid:
   grid: faults/view_fault_grid.yaml
-  classes: [coherent_bias]
-key_figure: regime_map heatmaps with predicted MDB contour
+  classes: [coherent_bias, affine_control]
+key_figure: regime_map heatmaps over (delta, f<=0.8) with predicted MDB contour and the affine control
+  marked

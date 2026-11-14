@@ -1,10 +1,11 @@
-# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: ablations_gate
 status: preregistered_draft
 design: v2_view_level_gate
-note: A0..A13 for design v2.3; not in the manuscript tables beyond H3, H4 and H7.
+note: A0..A18 for design v2.4 (explicit measurement model); not in the manuscript tables beyond H3, H4
+  and H7.
 hypothesis:
   id: H4
   prediction: see h3, h4 and h7 configs
@@ -26,8 +27,14 @@ ablations:
 - {id: A10, name: no scene-level alarm}
 - {id: A11, name: cross-model voting (ensemble ablation)}
 - {id: A12, name: 'ensemble gate: M models per view tested against the same surface (ensemble ablation)'}
-- {id: A13, name: mean-shift statistic only}
-baselines: [gate_surface_evidence, gate_surface_chi2, gate_surface_mean_shift, gate_surface_joint_fit,
+- {id: A13, name: region-scan statistic only}
+- {id: A14, name: 'iid sigma instead of Sigma_r (no whitening, no correlation): the assumption this design
+    replaces'}
+- {id: A15, name: no nuisance projection (offset not removed)}
+- {id: A16, name: Sigma_r without the pose term}
+- {id: A17, name: Sigma_r without Sigma_surf}
+- {id: A18, name: confidence-covariate sigma(.) from a model that outputs confidence}
+baselines: [gate_surface_evidence, gate_surface_chi2, gate_surface_region_scan, gate_surface_joint_fit,
   gate_pairwise_evidence, gate_surface_adaptive, gate_surface_exact_loo]
 metrics:
   primary: [false_alarm_rate, detection_power_at_fa_0.05]

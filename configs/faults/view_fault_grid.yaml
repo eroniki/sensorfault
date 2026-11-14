@@ -1,14 +1,16 @@
-# Design v2.3: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
+# Design v2.4: view-level fault detection and exclusion (integrity monitoring) for learned-depth reconstruction.
 # Gate = contribution; differentiable, renderable pose graph = test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
 target: the depth map or the pose prior of selected views
 seed_rule: SeedSequence([master, stable_hash(view_id), fault_id])
 depth_faults:
   coherent_bias:
     delta_sigma: [0.1, 0.2, 0.3, 0.5, 1, 2, 4]
-    fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1]
+    fraction_f: [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.8]
     mask_layout: [contiguous, scattered]
     sign: [+, '-']
-    note: the regime map (H1)
+    note: 'the regime map (H1); f<1 only: a bias on ALL pixels is an offset'
+  affine_control: {uniform_bias_f1: true, bias_proportional_to_sigma: true, prediction: 'not detected,
+      not harmful (H1d)'}
   smooth_warp:
     space: inverse_depth
     amplitude_x_std_inverse_depth: [0.25, 0.5, 1, 2]

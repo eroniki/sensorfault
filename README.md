@@ -1,16 +1,17 @@
 # sensorfault
 
 Research scaffold for **view-level fault detection and exclusion (FDE), in the spirit of GNSS RAIM, for
-learned-depth reconstruction** (design v2.3). One metric depth model is applied to each image; the gate tests each
+learned-depth reconstruction** (design v2.4). One metric depth model is applied to each image; the gate tests each
 depth map against a shared Gaussian-splat surface fitted from the other views (fixed budget, cross-fitted), excludes
 faulty views before pose graph optimisation and fusion, and raises a no-consensus alarm. Core argument: a coherent
-view-level fault is sub-noise at every pixel (invisible to pixel filters and robust kernels) but large when
-aggregated over the view (minimum detectable bias ~ 1/(f sqrt(n_eff))). The gate is the contribution; a
+view-level fault that the monocular scale/offset cannot absorb is sub-noise at each pixel (invisible to pixel filters
+and robust kernels) but large when aggregated over the view and whitened by an explicit residual covariance
+(minimum detectable bias ~ 1/sqrt(n_eff f (1-f)); a uniform bias over a whole view is an offset, not a fault). The gate is the contribution; a
 differentiable, renderable pose graph is the test bed; soft down-weighting is a baseline; a multi-model ensemble
 is an ablation; MASt3R-SfM and VGGT are reference points. See `PLAN.md`.
 
-**Status:** configs, registry stubs, the detection theory (`src/sensorfault/eval/detection_theory.py`,
-tested, Monte Carlo cross-checked) and config tests exist; the test bed, view-level fault injectors and
+**Status:** configs, registry stubs, the measurement-model and detection theory (`src/sensorfault/eval/detection_theory.py`:
+Sigma_r, nuisance projection, kappa, MDBs, n_eff, pose Jacobian, ellipsoid protection level; tested, Monte Carlo cross-checked) and config tests exist; the test bed, view-level fault injectors and
 the gate itself are **not implemented yet**. Design v1 (sensor-level elimination on a splat surface)
 is kept in `configs/legacy_sensor_faults/`, with its implemented pieces still under `src/`.
 
@@ -51,12 +52,12 @@ Optional extras: `pip install -e ".[tsdf]"` (Open3D), `".[gs]"` (torch, gsplat),
 
 | Hypothesis | Claim (short) | Config |
 |---|---|---|
-| H1 | Regime map: per-pixel bias vs fraction of the view; gate wins sub-noise/coherent, pixel filters win sparse/large | `configs/h1_regime_map_subnoise_bias.yaml` |
+| H1 | Regime map: per-pixel bias vs fraction (f<=0.8) of the view, plus the affine control (f=1: absorbed, not a fault); gate wins sub-noise/coherent, pixel filters win sparse/large | `configs/h1_regime_map_subnoise_bias.yaml` |
 | H2 | Consequence for trajectory and fused surface vs robust kernels, soft weights, COLMAP filter, voting | `configs/h2_consequence_vs_baselines.yaml` |
-| H3 | Evidence vs chi-square only where Gaussian assumptions break; mean-shift vs energy by fault shape | `configs/h3_statistic_choice.yaml` |
+| H3 | Evidence vs chi-square only where Gaussian assumptions break; region scan vs energy by fault shape | `configs/h3_statistic_choice.yaml` |
 | H4 | Cross-fitting, alignment and a support mask keep clean false alarm <=5% | `configs/h4_cross_fitting_alignment_support.yaml` |
 | H5 | Gate before PGO beats gating after and soft down-weighting; gate + kernel >= either | `configs/h5_placement_soft_downweighting.yaml` |
-| H6 | Price of monitoring: false alarm <=5%, availability >=90%, error change <=5%; reference points are context | `configs/h6_price_of_monitoring_reference_points.yaml` |
+| H6 | Adequacy of the measurement model; price of monitoring (false alarm <=5%, availability >=90%, error change <=5%); reference points are context | `configs/h6_price_of_monitoring_reference_points.yaml` |
 | H7 | Shared splat surface vs pairwise checks: cost, non-inferior power, fixed budget beats adaptive densification | `configs/h7_shared_surface_vs_pairwise.yaml` |
 | H8 | Pose faults (spoofed prior, glitches, false loop closures); loop-closure baselines expected to match the gate on large ones | `configs/h8_pose_faults.yaml` |
 | H9 | Conditional protection level coverage (optional) | `configs/h9_protection_level.yaml` |
