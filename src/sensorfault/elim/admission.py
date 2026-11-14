@@ -24,9 +24,10 @@ Corrected algorithm (``eliminate``)
 Entropy measures precision of the surviving consensus; Lambda is the fault test.  Entropy
 alone cannot flag a sharp, biased sensor (see tests/core/test_elim.py toy).
 
-Literal Alg. 1 (``literal_algorithm1``, ablation A8) reproduces the reading of Ambarkutuk et
-al. (Sensors 23(23):9309) documented in PLAN.md section 2, with bugs flagged in its docstring.
-[UNVERIFIED against PDF: typeset <=/>= may be a text-dump artefact.]
+Literal Alg. 1 (``literal_algorithm1``, legacy ablation A8) reproduces the printed Algorithm 1 of
+Ambarkutuk et al. (Sensors 23(23):9309). The author has confirmed that its inequality is a typo and
+that Eq. 14 is intended (PLAN.md section 2); the corrected variant is the one used, and the literal
+reading is kept only to document the typo (legacy v1 code and tests).
 """
 
 from __future__ import annotations

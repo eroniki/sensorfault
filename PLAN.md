@@ -1,6 +1,6 @@
 # View-level fault detection and exclusion for learned-depth reconstruction — research plan (design v2.5)
 
-Target: IEEE Access, solo author, 14–18 evening weeks (~10 h/wk), one 8 GB consumer GPU (RTX 2070 on this machine).
+Target: Elsevier `elsarticle` preprint first, then a subscription (no-APC) journal to be chosen; no pay-to-publish venue; solo author, 14–18 evening weeks (~10 h/wk), one 8 GB consumer GPU (RTX 2070 on this machine).
 Title (fixed): *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface*.
 Status: v2.5 of 2026-11-14. **v2.5 reframes the surface** (depth maps only; closed-form Gaussian planar primitives that separate extent from uncertainty; information-form fusion with exact leave-view-out = RAIM solution separation; ray-plane backward rendering and alpha compositing; projective association; per-region posterior, protection level and view count; no adaptive densification, fixed-budget MCMC only as an ablation). v2.4 derives the gate from an explicit measurement model** (nominal measurement with scale/offset ambiguity, heteroscedastic spatially-correlated noise, pose, intrinsics and surface uncertainty → residual covariance Σ_r → whitened, nuisance-projected tests; n_eff, MDB and protection level computed from Σ_r, not assumed). Framing = **integrity monitoring (RAIM-style FDE) on views**. Kept: one metric depth model per image (default Depth Pro), shared Gaussian-surface consensus (closed form, leave-view-out by subtraction, doubles as fused output), "gate is the contribution, pipeline is the test bed". Design v1 (physical-sensor faults) is in `configs/legacy_sensor_faults/`. Items marked **[UNVERIFIED]** come from memory or abstract-only reads.
 Hygiene: public datasets, public pretrained models and public code only.
@@ -62,7 +62,7 @@ Hygiene: public datasets, public pretrained models and public code only.
 
 ## 2. Fix for Eq. 14 / Algorithm 1 (the author's own Sensors 23(23):9309; a self-correction)
 
-Source read via Europe PMC XML (MDPI blocked); typeset math was flattened, so a ≤/≥ could be a dump artefact — **re-check against the PDF**. Prose independently supports the findings.
+**Closed (2026-11-14, author):** the Algorithm 1 vs Eq. 14 mismatch is a typo in the 2023 paper; we follow Eq. 14 (seed with the maximum-entropy pair). The notes below record the reading that exposed it; the manuscript says only that Algorithm 1's inequality is a typographical error.
 
 **Confirmed problems**
 1. Eq. 14 and prose: seed pair = **max** entropy. Alg. 1 line 5: `h_ij ≤ h*` (a **min** test).
@@ -208,25 +208,21 @@ Metrics: integrity first — detection power at 5% false alarm (heatmap over δ�
 
 ---
 
-## 9. IEEE Access facts (verified on official pages 2026-11-13)
-Verified on official pages: gold OA; APC $2,160 (+ taxes; 5%/20% member discounts only); no page limit, <20 pp recommended; single-anonymised, ≥2 reviews, ~4–6 weeks submission-to-publication, acceptance ~20%; reviewers judge technical soundness, not necessarily high novelty; no formal data/code statement required; preprints allowed (arXiv named in IEEE-wide policy, not on Access pages); AI-assisted writing must be disclosed in Acknowledgments; fabricated references → rejection; public ORCID required.
-Not verified / yours to resolve: Virginia Tech–IEEE read-and-publish agreement (ask VT libraries; VT OASF announced closed Jul 2025); current IEEE copyright-form (eCF) wording and any publication-approval obligations that apply to you — check the live form. No Access conflict-of-interest page found. Not legal advice. Comparable-paper titles came from catalogue metadata only.
-
----
-
----
+## 9. Venue and preprint plan (replaces the IEEE Access facts, 2026-11-14)
+- Template: Elsevier `elsarticle` (TeX Live), `5p,twocolumn`; main text 8 pages, then declarations, references and a Supplementary Material appended to the same PDF (split into a separate file if the chosen journal requires it).
+- No pay-to-publish venue: no APC / open-access fee. Preprint first (e.g. arXiv, once the results exist and the repositories are ready to be made public); choose a subscription-model Elsevier journal afterwards. **[UNVERIFIED]** which journal and its current policies: check its guide for authors before submitting.
+- Elsevier asks for a declaration of generative-AI use and a data/code availability statement: both are open TODOs in `main.tex`.
+- The IEEE Access template, biography and boilerplate were removed from the manuscript repo.
 
 ---
 
 ## 10. Open items
-- [ ] Re-read the Sensors 23(23):9309 PDF: Alg. 1 inequality directions, entropy normalisation (author to confirm).
-- [ ] Author to confirm the reading of "partly end-to-end" / "differentiable, renderable PGO".
 - [ ] **Week 2 go/no-go: fit σ(range, texture, grazing), ℓ, ν on clean residuals; assemble Σ_r; compute n_eff and κ; check adequacy** — the theory's weak point is the measurement model.
 - [ ] Verify ETH3D scene names/licence, ScanNet++ terms, the default model's weights licence and GPU memory; views per scene and achievable d̄ for H7.
 - [ ] Literature pass: integrity monitoring for visual/learned navigation; depth-prior filtering in SfM/SLAM; uncertainty-aware monocular depth in pose graphs.
 - [ ] Implement: fault injectors (bias grid, pose faults); pixel-wise gate; soft-weight baseline; test bed pipeline; ETH3D download script.
 - [ ] Choose and cite the matcher and solver; fix association gate (τ_h, τ_ext, cos_min), footprint, τ_α, s_min on dev scenes (N_s, n_it for the MCMC ablation only).
-- [ ] Affiliation / funding / AI-use disclosure in the manuscript (author's decision).
+- [ ] AI-use declaration and code/data statement in the manuscript (author's decision). Affiliation (Independent Researcher, Shelton, CT; murat@ambarkutuk.com) and funding (none) are set.
 
 ## 11. Change log
 - 2026-11-13: v2 design (gate = contribution, pipeline = test bed).
@@ -234,3 +230,4 @@ Not verified / yours to resolve: Virginia Tech–IEEE read-and-publish agreement
 - 2026-11-14: **v2.3 integrity-monitoring framing (RAIM-style FDE).** Core argument made explicit (sub-noise per pixel, coherent per view; MDB ∝ 1/(f√n_eff)); pose faults added; soft down-weighting is a baseline; conditional protection level added (optional); hypotheses reorganised to H1–H10 (new H1 regime map, H8 pose faults, H9 protection level; ties/losses pre-registered where gating should not help); `detection_theory` module + tests; configs and tests regenerated; five RAIM/integrity references added.
 - 2026-11-14: **v2.4 explicit measurement model.** Nominal d̂ = a·d + b + ε with scale/offset ambiguity, heteroscedastic spatially-correlated noise (σ(range, texture, grazing), ℓ, nugget ν), pose, intrinsics and surface uncertainty (jackknife over K cross-fitted surfaces) → Σ_r; tests on whitened, nuisance-projected residuals; n_eff = tr(C)²/tr(C²) computed; MDB, scan and protection level from Σ_r. **Correction:** a bias uniform over a whole view (f=1) or ∝σ(d) is an offset, absorbed by the alignment — not a fault, not detected, not harmful; the regime map now uses f ≤ 0.8 and an f=1 affine control (H1d); the signed-mean statistic is dropped in favour of a region scan; the earlier MDB table is withdrawn. New: calibration protocol and public-README check of which models output confidence; adequacy test in H6; misspecification breakdown; week-2 go/no-go is now measuring σ(·), ℓ, ν. Code: tested measurement-model theory (nugget correlation grid, Σ_r assembly, jackknife surface covariance, projected precision, κ, MDBs, n_eff, pose Jacobian, ellipsoid PL).
 - 2026-11-14: **v2.5 surface reframe.** Depth maps only (colour dropped; the photometric-term ablation and future work removed); Gaussian planar primitives over an SDF; extent separated from uncertainty; closed-form forward (σ_h²=nᵀPn from depth, pose and intrinsics); information-form fusion with exact leave-view-out by subtraction (= solution separation = innovation); ray-plane backward render with alpha compositing and extent-only weights; Σ_surf = a²diag σ²(u) replaces the K-fold jackknife; projective association with soft weights; per-region posterior, protection level and view count; adaptive densification dropped, fixed-budget MCMC kept as an ablation only. H4 reworded (leave-view-out vs joint), H7 revised (closed form vs pairwise vs MCMC fixed budget; association/view order) — the request's "H6" for the shared-surface hypothesis is H7 in this numbering. New breakdown `association_failure`; configs `gate_surface_mcmc_fixed_budget`, `gate_surface_single_covariance`; code `surface_model.py` (12 tests) and `sigma_surf_diag`. Schedule: week 5 builder is closed form.
+- 2026-11-14: **v2.6 venue and layout.** Elsevier `elsarticle` replaces the IEEE Access template (no pay-to-publish; preprint first); IEEE-specific items removed; affiliation Independent Researcher, Shelton, CT, no external funding; the "partly end-to-end" discussion and its open item dropped; the Algorithm 1 vs Eq. 14 item closed as a typo in the 2023 paper (follow Eq. 14); main text cut to 8 pages with related work, challenges, test bed, ensemble, full setup, planned tables/figures and derivations moved to a Supplementary Material; ablation A5 (literal Algorithm 1) removed.

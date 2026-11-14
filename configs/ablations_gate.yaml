@@ -20,7 +20,6 @@ ablations:
 - {id: A2, name: no support mask}
 - {id: A3, name: no grazing gate}
 - {id: A4, name: chi-square (energy) statistic only}
-- {id: A5, name: literal Algorithm 1 of the earlier BSE paper (bugs flagged)}
 - {id: A6, name: pairwise consensus instead of shared surface}
 - {id: A7, name: 'fixed-budget 3DGS-MCMC surface (optimised, explicit refits)'}
 - {id: A8, name: single covariance for extent and uncertainty (confident primitives shrink)}
