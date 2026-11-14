@@ -12,7 +12,7 @@ hypothesis:
     rate.
   falsification_criterion: Falsified if the ablations leave false-exclusion rate and power unchanged.
   independent_variables: [cross_fitting, support_mask, grazing_gate, alignment]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     cross_fit: [k_fold, joint, exact_leave_one_view_out]
     support_mask: [true, false]

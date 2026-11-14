@@ -3,8 +3,8 @@ baselines:
 - id: vote_median
   family: voting
   fuser: plain_voting
-  params: {rule: median}
+  params: {rule: cross_view_median}
 - id: vote_majority
   family: voting
   fuser: plain_voting
-  params: {rule: majority}
+  params: {rule: cross_view_majority}

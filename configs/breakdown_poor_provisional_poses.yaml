@@ -9,7 +9,7 @@ hypothesis:
   falsification_criterion: Report gate error versus provisional-pose error; test whether one re-gate pass
     recovers.
   independent_variables: [provisional_pose_noise_deg]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     provisional_pose_noise_deg: [0.5, 1, 2, 5]
 baselines: [no_gate, gate_surface_evidence, rk_huber, vote_median, colmap_geom_consistency]

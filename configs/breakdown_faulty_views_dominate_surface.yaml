@@ -9,7 +9,7 @@ hypothesis:
   falsification_criterion: Report power versus the share of coverage supplied by faulty views; expect
     the surface gate to degrade toward the pairwise gate or worse.
   independent_variables: [faulty_coverage_share, K, N_s]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     faulty_coverage_share: [0.25, 0.5, 0.75]
 baselines: [no_gate, gate_surface_evidence, rk_huber, vote_median, colmap_geom_consistency]

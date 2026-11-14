@@ -18,10 +18,11 @@ HYP = [
     "h4_gate_placement",
     "h5_clean_cost_reference_points",
     "h6_shared_surface_vs_pairwise",
+    "h7_ensemble_ablation",
 ]
 BREAK = [
-    "common_mode_estimators",
-    "m2",
+    "scenewide_model_failure",
+    "few_views",
     "sub_noise",
     "sparse_outliers_control",
     "low_overlap",
@@ -71,6 +72,7 @@ def test_hypotheses_match_the_manuscript_ids():
         "H4",
         "H5",
         "H6",
+        "H7",
     ]
 
 
@@ -91,10 +93,33 @@ def test_shared_surface_params_are_declared():
     assert ss["cross_fit"]["folds_K"] == [3, 4, 6]
 
 
-def test_fault_grid_and_ensemble_files_exist():
+def test_default_is_one_metric_model_per_image_and_ensemble_is_ablation_only():
+    c = load_config(CFG / "base.yaml")
+    assert c["depth_model"]["default"] == "depth_pro" and c["depth_model"]["one_model_per_image"]
+    assert c["ensemble_ablation"]["only_used_by"] == ["h7_ensemble_ablation"]
+    m = yaml.safe_load((CFG / "depth_models" / "depth_models.yaml").read_text())
+    assert m["default"]["id"] == "depth_pro" and m["default"]["output"] == "metric"
+    assert set(m["ensemble_sizes"]) == {"M2", "M3", "M4"}
+    assert all(m["default"]["id"] in v for v in m["ensemble_sizes"].values())
+    # no design-v2 experiment config other than H7 may use an ensemble baseline
+    for name in HYP + [f"breakdown_{b}" for b in BREAK] + ["ablations_gate"]:
+        if name == "h7_ensemble_ablation":
+            continue
+        cfg = load_config(CFG / f"{name}.yaml")
+        assert not {"cross_model_voting", "gate_ensemble"} & set(cfg["baselines"]), name
+
+
+def test_h7_covers_shared_failures_voting_and_ensemble_value():
+    c = load_config(CFG / "h7_ensemble_ablation.yaml")
+    assert set(c["baselines"]) == {"cross_model_voting", "gate_surface_evidence", "gate_ensemble"}
+    assert "joint_failure_lift" in c["metrics"]["primary"]
+    ids = baseline_ids()
+    assert ids["cross_model_voting"] == "plain_voting" and ids["gate_ensemble"] == "view_gate"
+
+
+def test_fault_grid_targets_view_depth_not_estimators():
     g = yaml.safe_load((CFG / "faults" / "view_fault_grid.yaml").read_text())
     assert set(g["classes"]) == {"smooth_warp", "region_failure", "nonaffine_distortion"}
-    e = yaml.safe_load((CFG / "estimators" / "ensemble.yaml").read_text())
-    assert set(e["ensemble_sizes"]) == {"M3", "M4", "M5"}
+    assert "ensemble_ablation_only" in g and "faulted_estimators_per_view" not in g
     for d in ("eth3d", "scannetpp", "replica_render", "trajectory_benchmarks"):
         assert (CFG / "datasets" / f"{d}.yaml").exists()

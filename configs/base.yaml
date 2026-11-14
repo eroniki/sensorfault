@@ -11,9 +11,11 @@ scenes:
     prereg-v1
   dev: [courtyard, electro, kicker]
   test: [delivery_area, facade, office, pipes, relief, terrace]
-estimators:
-  ensemble_file: estimators/ensemble.yaml
-  M: [3, 4, 5]
+depth_model: {default: depth_pro, file: depth_models/depth_models.yaml, one_model_per_image: true, selection_rule: confirm
+    on dev scenes vs laser reference; never on test scenes}
+ensemble_ablation:
+  M: [2, 3, 4]
+  only_used_by: [h7_ensemble_ablation]
 metrics:
   pose: [ate_rmse_sim3, rpe, pose_auc_at_5_10_30deg]
   surface: [accuracy, completeness, fscore]
@@ -39,7 +41,7 @@ shared_surface:
   support: {alpha_threshold: TODO, min_supported_fraction: TODO}
   output: surface refitted on admitted sources is the fused output; TSDF of same depth is a secondary
     check
-shared_inputs_for_all_methods: [images, matches, depth_ensemble, fault_realisations, pose_graph_solver]
+shared_inputs_for_all_methods: [images, matches, depth_maps, fault_realisations, pose_graph_solver]
 implemented: {configs: true, fault_injectors: false, view_gate: false, testbed_pipeline: false, note: 'Only
     configs, registry stubs (baselines/gate_testbed.py) and the grid-form admission test (elim/admission.py)
     exist.'}

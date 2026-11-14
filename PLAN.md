@@ -1,7 +1,7 @@
-# View-level gate for monocular depth sources — research plan (design v2.1, shared splat surface)
+# View-level gate for monocular depth sources — research plan (design v2.2, one depth model per image)
 
 Target: IEEE Access, solo author, 14–18 evening weeks (~10 h/wk), one 8 GB consumer GPU (RTX 2070 on this machine).
-Status: design v2 of 2026-11-13; v2.1 of 2026-11-14 restores the shared Gaussian-splat surface as the gate's consensus. Design v1 (sensor-level fault elimination on a Gaussian-splat surface, physical depth sensors) is in git history and `configs/legacy_sensor_faults/`. Items marked **[UNVERIFIED]** come from memory or abstract-only reads.
+Status: design v2 of 2026-11-13; v2.1 restored the shared Gaussian-splat surface as the gate's consensus; v2.2 (2026-11-14) makes the main setup **one metric depth model per image** (the gate keeps or drops each view's depth map) and moves the multi-model ensemble to an ablation (H7). Design v1 (sensor-level fault elimination on a Gaussian-splat surface, physical depth sensors) is in git history and `configs/legacy_sensor_faults/`. Items marked **[UNVERIFIED]** come from memory or abstract-only reads.
 Hygiene: public datasets, public pretrained models and public code only.
 
 **Framing: the gate is the contribution; the pipeline is the test bed.**
@@ -10,19 +10,19 @@ Hygiene: public datasets, public pretrained models and public code only.
 
 ## 1. Contribution, setting and honest gap
 
-**Contribution.** A *view-level gate* that decides which depth sources to trust *before* pose graph optimisation (PGO) and fusion. A *depth source* is one monocular estimator's depth map for one view (estimator × view). The gate tests each source **once against a single shared Gaussian-splat surface rendered at its view** (instead of against every overlapping view), so its cost grows with the number of views rather than view pairs, and the surface refitted on the admitted sources **doubles as the fused output**. The shared-surface consensus is part of the gate (the contribution), not of the test bed.
+**Contribution.** A *view-level gate* that decides which views' depth maps to keep *before* pose graph optimisation (PGO) and fusion. A *depth source* is one model's depth map for one view. The gate tests each depth map **once against a single shared Gaussian-splat surface fitted from the other views and rendered at its view** (instead of against every overlapping view), so its cost grows with the number of views rather than view pairs, and the surface refitted on the kept depth maps **doubles as the fused output**. The shared-surface consensus is part of the gate (the contribution), not of the test bed.
 
-**Test bed (answers "where do the depth maps come from").** RGB images → ensemble of M monocular estimators (Depth Anything V2, Metric3D v2, UniDepth, Depth Pro, MoGe; Marigold optional) → feature matches → provisional poses from a geometry-only graph → **shared splat surface, cross-fitted** → **gate** → PGO with gated depth factors (partly end-to-end: learned front-end, differentiable back-end, training-free gate) → surface refitted on admitted sources = fused output (TSDF of the same depth as a secondary check). It is an alternative to classical SfM, not a claimed new system.
+**Test bed (answers "where do the depth maps come from").** RGB images → **one metric depth model per image (default: Depth Pro)** → feature matches → provisional poses from a geometry-only graph → **shared splat surface, cross-fitted** → **gate** → PGO with gated depth factors (partly end-to-end: learned front-end, differentiable back-end, training-free gate) → surface refitted on kept depth maps = fused output (TSDF of the same depth as a secondary check). It is an alternative to classical SfM, not a claimed new system. **Why Depth Pro (from its abstract; confirm on dev scenes, never on test):** absolute-scale metric depth, so views are comparable without a free per-view scale fit that could absorb a fault; no camera intrinsics needed; fast (2.25 MP in 0.3 s on a standard GPU per its authors); sharp boundaries. Alternatives UniDepth, Metric3D v2. **[UNVERIFIED]** weight licence, 8 GB memory, accuracy on our scenes. **Multi-model ensemble = ablation only (H7).**
 
-**Baselines the gate must beat** (act at other units/stages): robust kernels in the pose graph (per constraint, after the edge exists); COLMAP geometric consistency filter (per pixel, after poses); plain voting (per pixel across sources). **Reference points, not rivals:** MASt3R-SfM, VGGT (and classical COLMAP SfM).
+**Baselines the gate must beat** (act at other units/stages): robust kernels in the pose graph (per constraint, after the edge exists); COLMAP geometric consistency filter (per pixel, after poses); plain voting (per pixel across the views that observe it). **Cross-model voting appears only in the ensemble ablation.** **Reference points, not rivals:** MASt3R-SfM, VGGT (and classical COLMAP SfM).
 
 **Why existing methods may not catch a coherent view-level fault (and where they do).**
-- Estimators fail coherently (smooth warp, failed region, non-affine distortion), not sparsely; pixels still look plausible.
+- A model fails coherently on some views (smooth warp, failed region, non-affine distortion), not sparsely; pixels still look plausible. A single model gives no redundancy within a view: only other views can expose a failure.
 - Pixel filters decide per pixel; kernels act after the faulty depth has built the constraint; voting needs a majority per pixel.
-- Honest limit: a pure scale/shift error is absorbed by the per-source alignment (in the gate and in PGO) and is *not* a fault here. Pixel filters and kernels should tie or win on sparse outliers. Estimators share training data, so common-mode failures can defeat any consensus.
+- Honest limit: a pure scale/shift error is absorbed by the per-view alignment (in the gate and in PGO) and is *not* a fault here. Pixel filters and kernels should tie or win on sparse outliers. **A model-level fault (all views wrong alike) is undetectable from depth alone** — the surface agrees with it. Models that share training data may fail on the same views, so an ensemble need not give independent redundancy (tested by H7a).
 - The gap is regime-specific (clustered or low-neighbour faulty views, smooth faults, fault below per-pixel noise). The paper must show these regimes occur, using natural failures scored against a laser reference.
 
-**Novelty (limited search, to be re-checked).** No work found that gates per depth source before PGO. The earlier novelty table (splat / multi-sensor) is obsolete. New literature areas to check: depth-prior filtering in SfM/SLAM; uncertainty-aware monocular depth in pose graphs; view-graph filtering (1DSfM, GLOMAP are cited). Previous finding kept: UncLe-SLAM (arXiv 2306.11048) is single-stream pixel-wise uncertainty, not multi-source.
+**Novelty (limited search, to be re-checked).** No work found that gates per view's depth before PGO. The earlier novelty table (splat / multi-sensor) is obsolete. New literature areas to check: depth-prior filtering in SfM/SLAM; uncertainty-aware monocular depth in pose graphs; view-graph filtering (1DSfM, GLOMAP are cited). Previous finding kept: UncLe-SLAM (arXiv 2306.11048) is single-stream pixel-wise uncertainty, not multi-source.
 
 ---
 
@@ -54,13 +54,13 @@ Source read via Europe PMC XML (MDPI blocked); typeset math was flattened, so a 
 
 ## 3. Measurement model, shared-surface consensus and gate statistic (as in the manuscript)
 
-- Aligned depth of source (m,i): `D~ = s·D + t`; healthy: `D~ = d + ε`, `σ_m(d) = σ0_m + κ_m·d`, fitted per estimator on dev data.
+- Aligned depth of view i: `D~_i = s_i·D_i + t_i` (prior (1,0) for a metric model); healthy: `D~ = d + ε`, `σ(d) = σ0 + κ·d`, fitted for the model on dev data. In the ensemble ablation sources are (m,i).
 - Residual weight with pose-induced pointing error: `v_res = σ_r² + (r σ_φ tanθ)²` (regularised: `tan²θ → sin²θ/(cos²θ+ε²)`, ε≈cos 80°, clip, gate θ>85°). Normal-direction variance `v_n = σ_r² cos²θ + r²σ_φ² sin²θ` (bounded) initialises splat covariances and floors their scale. Derivations in the manuscript's Appendix A. **Verified by hand; not a model of monocular error itself.**
-- **Shared surface:** N_s Gaussians, **fixed budget** with MCMC relocation (3DGS-MCMC), depth-only fit with robust kernel + accumulated-alpha loss + anisotropy cap + depth-distortion/normal-consistency (2DGS-style). **Cross-fitting:** views split into K folds of neighbouring views; surface S_{-f} fitted on views outside fold f, rendered at views in f. A source never meets a surface fitted to it; a clustered faulty block is held out together.
-- Held-out source: robust affine fit to the rendering (only non-affine deviation remains); compare on pixels with surface support α≥τ_α, valid, below the grazing gate.
+- **Shared surface:** N_s Gaussians, **fixed budget** with MCMC relocation (3DGS-MCMC), depth-only fit with robust kernel + accumulated-alpha loss + anisotropy cap + depth-distortion/normal-consistency (2DGS-style). **Cross-fitting:** views split into K folds of neighbouring views; surface S_{-f} fitted on views outside fold f, rendered at views in f. A view never meets a surface fitted to it; a clustered faulty block is held out together.
+- Held-out depth map: robust affine fit to the rendering (prior (1,0) for a metric model; only non-affine deviation remains); compare on pixels with surface support α≥τ_α, valid, below the grazing gate.
 - Statistic: normalised residual ρ_k against the rendered depth and variance, mean square T_k (chi-square gate) and mean log Bayes factor ℓ_k (evidence gate). Threshold calibrated on clean dev data to 5% per-view false exclusion (pixels are correlated).
-- Gate outputs `g_{m,i}∈{0,1}`; **"no consensus"** if the surface does not support the view (supported fraction < s_min), M<3, or every source is rejected ⇒ view depth unused. Optional CUSUM for estimator-level exclusion.
-- **Cost:** pairwise `C_pair ≈ N·d̄·P·c_w`; surface `C_surf ≈ ((K+1)·n_it + 1)·N·P·c_r`; break-even `d̄* ≈ ((K+1)·n_it + 1)·c_r/c_w`. **Linear in N for fixed K, N_s, n_it, but with a large constant: the pairwise gate is cheaper on sparse view graphs.** The pairwise gate (cross-view warp + set-based admission, entropy used only to select among admissible sets) is kept as the comparison (manuscript Appendix C).
+- Gate outputs `g_i∈{0,1}` per view; **"no consensus"** if the surface does not support the view (supported fraction < s_min) or too few other views observe the region ⇒ depth unused. Scene-level alarm if >½ of the views are rejected (the gate cannot then tell a failing model from a wrong surface). Assumption: faulty views are a minority in any region.
+- **Cost:** pairwise `C_pair ≈ N·d̄·P·c_w`; surface `C_surf ≈ ((K+1)·n_it + 1)·N·P·c_r`; break-even `d̄* ≈ ((K+1)·n_it + 1)·c_r/c_w`. **Linear in N for fixed K, N_s, n_it, but with a large constant: the pairwise gate is cheaper on sparse view graphs.** The pairwise gate (warp the neighbouring views into view i; build the consensus among the warped neighbours with the corrected set-growing criterion, entropy only to select among admissible sets; then test view i's own depth against it) is kept as the comparison (manuscript Appendix C). Depth inference adds N model evaluations per scene (cacheable); the ensemble ablation multiplies this by M.
 - Caveats to test (H3, H6, breakdown): provisional poses corrupt both the surface and the gate; faulty views in *other* folds or dominating a region's coverage can make the surface follow the fault (masking); a depth-only surface is weakly constrained (floaters).
 
 ---
@@ -71,24 +71,25 @@ Source read via Europe PMC XML (MDPI blocked); typeset math was flattened, so a 
 |---|---|---|
 | Robust kernels (no gate) | Huber, Cauchy, Geman–McClure via GNC, switchable constraints, DCS | `robust_kernel_pgo` |
 | Pixel filter | COLMAP geometric consistency (numpy test exists: `consistency_voting`) | `colmap_consistency_filter` |
-| Plain voting | per-pixel median / majority across ensemble and neighbours (`median_fusion` exists) | `plain_voting` |
+| Plain voting | per-pixel median / majority across the views that observe the pixel (`median_fusion` exists); **cross-model** median/majority only in H7 | `plain_voting` (param `rule`) |
 | Floor / bound / context | no gate; oracle gate; estimate-and-correct | `no_gate`, `oracle_gate`, `estimate_and_correct` |
 | Gate variants | shared surface vs pairwise consensus × chi-square vs evidence statistic; ablations: no cross-fitting (joint fit), adaptive densification at matched size, exact leave-one-view-out refit (expensive reference) | `view_gate` (params `consensus`, `statistic`, `cross_fit`, `densification`) |
 | Reference points | MASt3R-SfM, VGGT, COLMAP SfM | `mast3r_sfm`, `vggt`, `colmap_sfm` |
 
-Same images, matches, ensemble, fault realisations and solver for all; thresholds tuned on dev scenes; tuning budget reported; re-implementations labelled. Reference points do not see injected depth faults (they ignore our depth) — context only. **All are stubs** (`src/sensorfault/baselines/gate_testbed.py`); nothing in the test bed is implemented yet.
+Same images, matches, depth maps, fault realisations and solver for all; thresholds tuned on dev scenes; tuning budget reported; re-implementations labelled. Reference points do not see injected depth faults (they ignore our depth) — context only. **All are stubs** (`src/sensorfault/baselines/gate_testbed.py`); nothing in the test bed is implemented yet.
 
 ---
 
 ## 5. Hypotheses (pre-register at week 1; mirrored in configs/h*.yaml and the manuscript)
 
-- **H1 (gate vs the three baselines).** M≥3, one estimator corrupted on a fraction of views: gated pipeline cuts ATE and fused-surface error ≥25% vs the best tuned of {kernels, COLMAP filter, voting}, within 20% of oracle; advantage concentrated in clustered/few-neighbour faulty views and smooth faults; ties on sparse outliers. *Falsified if* the paired CI includes 0 in those regimes.
+- **H1 (gate vs the three baselines).** One metric model, its depth corrupted on a fraction of views: gated pipeline cuts ATE and fused-surface error ≥25% vs the best tuned of {kernels, COLMAP filter, cross-view voting}, within 20% of oracle; advantage concentrated in clustered/few-neighbour faulty views and smooth faults; ties on sparse outliers. *Falsified if* the paired CI includes 0 in those regimes.
 - **H2 (evidence vs chi-square).** At fixed 5% false exclusion, ≥10 points more power only where heteroscedastic noise, grazing, occlusion or non-Gaussian residuals break chi-square; ties under idealised Gaussian noise. *Falsified if* no gain anywhere → pivot P1.
-- **H3 (cross-fitting, alignment, support).** Surface fitted *without* the source's view + scale/shift fit + support mask keep clean false exclusion ≤5%; fitting the surface to all views (incl. the source under test) lowers power ≥10 points (surface absorbs the fault); no support mask at least doubles false exclusion.
+- **H3 (cross-fitting, alignment, support).** Surface fitted *without* the source's view + scale/shift fit + support mask keep clean false exclusion ≤5%; fitting the surface to all views (incl. the view under test) lowers power ≥10 points (surface absorbs the fault); no support mask at least doubles false exclusion.
 - **H4 (placement, complementarity).** Gating before PGO beats the same statistic after PGO; gate + robust kernel ≥ either alone.
 - **H5 (clean cost, reference points).** Price of gating on clean data ≤5%; on natural failures the test bed narrows the gap to MASt3R-SfM/VGGT (context only).
 - **H6 (shared surface vs pairwise checks).** (a) Efficiency: surface-gate time grows ~linearly in N (log–log slope <1.2) vs pairwise ∝ N·d̄ (slope >1.5 on dense graphs); ≥2× faster for N≥100 at d̄≥10; pairwise cheaper on sparse graphs (report break-even). (b) Robustness: power within 5 points of pairwise (non-inferior) in the H1 regimes; K∈{3,4,6} within 3 points of exact leave-one-view-out refit. (c) Fixed budget: adaptive densification at matched final size loses ≥10 points (surface adds a layer fitting the faulty source); sweet spot in N_s. *Falsified if* (a) speed-up <2× at dense overlap or slopes do not separate, (b) pairwise >5 points better, or (c) adaptive within 5 points of fixed.
-- **Breakdown (honest negatives).** Common-mode estimator failure; M=2 (no consensus); sub-noise faults; sparse outliers (baselines win/tie); low overlap (surface cannot support the view → no consensus); **faulty views dominating a region's coverage (surface follows the fault)**; poor provisional poses.
+- **H7 (ensemble ablation).** (a) Shared failures: on natural failures, models overlapping in training data fail on the same views more than independence predicts (pairwise lift ≥2, phi ≥0.3). (b) Where voting breaks: on views where ≥½ of the models fail, cross-model voting detects the failing view ≤20% of the time (models agree), while the single-model gate against the surface detects ≥20 points more; the converse (views the surface cannot support) is reported, not predicted. (c) Value: adding the models to the gate raises power at 5% false exclusion by ≥5 points (otherwise the M× inference cost is not justified). *Falsified if* (a) lift CI includes 1, (b) voting is within 10 points of the gate, or (c) gain CI includes 0.
+- **Breakdown (honest negatives).** **Model-level fault (all views wrong alike; undetectable by construction)**; **very few views (no consensus)**; sub-noise faults; sparse outliers (baselines win/tie); low overlap (surface cannot support the view → no consensus); faulty views dominating a region's coverage (surface follows the fault); poor provisional poses.
 
 Mapping from design v1: old H1 (sensor-level vs per-pixel) → new H1; old H2 → H2; old H3 (visibility/grazing) → H3 (+ alignment); old H4 (fixed-N splats) → **returns as H6c** (fixed budget vs adaptive densification, inside the shared-surface hypothesis); placement is the new H4; old H5 (learned fusion) → reframed as reference points.
 
@@ -98,17 +99,17 @@ Mapping from design v1: old H1 (sensor-level vs per-pixel) → new H1; old H2 �
 
 | Dataset | Role | Notes |
 |---|---|---|
-| ETH3D | primary real | multi-view images, laser-scan GT depth, calibrated poses; natural estimator failures labelled against laser depth. **[UNVERIFIED]** scene names in base.yaml, licence, download script not written. |
+| ETH3D | primary real | multi-view images, laser-scan GT depth, calibrated poses; natural model failures labelled against laser depth. **[UNVERIFIED]** scene names in base.yaml, licence, download script not written. |
 | ScanNet++ | secondary | laser-scanned geometry + registered images; reflective/transparent surfaces; access terms to accept. |
 | Replica | controlled synthetic | exact depth, vary overlap/fault parameters; research-only; release generator, not renderings. |
 | TUM RGB-D, Tanks & Temples | metric definitions | ATE/RPE and reconstruction metrics. |
 | H6 scaling study | view counts N∈{25,50,100,200}, mean co-visibility degree d̄∈{2,5,10,20} | Replica renderings (trajectory sets N and overlap), subsampled ScanNet++ sequences, ETH3D multi-camera videos. **[UNVERIFIED]** views per scene and achievable d̄ — check before fixing the grid. |
 
-Injected view-level faults on one estimator: smooth warp (inverse depth, amplitude ×{0.25,0.5,1,2} std), region failure (20–40% area), non-affine distortion (γ∈{0.8,0.9,1.1,1.25}); fraction of views p∈{10,20,40,60}%, scattered vs clustered, estimator-level; 1–2 faulted estimators per view, independent vs identical (common mode); controls: sparse outliers, clean. Seeds: `SeedSequence([master, hash(source id), fault id])`, ≥5 masters. **Fault injectors for v2 are not implemented** (v1 injectors in `src/sensorfault/faults/` cover depth bias/extrinsic drift on physical sensors).
+Injected view-level faults on the depth map of selected views: smooth warp (inverse depth, amplitude ×{0.25,0.5,1,2} std), region failure (20–40% area), non-affine distortion (γ∈{0.8,0.9,1.1,1.25}); fraction of views p∈{10,20,40,60}%, scattered vs clustered (all views = model-level breakdown); controls: sparse outliers, clean. Ensemble ablation only: 1..⌈M/2⌉ models corrupted on the same views, independent vs identical (common mode). Seeds: `SeedSequence([master, hash(view id), fault id])`, ≥5 masters. **Fault injectors for v2 are not implemented** (v1 injectors in `src/sensorfault/faults/` cover depth bias/extrinsic drift on physical sensors).
 
 Metrics: ATE (Sim(3)), RPE, pose AUC; fused-surface accuracy/completeness/F-score; depth AbsRel/δ1 after alignment; gate precision/recall, false exclusion on clean data, power at FER 5%, elimination-curve AUC; per-stage runtime/memory. Scene-level bootstrap; paired Wilcoxon.
 
-Compute risk: five estimators plus MASt3R-SfM/VGGT on 8 GB — cache depth maps offline, run reference points on subsets, check each model's memory **[UNVERIFIED]**.
+**Compute notes.** Default: one model inference per view (N per scene, cached), K+1 splat fits per scene, one pose graph; the ensemble ablation costs M× inference and is run on a subset of scenes. Risks **[UNVERIFIED]**: Depth Pro (and the alternatives) memory on an 8 GB card at the chosen resolution; K+1 splat fits per scene; MASt3R-SfM/VGGT memory (run on subsets). Mitigation: cache depth maps offline, lower resolution for the surface, K small.
 
 ---
 
@@ -116,8 +117,8 @@ Compute risk: five estimators plus MASt3R-SfM/VGGT on 8 GB — cache depth maps 
 
 | Wk | Work | Milestone |
 |---|---|---|
-| 1 | Re-read the Sensors PDF equations; verify datasets/licences; ensemble weights licences; prereg tag | M1 |
-| 2 | Estimator runner; cache ensemble depth on ETH3D dev scenes; per-estimator error vs laser | M2 |
+| 1 | Re-read the Sensors PDF equations; verify datasets/licences; Depth Pro weights licence and 8 GB memory; dev-scene comparison of Depth Pro / UniDepth / Metric3D v2 vs laser; prereg tag | M1 |
+| 2 | Depth runner (one model per view); cache depth on ETH3D dev scenes; per-view error vs laser (natural failure labels) | M2 |
 | 3 | Matches; geometry-only graph (provisional poses); metrics harness | M3 |
 | 4 | Depth-factor PGO; baselines: kernels, COLMAP filter, plain voting | M4 |
 | 5 | View-level fault injectors; depth-only fixed-N splat fit (3DGS-MCMC/2DGS-style) with cross-fitting; chi-square gate (surface + pairwise) | M5 |
@@ -133,7 +134,7 @@ Compute risk: five estimators plus MASt3R-SfM/VGGT on 8 GB — cache depth maps 
 | 17–18 | Buffer | |
 
 **Gate 1:** go if the gate beats all three baselines in the H1 regimes. Pivot P1: evidence ≈ chi-square → the gate uses the chi-square statistic; entropy relation becomes an equivalence result. Pivot P2: the gate does not beat the best baseline → analysis paper ("when do pixel filters and kernels suffice?").
-**Cut order:** ScanNet++/Replica sweeps → estimator-level CUSUM → exact leave-one-view-out reference → estimate-and-correct → optional estimators. Pivot P3: if the surface gate is not cheaper or is less reliable than the pairwise gate (H6 falsified), keep the pairwise gate as the method and report the surface as a negative result. **Never cut:** breakdown scenarios, clean-data cost (H5), the chi-square gate, the Eq. 14/Alg. 1 fix.
+**Cut order:** ScanNet++/Replica sweeps → scene-level alarm → exact leave-one-view-out reference → estimate-and-correct → ensemble ablation scenes (H7). Pivot P3: if the surface gate is not cheaper or is less reliable than the pairwise gate (H6 falsified), keep the pairwise gate as the method and report the surface as a negative result. **Never cut:** breakdown scenarios, clean-data cost (H5), the chi-square gate, the Eq. 14/Alg. 1 fix.
 
 ---
 
@@ -163,7 +164,7 @@ Not verified / yours to resolve: Virginia Tech–IEEE read-and-publish agreement
 ## 10. Open items
 - [ ] Re-read the Sensors 23(23):9309 PDF: Alg. 1 inequality directions, entropy normalisation (author to confirm).
 - [ ] Author to confirm the reading of "partly end-to-end".
-- [ ] Verify ETH3D scene names/licence, ScanNet++ terms, each estimator's weights licence and GPU memory.
+- [ ] Verify ETH3D scene names/licence, ScanNet++ terms, the default model's weights licence and GPU memory.
 - [ ] Verify the number of views per scene and the achievable co-visibility degree in ETH3D / ScanNet++ for the H6 scaling grid.
 - [ ] Literature pass: depth-prior filtering in SfM/SLAM; uncertainty-aware monocular depth in pose graphs.
 - [ ] Implement: view-level fault injectors; pixel-wise gate; test bed pipeline; baselines; `data` download scripts for ETH3D.
@@ -174,3 +175,4 @@ Not verified / yours to resolve: Virginia Tech–IEEE read-and-publish agreement
 ## 11. Change log
 - 2026-11-13: v2 design. Gate is the contribution, pipeline the test bed; splat surface and physical depth sensors dropped; configs for v1 moved to `configs/legacy_sensor_faults/`; new configs, registry stubs and tests added.
 - 2026-11-14: v2.1. Shared Gaussian-splat surface restored as the gate's consensus (cross-fitted, fixed budget, doubles as fused output); pairwise gate kept as comparison; H3 reworded (cross-fitting); H6 added (efficiency, robustness, fixed budget; old fixed-N idea returns as H6c); new breakdown scenario; gate variants and configs regenerated.
+- 2026-11-14: v2.2. Main setup is one metric depth model per image (default Depth Pro; chosen on dev scenes); each view's depth map is the source the gate keeps or drops, tested against the shared splat surface fitted from the other views. Multi-model ensemble moved to an ablation (H7: do models share failures; does cross-model voting break where the gate does not; is the ensemble worth M× inference). Within-view set-based consensus now exists only in the pairwise variant (among warped neighbours). Breakdown: model-level fault and very-few-views replace common-mode-estimators and M=2. Configs, tests, manuscript updated.

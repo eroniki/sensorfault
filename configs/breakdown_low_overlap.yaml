@@ -6,9 +6,9 @@ design: v2_view_level_gate
 hypothesis:
   id: breakdown
   prediction: Views with too little overlap for a cross-view comparison.
-  falsification_criterion: Report degradation of the gate toward ensemble-only evidence.
+  falsification_criterion: Report the fraction of views with no consensus and degradation of detection.
   independent_variables: [views_per_neighbourhood, overlap_fraction]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     overlap_fraction: [0.1, 0.3, 0.5]
 baselines: [no_gate, gate_surface_evidence, rk_huber, vote_median, colmap_geom_consistency]

@@ -11,7 +11,7 @@ hypothesis:
   falsification_criterion: Falsified if gating after the graph matches gating before it (CI of the difference
     includes 0), or if the combination is worse than the better component.
   independent_variables: [gate_placement, robust_kernel]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     gate_placement: [none, before_pgo, after_pgo]
     robust_kernel: [none, huber, geman_mcclure_gnc]

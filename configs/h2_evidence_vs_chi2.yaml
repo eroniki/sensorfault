@@ -12,7 +12,7 @@ hypothesis:
   falsification_criterion: 'Falsified if there is no gain >=10 points in any pre-registered regime. Fallback:
     report the gate with the chi-square statistic; keep the entropy relation as an equivalence result.'
   independent_variables: [noise_model, grazing_fraction, occlusion_fraction, residual_distribution]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     noise_model: [gaussian_homoscedastic, depth_dependent, heavy_tailed]
 baselines: [gate_surface_chi2, gate_surface_evidence]

@@ -17,7 +17,7 @@ hypothesis:
     separate, (b) the pairwise gate is >5 points better, or (c) adaptive densification is within 5 points
     of the fixed budget.
   independent_variables: [number_of_views_N, mean_covisibility_degree, folds_K, n_splats_Ns, densification_fixed_or_adaptive]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     N: [25, 50, 100, 200]
     d_bar: [2, 5, 10, 20]

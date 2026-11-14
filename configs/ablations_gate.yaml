@@ -10,7 +10,7 @@ hypothesis:
   prediction: see h3_cross_fitting_alignment_support.yaml and h6
   falsification_criterion: see h3 / h6
   independent_variables: [variant]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels: {}
 ablations:
 - {id: A0, name: 'full gate (shared surface, cross-fitted, fixed N_s, evidence criterion)'}
@@ -23,7 +23,9 @@ ablations:
 - {id: A7, name: adaptive densification at matched final size}
 - {id: A8, name: exact leave-one-view-out refit (reference)}
 - {id: A9, name: surface with photometric term (RGB) in the fit}
-- {id: A10, name: no estimator-level escalation (CUSUM off)}
+- {id: A10, name: no scene-level alarm}
+- {id: A11, name: cross-model voting (ensemble ablation)}
+- {id: A12, name: 'ensemble gate: M models per view tested against the same surface (ensemble ablation)'}
 baselines: [gate_surface_evidence, gate_surface_chi2, gate_surface_joint_fit, gate_pairwise_evidence,
   gate_surface_adaptive, gate_surface_exact_loo]
 metrics:

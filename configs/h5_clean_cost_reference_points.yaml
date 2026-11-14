@@ -11,7 +11,7 @@ hypothesis:
   falsification_criterion: Falsified if the price of gating on clean data exceeds 5%. Reference points
     are context only; no claim to beat them.
   independent_variables: [data_kind_clean_or_natural, dataset]
-  controlled_variables: [images, matches, depth_ensemble, pose_graph_solver, fault_seeds, scene_set]
+  controlled_variables: [images, matches, depth_maps, pose_graph_solver, fault_seeds, scene_set]
   levels:
     data_kind: [clean, natural_failures]
 baselines: [no_gate, gate_surface_evidence, mast3r_sfm, vggt, colmap_sfm]

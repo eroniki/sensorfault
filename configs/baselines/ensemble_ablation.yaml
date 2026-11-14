@@ -1,0 +1,10 @@
+# Design v2: view-level gate (contribution) + monocular-depth test bed. Old sensor-level configs: configs/legacy_sensor_faults/.
+baselines:
+- id: cross_model_voting
+  family: ensemble_ablation
+  fuser: plain_voting
+  params: {rule: cross_model_median_or_majority, flag_view_when_models_disagree: true}
+- id: gate_ensemble
+  family: ensemble_ablation
+  fuser: view_gate
+  params: {consensus: shared_surface, statistic: evidence, cross_fit: true, densification: fixed_N, sources: ensemble_M_models_per_view}
