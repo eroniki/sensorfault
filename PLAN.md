@@ -134,7 +134,20 @@ Cheapest cuts: SD 3.5 or a smaller backbone, fewer rho values, M = 5, 10-step sa
 
 ## 12. Status and next steps
 
-Done (no compute beyond the CPU toy): prior art read (`docs/prior-art.md`, incl. AffineGS); licences recorded (`docs/licences.md`); leave-view-out interface and leak test (`src/dcal/surface.py`, `tests/test_no_leak.py`: a poisoned-view check, a perturb-invariance check, a sensitivity check and a mutation test that catches a leaky fit); statistic and toy (`src/dcal/stat.py`, `toy.py`, `scripts/toy_power.py`). 11 tests pass.
-Next: (1) author decisions in section 11; (2) swap the toy surface for the real 2DGS surface behind the same `fit_surface/render` interface and re-run `check_leave_out`; (3) ETH3D data interface (GT reprojection, view masks, manifests/hashes only); (4) stage 0 on the TITAN RTX; (5) a toy with a miscalibrated posterior, to stress the empirical-null approach and the minority-fault collapse point.
+Done (CPU, plus one 0.4 GB ETH3D scene, `pipes`, downloaded outside the repo; manifest of archive hashes in `manifests/eth3d_pipes.json`):
+- Prior art read (`docs/prior-art.md`, incl. AffineGS); licences recorded (`docs/licences.md`); ScanNet++ dropped.
+- Leave-view-out interface and leak test (`src/dcal/surface.py`, `tests/test_no_leak.py`: poisoned-view, perturb-invariance, sensitivity and a mutation test that catches a leaky fit).
+- Fault statistic and CPU toy (`src/dcal/stat.py`, `toy.py`, `scripts/toy_power.py`, section 4.1).
+- **ETH3D interface (`src/dcal/eth3d.py`, `manifest.py`, `scripts/eth3d_check_scene.py`)**, checked on the real `pipes` scene:
+  - the ground-truth depth dumps are **z-depth** (against the laser scan projected through the distorted camera: median |d/z - 1| = 0.00000, all 2.2M compared pixels within 2%; as range they fail, 6-9% within 2%), which also confirms the pose, pixel-centre and THIN_PRISM_FISHEYE conventions taken from COLMAP's source;
+  - the dumps are at the original distorted resolution (6048x4032) and are **not aligned with the undistorted images** (6220x4141, PINHOLE), so `undistort_depth` re-samples them; after re-sampling at 1/8 scale (518x778) the depth agrees with the laser scan projected into the undistorted camera with median relative error 0.03% (p90 0.16%);
+  - **ground truth is sparse: 9-10% of pixels have depth**, so evaluation and supervision must use a validity mask and the label-fraction study needs a pixel-density control as well as the scene fraction.
+- 20 tests pass (leave-out guard, statistic, ETH3D parsers/camera model/undistortion on synthetic data, manifest; a real-data test runs with `ETH3D_PIPES` set).
 
-Python/PyTorch, diffusers, gsplat, 2DGS (the CPU toy needs only numpy/scipy). No latency targets.
+Not done, and why:
+- **Stage 0 on the TITAN RTX: not run.** This session's machine has an RTX 2070 (8 GB); the TITAN RTX box is not reachable from here. Stage 0 stays a task for that machine (sizing harness to be written, below).
+- **Real 2DGS behind the leave-view-out interface:** see the next entry once attempted; until then only the toy point surface is tested.
+
+Next: (1) the author decisions in section 11; (2) real 2DGS surface behind `fit_surface/render` and re-run `check_leave_out`; (3) stage-0 sizing/LoRA harness to run on the TITAN; (4) a toy with a miscalibrated posterior and a large-area fault sweep.
+
+Python/PyTorch, diffusers, gsplat, 2DGS (the CPU toy and the ETH3D interface need only numpy/scipy, plus Pillow and py7zr for data). No latency targets.

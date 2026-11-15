@@ -1,0 +1,26 @@
+{
+ "files": {
+  "pipes_dslr_depth.7z": {
+   "sha256": "12300888d47911d453727c439072ea1da309f307ed443a5c43abb53bdee6c628",
+   "size": 127725253
+  },
+  "pipes_dslr_jpg.7z": {
+   "sha256": "e2f81386e24dbefcd7090b02431e510b288f61df69591c04fb483056ad0f6ab6",
+   "size": 109668393
+  },
+  "pipes_dslr_scan_eval.7z": {
+   "sha256": "d900ecf9ab3bfda3dddbd78174f1ef90103aa8060d1f403253ad7c9e3dc54f4c",
+   "size": 53851871
+  },
+  "pipes_dslr_undistorted.7z": {
+   "sha256": "718981351c14e84759fcc73215e7251fce93d6e9ea1fe24f9e15f1028232c12c",
+   "size": 145321540
+  }
+ },
+ "meta": {
+  "fetched": "2026-11-14",
+  "note": "archives only; data stay outside git; extracted with py7zr",
+  "scene": "pipes",
+  "source": "https://www.eth3d.net/data/<archive>"
+ }
+}

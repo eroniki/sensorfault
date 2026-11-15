@@ -5,6 +5,10 @@ description = "Calibrated multi-view-consistent depth sampling (working package,
 requires-python = ">=3.10"
 dependencies = ["numpy", "scipy"]
 
+[project.optional-dependencies]
+data = ["pillow", "py7zr"]
+gpu = ["torch", "gsplat"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
