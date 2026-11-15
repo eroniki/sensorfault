@@ -1,14 +1,21 @@
 \section{Related Work}
 \label{sup:related}
 
-\runin{Testing theory and integrity monitoring.} Baarda's data snooping and reliability theory and
+\runin{Testing theory.} Baarda's data snooping and reliability theory and
 its extension to the detection--identification--adaptation (DIA) procedure test a linear Gaussian
 model with nuisance parameters for a misspecified observation and give a minimum detectable bias
-\cite{stat_teunissen_dia}. Receiver autonomous integrity monitoring applies the same logic to
-satellites \cite{flt_raim_parkinson,flt_raim_sturza,flt_raim_brown,flt_raim_pervan}, and solution
-separation, which compares the full solution with a leave-one-out solution, equals the
-residual-based test \cite{flt_raim_joerger}; protection levels with exclusion are analysed in
-\cite{flt_araim_pl_exclusion}. Our gate is an instance of this theory; its observations are pixels,
+\cite{stat_teunissen_dia}. In satellite navigation, solution separation, which compares the full
+solution with a leave-one-out solution, equals the residual-based test \cite{flt_raim_joerger}.
+
+\runin{Message passing.} Expectation propagation approximates a posterior by a product of site
+messages, and its cavity step removes one site's message before re-fitting it by moment matching
+\cite{mp_minka_ep}; for Gaussian messages the removal is an exact subtraction in information form.
+Gaussian belief propagation passes such messages on factor graphs and has been proposed as a
+computational basis for spatial AI \cite{mp_davison_gbp}. Our fuse step is one round of Gaussian messages
+from views to surfels, and our leave-view-out is the cavity step alone, without the moment-matching
+iterations of full expectation propagation.
+
+\runin{Our gate in these terms.} The gate is an instance of Baarda's testing theory; its observations are pixels,
 its nuisance is the per-view scale and offset, and its leave-one-out solution is a rendered surface.
 
 \runin{Monocular depth.} Metric depth models \cite{est_metric3dv2,est_unidepth,est_depthpro} and
@@ -19,8 +26,7 @@ same error across views is what H2 measures.
 
 \runin{Surfels and Gaussian splatting.} Point-based fusion maintains surfels with a normal, a radius
 and a confidence and fuses depth by confidence-weighted averaging with projective association
-\cite{fus_keller_surfels}; volumetric fusion uses a TSDF \cite{fus_curless,fus_kinectfusion}.
-3D Gaussian splatting renders anisotropic Gaussians with a differentiable rasteriser
+\cite{fus_keller_surfels}. 3D Gaussian splatting renders anisotropic Gaussians with a differentiable rasteriser
 \cite{gs_3dgs}; 2DGS uses planar Gaussians for accurate surfaces \cite{gs_2dgs}; gsplat is an
 open-source rasteriser \cite{gs_gsplat}; DN-Splatter adds depth and normal priors \cite{gs_dnsplatter};
 3DGS-MCMC replaces densification by relocation \cite{gs_mcmc}. Our surfels are 2DGS surfels with a

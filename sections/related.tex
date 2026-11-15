@@ -2,8 +2,11 @@
 \label{sec:related}
 \runin{Testing theory.} Baarda's data snooping, its reliability theory and the DIA procedure test a
 linear Gaussian model with nuisance parameters for misspecified observations and give a minimum
-detectable bias \cite{stat_teunissen_dia}; receiver autonomous integrity monitoring applies them to
-satellites, and solution separation equals the residual-based test \cite{flt_raim_joerger}. Our gate
+detectable bias \cite{stat_teunissen_dia}; in satellite navigation, solution separation equals the
+residual-based test \cite{flt_raim_joerger}. Read as message passing, removing one source's Gaussian
+message is the cavity step of expectation propagation \cite{mp_minka_ep}, and Gaussian belief
+propagation has been proposed for spatial AI \cite{mp_davison_gbp}; we use the cavity only as a
+framing of one exact subtraction. Our gate
 is an instance: the observations are pixels, the nuisance is a per-view scale and offset, and the
 leave-one-out solution is a rendered surface.
 

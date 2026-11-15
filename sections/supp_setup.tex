@@ -63,12 +63,11 @@ view supports; constant-$\sigma$ residuals; information deflated by $n_{\mathrm{
 inflation of the rendered variance; no scene temperature; no shared distance bias; a fold-wise opacity
 warm-up ($K=5$ warm-ups, each without one fold); a FisherRF-style
 diagonal Fisher \cite{unc_fisherrf} and a Bayes' Rays-style uncertainty \cite{unc_bayesrays} in place
-of the rendered blocks; energy or region scan alone; and the evidence (Bayes-factor) criterion of our
-earlier work \cite{flt_ambarkutuk}, following its Eq.~(14), as an equivalence check.
+of the rendered blocks; and energy or region scan alone.
 
 \subsection{Metrics and Protocol}
 Detection power at 5\% per-view false alarm, false-alarm, untestable and availability rates and the
 elimination-curve AUC; held-out laser-depth AbsRel and surface accuracy, completeness and F-score; the
-cross-view error correlation by appearance class; raw and deflated $T_j/(n-2)$ on clean views.
+cross-view error correlation by appearance class; raw and temperature-scaled $T_j/m_j$ on clean views, the fitted $\hat\gamma$ per scene and $\omega$.
 Scene-level bootstrap intervals and paired Wilcoxon tests, five seeds. Hypotheses, thresholds and the
 dev/test split are fixed in a pre-registration file and tagged before any test scene is processed.
