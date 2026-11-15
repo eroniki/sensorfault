@@ -1,11 +1,16 @@
-% E1: clean scenes, 20 seeds per condition (noise at the calibrated level and 1.3x)
+% E1, clean scenes (20 seeds per condition): single-test false alarms and Holm-loop exclusions
 \begin{tikzpicture}
-\begin{axis}[ybar, bar width=9pt, width=10cm, height=5.2cm, ymin=0, ymax=125, enlarge x limits=0.18,
-  xtick=data, xticklabels={{1.0x, temp.\ on},{1.0x, temp.\ off},{1.3x, temp.\ on},{1.3x, temp.\ off}}, tick label style={font=\scriptsize}, ylabel={\%},
-  legend style={font=\scriptsize, at={(0.02,0.98)}, anchor=north west}, nodes near coords, nodes near coords style={font=\tiny},
-  every node near coord/.append style={/pgf/number format/precision=1}]
-\addplot[fill=gray!40] table[x=i, y=per_view_fa, col sep=comma]{\efigdir/e1_clean_false_alarms.csv};
-\addplot[fill=blue!50] table[x=i, y=loop_any_pct, col sep=comma]{\efigdir/e1_clean_false_alarms.csv};
-\legend{single test: views flagged at $p<0.05$, loop with Holm: seeds with any exclusion}
-\end{axis}
+\begin{groupplot}[sfaxis, sfbar, /pgf/bar width=9pt, group style={group size=2 by 1, horizontal sep=1.6cm},
+  width=4.6cm, height=3.6cm, scale only axis, ymin=0, ymax=112, xmin=-0.6, xmax=1.6,
+  xtick={0,1}, xticklabels={Nominal noise, Noise $1.3\times$},
+  nodes near coords, every node near coord/.append style={font=\sffamily\sansmath\tiny, /pgf/number format/fixed,
+    /pgf/number format/precision=1},
+  legend style={at={(0.03,0.97)}, anchor=north west}]
+\nextgroupplot[ylabel={Views flagged, single test [\%]}, title={\sfsub{a}}]
+\addplot[sfbarred] table[x=x, y=fa_on, col sep=comma] {\efigdir/e1_clean_by_noise.csv};
+\addplot[sfbarblack] table[x=x, y=fa_off, col sep=comma] {\efigdir/e1_clean_by_noise.csv};\legend{Temperature on, Temperature off}
+\nextgroupplot[ylabel={Seeds with an exclusion [\%]}, title={\sfsub{b}}]
+\addplot[sfbarred] table[x=x, y=loop_on, col sep=comma] {\efigdir/e1_clean_by_noise.csv};
+\addplot[sfbarblack] table[x=x, y=loop_off, col sep=comma] {\efigdir/e1_clean_by_noise.csv};
+\end{groupplot}
 \end{tikzpicture}

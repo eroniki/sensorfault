@@ -1,16 +1,16 @@
-% E1: same 8-sigma error on three neighbouring frames of a strip, 10 seeds per bar
+% E1, the same 8-sigma error on three neighbouring frames (10 seeds per bar)
 \begin{tikzpicture}
-\begin{groupplot}[group style={group size=1 by 2, vertical sep=2.5cm}, ybar, /pgf/bar width=7pt,
-  width=12cm, height=4.6cm, ymin=0, ymax=105, enlarge x limits=0.1, xtick={0,...,5},
-  xticklabels={{B=3\\loop},{B=1\\loop},{B=3\\single pass},{B=1\\single pass},{B=3\\loop\\no temp.},{B=3\\loop\\unwhitened}}, xticklabel style={align=center}, tick label style={font=\scriptsize}, ylabel={\%}, title style={font=\small},
-  nodes near coords, nodes near coords style={font=\tiny}, every node near coord/.append style={/pgf/number format/precision=1},
-  legend style={font=\scriptsize, at={(0.5,-0.42)}, anchor=north, legend columns=2}, ymax=115]
-\nextgroupplot[title={noise 1.0$\times$ calibrated}]
-\addplot[fill=blue!50] table[x=i, y=detected_pct, col sep=comma]{\efigdir/e1_repeated_ablations_1.0.csv};
-\addplot[fill=red!45] table[x=i, y=clean_excluded_pct, col sep=comma]{\efigdir/e1_repeated_ablations_1.0.csv};
-\nextgroupplot[title={noise 1.3$\times$ calibrated}]
-\addplot[fill=blue!50] table[x=i, y=detected_pct, col sep=comma]{\efigdir/e1_repeated_ablations_1.3.csv};
-\addplot[fill=red!45] table[x=i, y=clean_excluded_pct, col sep=comma]{\efigdir/e1_repeated_ablations_1.3.csv};
-\legend{faulty frames excluded, clean views excluded}
+\begin{groupplot}[sfaxis, sfbar, /pgf/bar width=6pt, group style={group size=1 by 2, vertical sep=2.1cm},
+  width=10.4cm, height=2.6cm, scale only axis, ymin=0, xmin=-0.5, xmax=5.5,
+  xtick={0,...,5}, xticklabels={{$B{=}$3\\loop},{$B{=}$1\\loop},{$B{=}$3\\single pass},{$B{=}$1\\single pass},{$B{=}$3\\loop\\no temp.},{$B{=}$3\\loop\\unwhitened}}, xticklabel style={align=center},
+  nodes near coords, every node near coord/.append style={font=\sffamily\sansmath\tiny, /pgf/number format/fixed,
+    /pgf/number format/precision=1, rotate=90, anchor=west},
+  legend style={at={(0.99,0.95)}, anchor=north east}]
+\nextgroupplot[ylabel={Faulty frames excluded [\%]}, ymax=112, title={\sfsub{a}}]
+\addplot[sfbarblack] table[x=x, y=det_10, col sep=comma] {\efigdir/e1_repeated_by_noise.csv};
+\addplot[sfbarred] table[x=x, y=det_13, col sep=comma] {\efigdir/e1_repeated_by_noise.csv};
+\nextgroupplot[ylabel={Clean views excluded [\%]}, ymax=10.5, title={\sfsub{b}}]
+\addplot[sfbarblack] table[x=x, y=fa_10, col sep=comma] {\efigdir/e1_repeated_by_noise.csv};
+\addplot[sfbarred] table[x=x, y=fa_13, col sep=comma] {\efigdir/e1_repeated_by_noise.csv};\legend{Nominal noise, Noise $1.3\times$}
 \end{groupplot}
 \end{tikzpicture}

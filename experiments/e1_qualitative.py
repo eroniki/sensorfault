@@ -250,10 +250,10 @@ def main(out_dir: str) -> None:
         f.write("x,y,yaw\n" + "\n".join(f"{c[0]},{c[1]},{c[2]}" for c in cams) + "\n")
     with (out / "tested.csv").open("w") as f:
         f.write("x,y,label\n" + "\n".join(f"{c[0]},{c[1]},{t}" for t, c in tested.items()) + "\n")
-    for name, anchors in (("cb_viridis.png", VIRIDIS), ("cb_rdbu.png", RDBU)):
-        colorbar(out / name, anchors)
     (out / "meta.json").write_text(json.dumps(meta, indent=1, default=float))
-    write_tex(out, meta)
+    import e1_figures_tikz  # figures in the shared TikZ/PGFPlots style
+
+    e1_figures_tikz.main(str(out.parent))
     print(json.dumps(meta, indent=1, default=float))
 
 

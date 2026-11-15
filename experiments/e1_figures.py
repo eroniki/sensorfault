@@ -363,7 +363,10 @@ def main(path: str) -> None:
     fig_repeat(P, out)
     _, rt_rows = fig_runtime(C, G, P, out)
     summary_table(C, G, P, rt_rows, out)
-    compile_pdfs(out)
+    # the figures themselves are written (TikZ/PGFPlots, shared style) by e1_figures_tikz.py
+    import e1_figures_tikz
+
+    e1_figures_tikz.main(str(root))
     print("\n".join(sorted(str(p) for p in out.iterdir())))
 
 
