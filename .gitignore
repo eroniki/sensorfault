@@ -6,3 +6,4 @@ runs/
 *.pt
 *.ckpt
 *.safetensors
+!figures/data/
