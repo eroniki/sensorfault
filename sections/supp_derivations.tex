@@ -73,14 +73,8 @@ With independent blocks and opacity frozen,
 \]
 with $P_k^{(-j)}$ the inverse of $\Lambda_k^{(-j)}$ on the nine geometric coordinates, which is \eqref{eq:var}. The residual \eqref{eq:res} is the sum of the depth noise of view $j$ and the
 error of the leave-$j$-out surface, which are independent because view $j$ was subtracted, so its
-covariance is $\gamma^{2}DCD+a_j^{2}UP^{(-j)}U^{\top}+J_q\Sigma_qJ_q^{\top}$, the last term being the error of view
-$j$'s pose, which was estimated without its depth. With $W=(\gamma^{2}DCD)^{-1}$ (diagonal when $C=I$) and
-$\Lambda^{(-j)}=(P^{(-j)})^{-1}$, the Woodbury identity gives
-\[
-\bigl(W^{-1}+UP^{(-j)}U^{\top}\bigr)^{-1}=W-WU\bigl(\Lambda^{(-j)}+U^{\top}WU\bigr)^{-1}U^{\top}W,
-\]
-and $\Lambda^{(-j)}+U^{\top}WU$ is block-diagonal with one $3\times3$ block per surfel, so applying the
-precision costs one pass over the pixels. When each
+covariance is $\gamma^{2}DCD+a_j^{2}\mathrm{diag}\,V_{-j}+J_q\Sigma_qJ_q^{\top}$ up to the dropped cross terms, the
+last term being the error of view $j$'s pose, which was estimated without its depth. When each
 pixel is rendered by one surfel the blocks are exact and the whitened residual is $\mathcal{N}(0,1)$;
 when footprints overlap, the dropped cross-surfel terms make it overconfident. The code reproduces both
 cases on a synthetic plane, and also the overconfidence caused by spatially correlated noise, which

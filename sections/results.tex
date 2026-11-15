@@ -15,32 +15,48 @@ training, no opacity, no pose refinement and no real depth model, and the noise 
 independent; H1, H2, H4, H5 and H7 are therefore not addressed. Faults are rectangular regions offset
 by $\delta\sigma$ on one view, or the same $8\sigma$ offset on a 25~m ground patch in three neighbouring
 frames of a strip. Holm runs over $M=NR_{\max}=1850$ tests; the region scan uses $4\times6$ image tiles.
-Table~\ref{tab:e1} summarises the outcomes; the full tables are in the code repository
-(\texttt{results/e1}).
+Table~\ref{tab:e1} summarises the outcomes, Figures~\ref{fig:e1grid}--\ref{fig:e1repeated} compare
+the variants, and the runtime is in Supplement~\ref{sup:results} (Figure~\ref{fig:e1runtime}); the data
+behind them are in the code repository (\texttt{results/e1}).
 
-\begin{table}[t]
-\caption{E1 outcomes on MatrixCity block~3 (exact depth, independent noise, linearised gate). Clean
-scenes: 20 seeds; one faulty view: 160 scenes (4 magnitudes $\times$ 4 areas $\times$ 10 seeds); three
-neighbouring faulty frames: 10 seeds. FA: clean views excluded, as a share of clean views.}
+\begin{table}[!htbp]
+\caption{E1 summary on MatrixCity block~3 (exact depth, independent noise, linearised gate). Clean
+scenes: 20 seeds per condition; one faulty view: 160 scenes (4 magnitudes $\times$ 4 areas $\times$ 10
+seeds), detection at a per-view threshold matched to 5\% false alarm on clean scenes; three neighbouring
+faulty frames: 10 seeds per row; clean excluded is the share of clean views excluded. Runtime is CPU
+wall-clock per stage; a gate pass tests every active view once.}
 \label{tab:e1}
 \centering\footnotesize\setlength{\tabcolsep}{3pt}
-\begin{tabular}{p{3.4cm}p{4.3cm}p{5.4cm}}
-\toprule
-Scenario & Variant & Outcome \\
-\midrule
-Clean, nominal noise & loop, Holm & 0/20 seeds with any exclusion \\
- & single pass, per view, $p<0.05$ & 7.5\% (temperature on), 2.8\% (off) \\
- & mean $T/m$ & 0.965 \\
-Clean, noise $1.3\times$ calibrated & loop, temperature on & 0/20 seeds with any exclusion \\
- & loop, temperature off & 20/20 seeds; per-view FA 100\% \\
-One faulty view, 2--16$\sigma$, 5--40\% & gate, matched 5\% per-view FA & 160/160 detected \\
- & aligned RMS, matched 5\% FA & 157/160 (misses: 3 of 10 at $2\sigma$, 5\%) \\
- & loop, Holm & 160/160 detected; 2/160 scenes with one clean exclusion \\
-Three neighbouring faulty frames & loop, $B=3$ or $B=1$ & 93.3\% detected; FA 0\% \\
- & single pass (all rejected at once) & 93.3--96.7\% detected; FA 4.9--8.3\% \\
-\bottomrule
-\end{tabular}
+\input{\efigdir/e1_summary_table.tex}
 \end{table}
+
+\begin{figure}[!htbp]
+\centering
+\input{\efigdir/fig_e1_grid.tex}
+\caption{E1, one faulty view: detection (\%) by the gate and by the aligned-RMS baseline, each at a
+per-view threshold matched to 5\% false alarm on clean scenes, across fault magnitude and area (10 seeds
+per cell). The grid is too easy to separate them; the baseline misses only at $2\sigma$ over 5\%.}
+\label{fig:e1grid}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\input{\efigdir/fig_e1_clean.tex}
+\caption{E1, clean scenes (20 seeds per condition), with the noise at its calibrated level and at
+$1.3\times$: share of views flagged by a single test at $p<0.05$, and share of seeds in which the
+Holm-controlled loop excluded any view, with and without the scene temperature.}
+\label{fig:e1clean}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\input{\efigdir/fig_e1_repeated.tex}
+\caption{E1, the same $8\sigma$ error on a 25~m patch in three neighbouring frames of a strip (10 seeds per
+bar): faulty frames excluded and clean views excluded for leave-block-out ($B=3$) and single-view
+leave-out ($B=1$), with the loop (one view per round) or a single pass (all rejected views at once), and
+without the scene temperature or without whitening.}
+\label{fig:e1repeated}
+\end{figure}
 
 The Holm-controlled loop kept the family-wise false alarm at zero in 20 clean scenes, and the scene
 temperature was what kept it there when the noise was 30\% above its calibrated level. Without the
@@ -56,10 +72,14 @@ single pass that excludes every rejected view at once excluded 5--8\% of clean v
 frames out of 30 were never detected, in two of the ten scenes. In this exact, independent-noise setting
 the energy statistic was slightly conservative, mean $T/m=0.965$, and the per-view false-alarm rate of a
 single test at $p<0.05$ was 7.5\% with the temperature. The temperature is fitted from the conservative
-energy statistics and so slightly loosens the region scan; the Holm schedule absorbs this. Two
-implementation points were needed to reach these numbers and are part of the method as reported:
-whitening with the block-sparse surfel term (Section~\ref{sec:method:gate}), and ranking views by
-$\log p$ so that a swamped neighbour whose p-value underflows cannot be dropped before the faulty view.
+energy statistics and so slightly loosens the region scan; the Holm schedule absorbs this. One caveat on
+how these numbers were produced: E1's whitening kept the correlation between pixels that one surfel
+renders, a change to \eqref{eq:res} that is still awaiting approval and is not part of the method as
+stated; without it, the region scan raised false alarms on weakly supported views in a dry run. The
+loop also ranked views by $\log p$, so that a swamped neighbour whose p-value underflows to zero cannot be
+dropped before the faulty view.
+
+\FloatBarrier
 
 \subsection{Planned Results}
 The first result on real data will be the residual measurement of H1 (Figure~\ref{fig:residuals}), including the altitude comparison

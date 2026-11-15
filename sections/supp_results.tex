@@ -44,6 +44,15 @@ Oracle gate            & \todocell & \todocell & \todocell & \todocell \\
 \end{tabular}
 \end{table}
 
+\begin{figure}[h]
+\centering
+\input{\efigdir/fig_e1_runtime.tex}
+\caption{E1 runtime: CPU wall-clock per stage, with the threads used and the seconds per gate pass (one
+cavity test of every active view; pass counts derived from the saved loop rounds). A one-off load and
+surfel build of the block took about 6 minutes and was cached.}
+\label{fig:e1runtime}
+\end{figure}
+
 \todofig{calibration}{Histogram of $T_j/m_j$ on fault-free views, raw and with the leave-view-out scene temperature, the fitted $\hat\gamma$ per scene and the per-view heterogeneity $\omega$, and the false-alarm rate against $\alpha$ on test scenes, with and without deflation by $n_{\mathrm{eff}}/n$ or jackknife inflation (H5).}
 
 \begin{table}[h]

@@ -22,7 +22,7 @@ flagged views (one per round by default), with a Holm step-down schedule across 
 latexmk -pdf main.tex        # output: build/main.pdf (TeX Live; uses ./latexmkrc)
 ```
 Class `elsarticle` with option `preprint,12pt` and bibliography style `elsarticle-num`, both from TeX Live.
-`draft_v0.pdf` is the last committed build: main text pp. 1-19, declarations and references from p. 20, then the
+`draft_v0.pdf` is the last committed build: main text pp. 1-23, declarations and references from p. 24, then the
 Supplementary Material (S1-S4) in the same PDF.
 
 ## Outline
@@ -38,7 +38,7 @@ setup; S4 planned tables and figures.
 - `main.tex` front matter, abstract, declarations, section includes
 - `sections/` main text: `intro`, `related`, `method`, `setup`, `results`, `conclusion`; `supplement.tex` includes `supp_*.tex`; `macros.tex`
 - `refs/references.bib` cited entries only; `refs/EVIDENCE.md` how each was checked
-- placeholder figures are drawn by `\todofig` in `sections/macros.tex`; there are no figure files yet
+- `figures/e1/` E1 figures (pgfplots) and summary table, with their CSV data, copied from `eroniki/sensorfault` `results/e1/figures/` (regenerate there with `experiments/e1_figures.py`); remaining placeholders are drawn by `\todofig` in `sections/macros.tex`
 
 ## Licence note
 `elsarticle` is distributed with TeX Live (LPPL). Keep this repository private until the preprint is released.

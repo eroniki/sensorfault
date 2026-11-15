@@ -1,0 +1,15 @@
+% E1: detection (%) at matched 5% per-view false alarm, one faulty view, 10 seeds per cell
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.6cm},
+  width=5.6cm, height=5.0cm, enlargelimits=false,
+  colormap={det}{rgb255=(255,255,255) rgb255=(33,102,172)}, point meta min=0, point meta max=100,
+  xtick={0,...,3}, xticklabels={0.05,0.1,0.2,0.4}, ytick={0,...,3}, yticklabels={2,4,8,16},
+  xlabel={area fraction}, ylabel={magnitude ($\sigma$)}, title style={font=\small}, tick label style={font=\scriptsize}, label style={font=\small}]
+\nextgroupplot[title={Gate}]
+\addplot[matrix plot*, point meta=explicit, mesh/cols=4, nodes near coords={\pgfmathprintnumber{\pgfplotspointmeta}}, nodes near coords style={font=\scriptsize, anchor=center}]
+  table[x=ai, y=di, meta=gate, col sep=comma]{\efigdir/e1_grid_detection.csv};
+\nextgroupplot[title={Aligned RMS}]
+\addplot[matrix plot*, point meta=explicit, mesh/cols=4, nodes near coords={\pgfmathprintnumber{\pgfplotspointmeta}}, nodes near coords style={font=\scriptsize, anchor=center}]
+  table[x=ai, y=di, meta=rms, col sep=comma]{\efigdir/e1_grid_detection.csv};
+\end{groupplot}
+\end{tikzpicture}

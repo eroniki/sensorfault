@@ -1,0 +1,8 @@
+% E1: wall-clock per stage (CPU only), threads, and seconds per gate pass (one cavity test of every active view)
+\begin{tikzpicture}
+\begin{axis}[ybar, bar width=12pt, width=7.5cm, height=5cm, ymin=0, ymax=70, xtick=data,
+  xticklabels={{clean\\4 threads\\8.7 s per pass},{grid\\2 threads\\6.9 s per pass},{repeated\\2 threads\\6.2 s per pass}}, xticklabel style={align=center}, ylabel={minutes}, tick label style={font=\scriptsize},
+  nodes near coords, nodes near coords style={font=\tiny}, enlarge x limits=0.25]
+\addplot[fill=gray!50] table[x=i, y=minutes, col sep=comma]{\efigdir/e1_runtime.csv};
+\end{axis}
+\end{tikzpicture}

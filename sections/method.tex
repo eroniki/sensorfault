@@ -160,18 +160,11 @@ alignment $(a_j,b_j)$ is fitted by weighted least squares and the residual
 \begin{equation}
 \begin{split}
   r_j(u)&=\hat d_j(u)-\bigl(a_j\hat D_{-j}(u)+b_j\bigr),\\
-  \Sigma_r&=\hat\gamma_{-j}^{2}DCD+a_j^{2}\,U P^{(-j)} U^{\top}+J_q\Sigma_qJ_q^{\top}
+  \Sigma_r&=\hat\gamma_{-j}^{2}DCD+a_j^{2}\,\mathrm{diag}\,V_{-j}+J_q\Sigma_qJ_q^{\top}
 \end{split}
   \label{eq:res}
 \end{equation}
-is whitened. Here $U$ is the block-sparse pixel-to-surfel Jacobian, whose row for pixel $u$ holds
-$w_{uk}J_{uk}$ in the columns of surfel $k$, and $P^{(-j)}$ is block-diagonal with the cavity covariances
-$P_k^{(-j)}$; its diagonal is $V_{-j}$ of \eqref{eq:var}. Pixels rendered by the same surfel share that
-surfel's estimation error, so the off-diagonal terms matter even under independent blocks: a region
-statistic that ignored them would add a shared error coherently and raise false alarms, which our
-first experiment showed on weakly supported views. Whitening uses the Woodbury identity with one
-$3\times3$ block per surfel, so its cost stays linear in the number of pixels; correlations between
-different surfels are still ignored. $\Sigma_q$ is the covariance of view $j$'s pose from the spline, estimated without its depth,
+is whitened, with $\Sigma_q$ the covariance of view $j$'s pose from the spline, estimated without its depth,
 and $J_q$ the Jacobian of the rendered depth with respect to that pose (the shared bias term is part
 of the rendered prediction and is omitted from the notation). The scene temperature is fitted without view $j$: $\hat\gamma_{-j}^{2}$ solves
 $\mathrm{median}_{i\ne j}\,T_i(\gamma)/q_{0.5}(\chi^{2}_{m_i})=1$, a one-dimensional root, with $T_i$
