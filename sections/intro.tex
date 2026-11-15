@@ -3,13 +3,16 @@
 
 Monocular metric depth models \cite{est_metric3dv2,est_unidepth,est_depthpro} are now accurate
 enough to supervise 3D reconstruction from images: depth-supervised Gaussian splatting
-\cite{gs_3dgs,gs_2dgs,gs_dnsplatter} uses one predicted depth map per image as a geometric prior.
-The predictions fail in a characteristic way. The failures are \emph{regional} and
-\emph{appearance-driven}: on a reflective or glass surface the model predicts the depth of the
-reflection, and on a textureless wall it has no cue and predicts a smooth guess. Inside such a
-region the error is large, often many times the nominal noise, and outside it the same depth map
-is good. Depth supervision bakes these regions into the surface, and nothing in a single image says
-which depth map, or which part of it, to distrust.
+\cite{gs_3dgs,gs_2dgs,gs_dnsplatter} uses one predicted depth map per image as a geometric prior. We
+study this for aerial survey imagery, flown in parallel strips with GNSS/IMU poses, where a depth prior
+per image could complement or replace dense multi-view stereo. The predictions fail in a
+characteristic way. The failures are \emph{regional} and \emph{appearance-driven}: on glass, water or
+other specular surfaces the model predicts the depth of the reflection, and on textureless roofs, roads
+or walls it has no cue and predicts a smooth guess. Inside such a region the error is large, often many
+times the nominal noise, and outside it the same depth map is good. The models are also trained mostly
+on imagery taken near the ground, so nadir views from survey altitude are a different, less familiar
+regime. Depth supervision bakes the faulty regions into the surface, and nothing in a single image
+says which depth map, or which part of it, to distrust.
 
 The cheap defences act per pixel or per ray. Robust losses \cite{rob_blackrangarajan,rob_barron}
 and distractor-aware splatting such as RobustNeRF and SpotLessSplats
@@ -19,40 +22,43 @@ confidence, gives a view score. None of them states a false-alarm rate, and none
 that the other views of the same scene observe the same surface with known uncertainty.
 
 \paragraph{Approach}
-We propose a \emph{depth-only view gate} built on Gaussian surfels whose uncertainty renders. Each
-2DGS-style surfel keeps its shape covariance for rendering and, separately, a $10\times10$
-uncertainty over its mean, its tangent-space rotation error, its log scales and its opacity, with the
-opacity frozen after a warm-up. Every view adds the alpha-weighted rasteriser information
-$J^{\top}R^{-1}J$ to the surfels it sees, so the fused surface is a Laplace posterior obtained by
-rendering, without correspondences. Leaving a view out is a subtraction of its information and one
-Newton step. The gate renders the other views' surface, and its variance, into the tested view and
-tests the whitened depth residuals: pixels that no other view sees are untestable, and the tested view
-spawns no surfels of its own. The noise model has one free variable, a scene temperature, and the
-depth model's systematic error is a distance term shared by all views. Colour is a separate
-appearance block that may refine the poses but never updates the map geometry; it reaches geometry
-only through the depth model.
+The contribution is a \emph{depth-only view gate}. It is built on a standard representation: 2DGS
+surfels, each augmented with a $10\times10$ information block over its mean, its tangent-space rotation
+error, its log scales and its opacity, kept apart from the shape used for rendering. Every view adds the
+alpha-weighted rasteriser information $J^{\top}R^{-1}J$ to the surfels it sees, so the fused surface is a
+Laplace posterior obtained by rendering. Leaving a view out, or a block of neighbouring frames that tend
+to share its errors, is a subtraction of their information and one Newton step. The gate renders the
+remaining views' surface and its variance into the tested view and tests the whitened depth residuals at
+a stated false-alarm rate; pixels that no other view sees are untestable, and the tested view spawns no
+surfels of its own. The representation is sparse, and both fusion and testing are correspondence-free,
+unlike dense volumetric fusion in a TSDF \cite{fus_curless,fus_kinectfusion}, dense radiance fields
+\cite{rec_nerf} or multi-view stereo cost volumes \cite{rec_mvsnet}. Geometry is fitted to depth only:
+colour is a separate appearance block that may refine the poses but never updates the geometry, so
+reflectance cannot corrupt the surface except through the depth model itself. Poses come from the
+survey's GNSS/IMU as a smooth trajectory spline, refined by render-and-compare without correspondences.
 
 \paragraph{What is and is not new}
-The test is classical (Baarda's data snooping, Teunissen's DIA procedure \cite{stat_teunissen_dia} and
-GNSS solution separation \cite{flt_raim_joerger}), and removing a view by subtraction is the cavity step of
-expectation propagation \cite{mp_minka_ep}, used here once per round and without moment matching; the
-outer loop of rounds is iterative data snooping and hard EM \cite{stat_dempster_em}; surfels with confidence-weighted fusion are
-point-based fusion \cite{fus_keller_surfels}; per-view alignment of monocular depth is standard
-\cite{rec_monosdf}. What is new, to our knowledge, is a per-Gaussian uncertainty that the splatting
-rasteriser renders into depth variance, used with exact leave-view-out to test whole views at a stated
-false-alarm rate (Section~\ref{sec:related}).
+The representation is not new: 2DGS surfels \cite{gs_2dgs} with confidence-weighted fusion are close to
+point-based fusion \cite{fus_keller_surfels}, and per-view alignment of monocular depth is standard
+\cite{rec_monosdf}. The test is classical (Baarda's data snooping, Teunissen's DIA procedure
+\cite{stat_teunissen_dia} and GNSS solution separation \cite{flt_raim_joerger}); removing a view by
+subtraction is the cavity step of expectation propagation \cite{mp_minka_ep}, used here once per round
+and without moment matching; the outer loop of rounds is iterative data snooping and hard EM
+\cite{stat_dempster_em}; and spline trajectories are standard in continuous-time estimation
+\cite{traj_furgale_basis}. What is new, to our knowledge, is the gate: a per-Gaussian uncertainty that
+the splatting rasteriser renders into depth variance, used with exact leave-view-out and leave-block-out
+to test whole views at a stated false-alarm rate (Section~\ref{sec:related}).
 
 \paragraph{Contributions}
 \begin{itemize}
-  \item Gaussian surfels with a separate $10\times10$ uncertainty (opacity frozen after a warm-up)
-        whose normal-offset and tilt block renders into per-pixel depth variance, fused on rendering by
-        $J^{\top}R^{-1}J$ with leave-view-out by subtraction and one Newton step (Sections~\ref{sec:method:surfels}--\ref{sec:method:fusion}).
-  \item A depth-only view gate that tests whitened residuals against the other views' rendered
-        surface, with untestable pixels and no spawning by the tested view
-        (Section~\ref{sec:method:gate}).
-  \item A pre-registered evaluation that starts by measuring the residuals of a real depth model,
-        tests whether the model repeats its errors across views in textureless regions, and
-        requires the gate to beat cheap baselines on regional, appearance-driven failures
-        (Section~\ref{sec:setup}).
+  \item A depth-only view gate that tests each view's whitened depth residuals against the rendered
+        cavity of the other views, with untestable pixels, no spawning by the tested view, and a
+        Holm-controlled outer loop (Sections~\ref{sec:method:gate}--\ref{sec:method:loop}).
+  \item Leave-block-out: exact subtraction of a block of neighbouring frames, so that neighbours that
+        repeat a view's error cannot mask it (Section~\ref{sec:method:block}).
+  \item A pre-registered evaluation on aerial survey imagery, with ETH3D as a sanity check, that starts by
+        measuring the residuals of a real depth model, tests whether it repeats its errors across
+        neighbouring views, and requires the gate to beat cheap baselines on regional, appearance-driven
+        failures (Section~\ref{sec:setup}).
 \end{itemize}
 \TODO{Replace this list by result-bearing contributions once H1--H6 are evaluated.}

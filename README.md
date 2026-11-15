@@ -1,13 +1,14 @@
 # sensorfault-manuscript
 
-Draft v0 of *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface*, in the
+Draft v0 of *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface* (aerial survey
+setting; UseGeo, MatrixCity, ETH3D as a sanity check), in the
 Elsevier `elsarticle` template, single-column preprint layout (preprint first; no pay-to-publish venue). Companion code
 and plan: `eroniki/sensorfault`; reference design: `docs/design-3dgs-bayes.md` in that repo.
 
 The paper proposes a depth-only view gate for depth-supervised Gaussian splatting. Each 2DGS surfel keeps its shape for
 rendering and a separate 10x10 uncertainty over mean, rotation error, log scales and opacity (opacity frozen after a
 warm-up). In the fuse step each view sends the surfels an information-form message (alpha-weighted J^T R^-1 J); leaving
-a view out is a subtraction plus one Newton step (the cavity step of expectation propagation, used once, without moment
+a view, or a block of neighbouring strip frames, out is a subtraction plus one Newton step (the cavity step of expectation propagation, used once, without moment
 matching). The tested view is compared with the other views' surface rendered into it, with one free noise variable
 (a scene temperature) and a shared distance bias. Training, freezing, fusing and testing repeat in rounds that drop
 flagged views (one per round by default), with a Holm step-down schedule across rounds.
@@ -20,13 +21,13 @@ flagged views (one per round by default), with a Holm step-down schedule across 
 latexmk -pdf main.tex        # output: build/main.pdf (TeX Live; uses ./latexmkrc)
 ```
 Class `elsarticle` with option `preprint,12pt` and bibliography style `elsarticle-num`, both from TeX Live.
-`draft_v0.pdf` is the last committed build: main text pp. 1-14, declarations and references from p. 15, then the
+`draft_v0.pdf` is the last committed build: main text pp. 1-16, declarations and references from p. 17, then the
 Supplementary Material (S1-S4) in the same PDF.
 
 ## Outline
 Main text: Abstract, Keywords; 1 Introduction; 2 Related Work (short); 3 Method (setting, measurement model and faults;
-surfels with an uncertainty that renders; fusion on rendering, leave-view-out and the message-passing reading; the view
-gate; the outer loop with Algorithm 1 "Train, freeze, fuse, test" in rounds, Holm across rounds); 4 Experimental Design and Hypotheses (H1-H6, breakdown);
+poses as a trajectory spline refined by render-and-compare; surfels with an uncertainty that renders; fusion on rendering, leave-view-out and the message-passing reading; the view
+gate; leave-block-out; the outer loop with Algorithm 1 "Train, freeze, fuse, test" in rounds, Holm across rounds); 4 Experimental Design and Hypotheses (H1-H6, breakdown);
 5 Results (status); 6 Conclusions, Limitations, Future Work. Declarations; References.
 Supplement: S1 related work; S2 derivations (ray-surfel and opacity Jacobians, information update and Newton leave-out,
 solution separation, rendered variance, minimum detectable bias, scene temperature and heterogeneity); S3 experimental

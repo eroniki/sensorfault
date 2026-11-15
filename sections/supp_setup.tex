@@ -2,15 +2,36 @@
 \label{sup:setup}
 
 \subsection{Data}
-\runin{ETH3D (primary; residual measurement).} Multi-view images with laser-scan ground truth and
-calibrated poses \cite{data_eth3d}; the laser depth scores every view's depth map, so natural failures
-are labelled without injection. Development scenes (proposed: courtyard, electro, kicker) are used for
-the residual measurement and all tuning; test scenes only after the pre-registration tag.
-\TODO{Fix the scene subset and check the licence.}
+Candidates were checked on their official pages on 2026-11-14 (no data downloaded). The setting needs
+raw aerial images, a pose per image (exterior orientation, GNSS/IMU or registration) and a reference
+surface that does not come from photogrammetry, since a photogrammetric reference would share the
+errors under test.
 
-\runin{ScanNet++ (secondary).} Indoor scenes with registered images and laser-scanned geometry
-\cite{data_scannetpp}, with many reflective and transparent surfaces. Access requires accepting the
-dataset terms. \TODO{Confirm access and terms.}
+\runin{UseGeo (main real set).} UAV nadir images from about 80~m, about 2~cm ground sampling distance,
+829 images in three sets of eight strips each (80\% forward and 60\% side overlap), exterior orientation and
+interior parameters per image, UAV LiDAR at about 50~points/m$^2$ and per-image LiDAR depth maps
+\cite{data_usegeo}. Licence CC BY-NC-SA 4.0; direct download. The LiDAR, not the also provided
+photogrammetric point cloud, is the reference.
+
+\runin{H3D (second real set, pending).} UAV oblique imagery at 1.5--3~cm and UAV LiDAR at about
+800~points/m$^2$, in several epochs \cite{data_h3d}. Registration is required; whether the raw images and
+their orientations are released, and under what licence, could not be confirmed on the official page.
+\TODO{Ask the maintainers before relying on H3D.}
+
+\runin{MatrixCity (synthetic).} A synthetic city rendered in a game engine, with aerial and street views,
+exact depth, normals and poses \cite{data_matrixcity}; licence CC BY-NC 4.0. It is used for controlled
+fault injection with exact truth, and for strips with known geometry.
+
+\runin{ETH3D (sanity check).} Multi-view images with laser-scan ground truth and registered poses
+\cite{data_eth3d}, used as given. \TODO{Fix the scene subset and check the licence.}
+
+\runin{Considered and not used.} ISPRS Vaihingen (crewed nadir frames with exterior orientation and
+airborne LiDAR; research use only, no redistribution, 16~GB) is the fallback real set. The ISPRS/EuroSDR
+Dortmund benchmark has oblique and UAV images with GNSS/INS and laser scans, but its oblique blocks are
+125--350~GB and the scan type is not stated. UrbanScene3D is mostly synthetic, does not state which real
+scenes have LiDAR or poses, and is 1.43~TB. Mill-19 has no geometric reference and could serve only as a
+rendering check. ScanNet++ was dropped: it is indoor, and the aerial sets above cover the specular and
+textureless failures that motivated it.
 
 \subsection{Depth Model}
 Depth Pro \cite{est_depthpro} is the default: it predicts metric depth without intrinsics, one map per
@@ -20,10 +41,20 @@ UniDepthV2 lists a confidence output; they supply the confidence baseline. MoGe 
 mask rather than a confidence, and Depth Anything V2 and Marigold document no uncertainty output.
 
 \subsection{Reconstruction and Gate}
-\runin{Poses.} Poses start from the dataset and are refined by feature matches and photometric refinement
-of the appearance block over all frames. The pose of a tested view is never refined with its own depth
-term: a pose fitted to view $j$'s depth would absorb the part of a fault that a pose change can explain,
-and would make pose errors invisible to the test.
+\runin{Poses.} The input is posed images. On aerial data the trajectory is a uniform cubic B-spline in time,
+with one control point per second of flight (fixed on development data), fitted to the exterior
+orientation or GNSS/IMU with a second-difference smoothness prior; rotations use the cumulative form on
+$SO(3)$. The control points are then refined by differentiable pose-graph optimisation whose factors are
+the GNSS/IMU prior, the smoothness prior and render-and-compare depth terms, and optionally photometric
+render-and-compare of the appearance block; no feature correspondences are used. Before a view is
+tested, its own render-and-compare term is subtracted from the control-point information, and its pose
+covariance $\Sigma_q$ follows from the spline's basis row at its time stamp. The ablation starts from poses
+perturbed by a fixed amount (fixed on development data). On ETH3D the registered poses are used as given.
+
+\runin{Blocks.} Blocks are $B$ consecutive frames of the same flight strip, centred on the tested view and
+shifted inwards at the strip ends; strips are taken from the flight plan or split at turns of the spline.
+$B$ is chosen from $\{1,3,5,9\}$ on development data against the measured decay of the cross-view error
+correlation with frame separation (H2).
 
 \runin{Train, freeze, fuse, test.} Depth maps are computed once and cached, so the depth model is not
 resident during training. Surfels are 2DGS planar Gaussians rendered with gsplat into expected depth,
@@ -50,10 +81,10 @@ are fixed on development scenes. \TODO{Fix them; report GPU model, wall-clock an
 \subsection{Faults}
 \runin{Natural.} A view region is a natural failure if its aligned error against the laser depth
 exceeds $k\sigma$ on a connected region of at least a minimum area; regions are classed from the image
-and the laser reference as reflective or glass, textureless wall, or other. $k$ and the minimum area
+and the reference as specular (glass, water), textureless (roofs, roads, walls), or other. $k$ and the minimum area
 are fixed on development scenes.
 \runin{Injected.} Offset, plane replacement, blurred copy and mirrored depth (the depth of a reflected
-scene) on 2, 5, 10, 20 or 40\% of a view at 2, 4, 8 or 16$\sigma$, placed on reflective or textureless
+scene) on 2, 5, 10, 20 or 40\% of a view at 2, 4, 8 or 16$\sigma$, placed on specular or textureless
 appearance masks or on random connected superpixels, either independently per view or repeated with
 the same error across views. Whole-view affine errors are a control: they are absorbed and should be
 neither detected nor harmful.
@@ -68,7 +99,8 @@ also turned into view scores. \emph{Bounds:} no gate, and an oracle gate that dr
 views. \emph{Gate ablations:} a joint surface (no leave-view-out); keeping surfels that only the tested
 view supports; constant-$\sigma$ residuals; information deflated by $n_{\mathrm{eff}}/n$; jackknife
 inflation of the rendered variance; no scene temperature; no shared distance bias; a fold-wise opacity
-warm-up ($K=5$ warm-ups, each without one fold); the outer-loop ablations above; a FisherRF-style
+warm-up ($K=5$ warm-ups, each without one fold); the outer-loop ablations above; single-view leave-out ($B=1$) and the block-size sweep; perturbed starting
+poses; a FisherRF-style
 diagonal Fisher \cite{unc_fisherrf} and a Bayes' Rays-style uncertainty \cite{unc_bayesrays} in place
 of the rendered blocks; and energy or region scan alone.
 

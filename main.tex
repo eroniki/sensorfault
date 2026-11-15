@@ -27,24 +27,24 @@
             country={USA}}
 
 \begin{abstract}
-Monocular metric depth models are good enough to supervise Gaussian splatting, but they fail
-regionally and for reasons of appearance: on reflective surfaces they predict the depth of the
-reflection, and on textureless walls they guess. Robust losses and distractor masks act per pixel,
-mostly from colour, and state no false-alarm rate. This paper proposes a depth-only view gate built
-on Gaussian surfels whose uncertainty renders. Each 2DGS-style surfel keeps its shape for rendering
-and, separately, a $10\times10$ uncertainty over its mean, rotation error, log scales and opacity, with
-opacity frozen after a warm-up; every view adds the alpha-weighted rasteriser information $J^{\top}R^{-1}J$,
-so fusion needs no correspondences and leaving a view out is a subtraction and one Newton step. The
-other views' surface and its variance are rendered into the tested view, whose whitened depth residuals
-are tested at a stated false-alarm rate; pixels that no other view sees are untestable, and the tested
-view spawns no surfels. The noise has a single free variable, a scene temperature fitted
-leave-view-out, and the depth model's bias is a shared distance term. Colour is a separate block that
-may refine poses but never updates the map geometry. The test is classical (Baarda, Teunissen, solution separation); the
-contribution is a per-Gaussian uncertainty that renders and its use for testing views. A
-pre-registered protocol first measures the residuals of a real depth model on ETH3D, tests whether it
-repeats its errors across views in textureless regions, and requires the gate to beat cheap
-baselines, including SpotLessSplats, RobustNeRF, robust depth losses, aligned residual RMS and depth
-confidence, in depth-supervised splatting on ETH3D and ScanNet++.
+Monocular metric depth models can supervise Gaussian splatting from aerial survey imagery, but they fail
+regionally and for reasons of appearance: on specular surfaces they predict the depth of the reflection,
+and on textureless roofs and roads they guess; they are also trained mostly near the ground, so nadir
+views from altitude are an unfamiliar regime. Robust losses and distractor masks act per pixel, mostly
+from colour, and state no false-alarm rate. The contribution of this paper is a depth-only view gate. It
+uses a standard representation, 2DGS surfels augmented with $10\times10$ information blocks over mean,
+rotation error, log scales and opacity, kept apart from the rendering shape. Every view adds the
+alpha-weighted rasteriser information $J^{\top}R^{-1}J$, so fusion is sparse and correspondence-free, and
+leaving out a view, or a block of neighbouring frames of the same flight strip that tend to share its
+errors, is an exact subtraction and one Newton step. The remaining views' surface and its variance are
+rendered into the tested view, whose whitened depth residuals are tested at a stated false-alarm rate,
+with untestable pixels and no surfels spawned by the tested view, in rounds that retrain without
+flagged views under a Holm schedule. Geometry is fitted to depth only, so reflectance cannot corrupt it;
+poses are a trajectory spline from GNSS/IMU refined by render-and-compare; the noise has one free
+variable, a scene temperature. A pre-registered protocol first measures the residuals of a real depth
+model on UAV survey data with LiDAR reference, tests whether it repeats errors across neighbouring frames,
+and requires the gate to beat cheap baselines, including SpotLessSplats, RobustNeRF, robust depth losses,
+aligned residual RMS and depth confidence, on UseGeo, MatrixCity and ETH3D.
 \textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
 \end{abstract}
 
@@ -64,7 +64,10 @@ Gaussian splatting \sep monocular depth estimation \sep fault detection and excl
 
 \section*{Declarations}
 \textbf{Funding.} This research received no external funding.
-\textbf{Data and code availability.} \textcolor{red}{[TODO: the code, configurations, seeds and fault manifests are to be released; add the repository URL when public. Restricted datasets are not redistributed.]}
+\textbf{Data and code availability.} The datasets are used under their own terms and are not
+redistributed: UseGeo under CC BY-NC-SA 4.0; MatrixCity under CC BY-NC 4.0; H3D under terms still to be
+confirmed with its maintainers; ETH3D under terms still to be checked (Supplement~\ref{sup:setup}).
+\textcolor{red}{[TODO: the code, configurations, seeds and fault manifests are to be released; add the repository URL when public; confirm the H3D and ETH3D terms.]}
 \textbf{Use of AI tools.} \textcolor{red}{[TODO: author to state whether and how generative AI tools assisted the writing; Elsevier asks for a declaration.]}
 
 \bibliographystyle{elsarticle-num}

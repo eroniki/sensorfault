@@ -18,6 +18,16 @@ splatting and implicit surfaces after per-view alignment \cite{gs_dnsplatter,rec
 the rasteriser's own Jacobians rather than by association, and keep the uncertainty apart from the
 rendering shape.
 
+\runin{Dense fusion.} Volumetric fusion integrates depth into a truncated signed distance function on
+a voxel grid \cite{fus_curless,fus_kinectfusion}; radiance fields fit a dense volumetric field to images
+\cite{rec_nerf}; learned multi-view stereo builds cost volumes over depth hypotheses from feature
+correspondences \cite{rec_mvsnet}. Our representation is sparse, and its fusion and testing need no
+correspondences.
+
+\runin{Trajectories.} Continuous-time estimation writes the trajectory with temporal basis functions
+\cite{traj_furgale_basis}, and cumulative B-splines on Lie groups give smooth rotations with cheap
+derivatives \cite{traj_sommer_bspline}; we use such a spline as the prior for survey flights.
+
 \runin{Robust reconstruction.} Robust losses \cite{rob_blackrangarajan,rob_barron} and distractor-aware
 methods \cite{gs_robustnerf,gs_spotless,gs_robustsplat} down-weight pixels whose residual, mostly
 photometric, looks like an outlier; multi-view consistency filters test pixels by correspondence

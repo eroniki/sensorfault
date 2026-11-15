@@ -11,7 +11,6 @@ evidence logs (removed in the clean-up; see git history). Re-check all entries b
 | stat_dempster_em | https://api.crossref.org/works/10.1111/j.2517-6161.1977.tb01600.x / JRSS B 39(1):1-22, 1977; Dempster, Laird, Rubin (record; checked 2026-11-14). |
 | cal_guo_temperature | https://proceedings.mlr.press/v70/guo17a.html / ICML 2017, PMLR 70:1321-1330; Guo, Pleiss, Sun, Weinberger (page metadata; checked 2026-11-14). |
 | data_eth3d | Thomas Schops and Johannes L. Schonberger and Silvano Galliani and Torsten Sattl / A Multi-view Stereo Benchmark with High-Resolution Images and Multi-ca / 2017 IEEE Conference on Computer Vision and Patter / 2017 / pp=2538-2547 / https://api.crossref.org/works/10.1109/cvpr.2017.272 |
-| data_scannetpp | Chandan Yeshwanth and Yueh-Cheng Liu and Matthias Nießner and Angela Dai / ScanNet++: A High-Fidelity Dataset of 3D Indoor Scenes / 2023 IEEE/CVF International Conference on Computer / 2023 / pp=12-22 / https://api.crossref.org/works/10.1109/iccv51070.2023.00008 |
 | est_dav2 | Lihe Yang and Bingyi Kang and Zilong Huang and Zhen Zhao and Xiaogang Xu and Jia / Depth Anything V2 / Advances in Neural Information Processing Systems  / 2024 / pp=21875-21911 / https://api.crossref.org/works/10.52202/079017-0688 |
 | est_depthpro | arXiv 2410.02073 (venue from the arXiv comment field; no DOI/pages seen) / Depth Pro: Sharp Monocular Metric Depth in Less Than a Second |
 | est_marigold | Bingxin Ke and Anton Obukhov and Shengyu Huang and Nando Metzger and Rodrigo Cay / Repurposing Diffusion-Based Image Generators for Monocular Depth Estim / 2024 IEEE/CVF Conference on Computer Vision and Pa / 2024 / pp=9492-9502 / https://api.crossref.org/works/10.1109/cvpr52733.2024.00907 |
@@ -37,3 +36,13 @@ evidence logs (removed in the clean-up; see git history). Re-check all entries b
 | stat_teunissen_dia | https://api.crossref.org/works/10.1007/s00190-017-1045-7 / J. Geodesy 92(1):59-80; sole author Teunissen (record; checked 2026-11-14). |
 | unc_bayesrays | Crossref search -> 10.1109/CVPR52733.2024.01896; arXiv 2309.03185 / CVPR 2024, pp. 20061-20070; Goli, Reading, Sellan, Jacobson, Tagliasacchi (record; checked 2026-11-14). |
 | unc_fisherrf | Crossref search -> 10.1007/978-3-031-72624-8_24; arXiv 2311.17874 / ECCV 2024, LNCS, pp. 422-440; Jiang, Lei, Daniilidis (record; checked 2026-11-14). |
+| data_usegeo | https://api.crossref.org/works/10.1016/j.ophoto.2024.100070 / ISPRS Open J. Photogramm. Remote Sens. 13:100070, 2024; ten authors (record; checked 2026-11-14). Licence CC BY-NC-SA 4.0 per github.com/3DOM-FBK/usegeo. |
+| data_h3d | https://api.crossref.org/works/10.1016/j.ophoto.2021.100001 ; arXiv 2102.05346 / ISPRS Open J. Photogramm. Remote Sens. 1:100001, 2021; seven authors (record; checked 2026-11-14). Licence not stated on the benchmark page. |
+| data_matrixcity | https://api.crossref.org/works/10.1109/ICCV51070.2023.00297 ; arXiv 2309.16553 / ICCV 2023, pp. 3182-3192 (record; checked 2026-11-14). Licence CC BY-NC 4.0 per the project page. |
+| data_beyondlight | arXiv 2512.14200 (arXiv API record) / first six authors listed, "and others"; arXiv comment says ECCV 2026; cited as arXiv (checked 2026-11-14). |
+| rec_nerf | https://api.crossref.org/works/10.1007/978-3-030-58452-8_24 / ECCV 2020, LNCS, pp. 405-421 (record; checked 2026-11-14). |
+| rec_mvsnet | https://api.crossref.org/works/10.1007/978-3-030-01237-3_47 / ECCV 2018, LNCS, pp. 785-801 (record via search; checked 2026-11-14). |
+| traj_furgale_basis | https://api.crossref.org/works/10.1109/ICRA.2012.6225005 / ICRA 2012, pp. 2088-2095 (record via search; checked 2026-11-14). |
+| traj_sommer_bspline | https://api.crossref.org/works/10.1109/CVPR42600.2020.01116 / CVPR 2020, pp. 11145-11153; Sommer, Usenko, Schubert, Demmel, Cremers (record; checked 2026-11-14). |
+| fus_curless | https://doi.org/10.1145/237170.237269 / SIGGRAPH 1996, pp. 303-312 (carried over from the earlier evidence log). |
+| fus_kinectfusion | https://doi.org/10.1109/ISMAR.2011.6092378 / ISMAR 2011, pp. 127-136 (carried over from the earlier evidence log). |

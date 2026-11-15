@@ -21,8 +21,9 @@ $n_{\mathrm{eff}}/n$ or jackknife inflation are ablations only. (2)~The scene te
 noise level, not its shape or tails, and not a view whose nominal noise is genuinely larger than the
 scene's; such a view keeps an elevated false-alarm rate and is indistinguishable from a fault by design,
 so the guarantee is a scene-average false-alarm rate. (3)~If the depth model repeats the same error
-across views, as H2 tests for textureless walls, the other views agree with the fault and the gate
-cannot see it. (4)~Pixels that no other view sees are untestable, so low overlap lowers availability.
+across views, as H2 tests for textureless surfaces, the other views agree with the fault and the gate
+cannot see it; leave-block-out removes the neighbours that share it, but not errors repeated across
+whole strips, and it weakens the cavity, raises the detection floor and leaves more pixels untestable. (4)~Pixels that no other view sees are untestable, so low overlap lowers availability.
 (5)~If faulty views are a majority in a region, the leave-view-out surface follows the fault and the
 outer loop locks onto the wrong consensus; masking among a minority of faulty views and swamping of
 clean views are reduced, not excluded, by dropping one view per round, and a dropped clean view is not
@@ -31,12 +32,17 @@ and opacity is not re-estimated without the tested view; within a round, a surfe
 not-yet-caught view cannot be restored, although the next round re-densifies once that view is caught.
 The Holm schedule over rounds is exact only for fixed p-values, so the loop's level rests on
 clean-run calibration. (7)~Whole-view affine errors are absorbed by the alignment and are neither
-detected nor harmful; the depth bias is modelled only as a shared distance term. (8)~Colour refines the
+detected nor harmful; the depth bias is modelled only as a shared distance term. (8)~Colour may refine the
 poses but never the map geometry, so appearance cues are not used for detection. (9)~Pose faults are
-out of scope. (10)~The noise shape is calibrated on a few static scenes for one default model.
+out of scope; poses are refined, not estimated from scratch, and the spline assumes a smooth,
+continuously recorded flight. (10)~The noise shape is calibrated on a few static scenes for one default
+model, and nadir aerial imagery lies outside the depth model's main training distribution, which H1
+measures rather than assumes away.
 
 \subsection{Future Work}
 \label{sec:disc:future}
 Planned, none started: modelling cross-surfel correlation by low-rank or banded blocks; testing poses
 as well as depth; a per-view bias field of the depth model, which is the subject of a separate paper; using the rendered uncertainty for view selection and for reconstruction from fewer
-views; online operation; and depth from physical sensors.
+views; online operation; and depth from physical sensors. Estimating the light sources and relighting the
+appearance block, for example on aerial data under varying illumination \cite{data_beyondlight}, could later
+let colour help without letting it shape the geometry.
