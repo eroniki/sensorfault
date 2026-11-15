@@ -173,6 +173,8 @@ Not done, and why:
 
 Environment note (`docs/env.md`): the working GPU stack here is Python 3.10 + torch 2.4.1+cu121 + gsplat 1.4.0 with the system nvcc 12.0 (first JIT build about 40 minutes at low priority on this shared host). Python 3.12 + torch 2.15/cu13.2 + nvcc 13.x failed (header mismatch, then ptxas/nvcc errors).
 
+**Stage 1 pipeline (written 2026-11-15, `docs/stage1-titan.md`):** SDXL + LoRA training code with checkpoint/resume (resume reproduces an uninterrupted run to 1e-6 on a tiny CPU model), masked v-prediction loss on affine-invariant targets, BlendedMVS/Hypersim readers, smoke and full-run scripts and a smoke verdict script; also run on real SDXL weights for 36 steps on the 2070 (finite, no overflow, resume works). The smoke run on real data and the full run are for the TITAN session. Not yet checked: depth quality of any model, BlendedMVS depth convention.
+
 Next: (1) author decisions in section 11; (2) stage 0 on the TITAN with the harness; (3) feed model-predicted depth (first a pretrained Marigold-style or Depth Pro prediction as a stand-in baseline) through the same 2DGS and run the statistic on real views with injected faults; (4) a non-exchangeable-null toy; (5) one BlendedMVG scene download to settle its depth/camera conventions.
 
 Python/PyTorch, diffusers, gsplat, 2DGS (the CPU toy and the ETH3D interface need only numpy/scipy, plus Pillow and py7zr for data). No latency targets.
