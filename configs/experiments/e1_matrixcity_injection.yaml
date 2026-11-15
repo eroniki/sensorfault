@@ -1,6 +1,6 @@
 # Experiment E1 (first gate experiment, design v3.4 frozen). Script: experiments/e1_matrixcity_injection.py
 id: e1_matrixcity_injection
-status: run
+status: completed 2026-11-15 (results/e1: clean.json, grid.json, repeat.json, summary.md)
 data:
   dataset: MatrixCity (CC BY-NC 4.0, Hugging Face BoDai/MatrixCity)
   block: small_city aerial train block_3 (185 frames; 8x8 positions x 4 headings, 30 deg oblique, 300 m)
