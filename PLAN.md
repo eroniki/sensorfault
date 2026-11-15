@@ -142,7 +142,7 @@ Done (CPU, plus one 0.4 GB ETH3D scene, `pipes`, downloaded outside the repo; ma
   - the ground-truth depth dumps are **z-depth** (against the laser scan projected through the distorted camera: median |d/z - 1| = 0.00000, all 2.2M compared pixels within 2%; as range they fail, 6-9% within 2%), which also confirms the pose, pixel-centre and THIN_PRISM_FISHEYE conventions taken from COLMAP's source;
   - the dumps are at the original distorted resolution (6048x4032) and are **not aligned with the undistorted images** (6220x4141, PINHOLE), so `undistort_depth` re-samples them; after re-sampling at 1/8 scale (518x778) the depth agrees with the laser scan projected into the undistorted camera with median relative error 0.03% (p90 0.16%);
   - **ground truth is sparse: 9-10% of pixels have depth**, so evaluation and supervision must use a validity mask and the label-fraction study needs a pixel-density control as well as the scene fraction.
-- 20 tests pass (leave-out guard, statistic, ETH3D parsers/camera model/undistortion on synthetic data, manifest; a real-data test runs with `ETH3D_PIPES` set).
+- 19 CPU tests pass (leave-out guard, statistic, ETH3D parsers/camera model/undistortion on synthetic data, manifest); a 20th, real-data test of the undistorted ground truth against the laser scan, passes when `ETH3D_PIPES` is set.
 
 Not done, and why:
 - **Stage 0 on the TITAN RTX: not run.** This session's machine has an RTX 2070 (8 GB); the TITAN RTX box is not reachable from here. Stage 0 stays a task for that machine (sizing harness to be written, below).
