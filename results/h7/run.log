@@ -1,0 +1,44 @@
+surfels 81152, GSD 0.1410 m, 159 s
+renderer vs E1 assignment at the true poses: 65.0% of measured pixels on the same surfel
+fault re-injected in view 59: 0.40 of its pixels
+baseline views rendered, 166 s
+baseline: Holm round rejects [59] (view 59 is the faulty one), 173 s
+seed 0 control     rot  0.00 deg trans    0 GSD: flagged 0/8 clean perturbed; median recovered rot nan trans nan; unperturbed flagged 0; 66 s
+seed 0 rotation    rot  0.05 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.62 trans nan; unperturbed flagged 11; 65 s
+seed 0 rotation    rot  0.10 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.61 trans nan; unperturbed flagged 29; 77 s
+seed 0 rotation    rot  0.25 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.58 trans nan; unperturbed flagged 38; 66 s
+seed 0 rotation    rot  0.50 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.62 trans nan; unperturbed flagged 97; 76 s
+seed 0 rotation    rot  1.00 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.66 trans nan; unperturbed flagged 110; 84 s
+seed 0 rotation    rot  2.00 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.65 trans nan; unperturbed flagged 178; 80 s
+seed 0 translation rot  0.00 deg trans    1 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.30; unperturbed flagged 5; 69 s
+seed 0 translation rot  0.00 deg trans    2 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.15; unperturbed flagged 16; 73 s
+seed 0 translation rot  0.00 deg trans    5 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.64; unperturbed flagged 39; 66 s
+seed 0 translation rot  0.00 deg trans   10 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.53; unperturbed flagged 59; 69 s
+seed 0 translation rot  0.00 deg trans   25 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.69; unperturbed flagged 145; 77 s
+seed 0 translation rot  0.00 deg trans   50 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.84; unperturbed flagged 184; 92 s
+seed 0 combined    rot  0.05 deg trans    1 GSD: flagged 8/8 clean perturbed; median recovered rot 0.61 trans -0.05; unperturbed flagged 10; 69 s
+seed 0 combined    rot  0.10 deg trans    2 GSD: flagged 8/8 clean perturbed; median recovered rot 0.63 trans 0.24; unperturbed flagged 12; 78 s
+seed 0 combined    rot  0.25 deg trans    5 GSD: flagged 8/8 clean perturbed; median recovered rot 0.58 trans 0.49; unperturbed flagged 56; 67 s
+seed 0 combined    rot  0.50 deg trans   10 GSD: flagged 8/8 clean perturbed; median recovered rot 0.64 trans 0.37; unperturbed flagged 93; 74 s
+seed 0 combined    rot  1.00 deg trans   25 GSD: flagged 8/8 clean perturbed; median recovered rot 0.67 trans 0.57; unperturbed flagged 136; 78 s
+seed 0 combined    rot  2.00 deg trans   50 GSD: flagged 8/8 clean perturbed; median recovered rot 0.65 trans 0.67; unperturbed flagged 156; 81 s
+seed 1 control     rot  0.00 deg trans    0 GSD: flagged 0/8 clean perturbed; median recovered rot nan trans nan; unperturbed flagged 0; 73 s
+seed 1 rotation    rot  0.05 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.60 trans nan; unperturbed flagged 3; 73 s
+seed 1 rotation    rot  0.10 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.61 trans nan; unperturbed flagged 11; 62 s
+seed 1 rotation    rot  0.25 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.65 trans nan; unperturbed flagged 31; 75 s
+seed 1 rotation    rot  0.50 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.67 trans nan; unperturbed flagged 60; 83 s
+seed 1 rotation    rot  1.00 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.64 trans nan; unperturbed flagged 87; 92 s
+seed 1 rotation    rot  2.00 deg trans    0 GSD: flagged 8/8 clean perturbed; median recovered rot 0.63 trans nan; unperturbed flagged 118; 83 s
+seed 1 translation rot  0.00 deg trans    1 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.51; unperturbed flagged 1; 69 s
+seed 1 translation rot  0.00 deg trans    2 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.46; unperturbed flagged 11; 69 s
+seed 1 translation rot  0.00 deg trans    5 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.59; unperturbed flagged 23; 74 s
+seed 1 translation rot  0.00 deg trans   10 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.70; unperturbed flagged 49; 75 s
+seed 1 translation rot  0.00 deg trans   25 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.80; unperturbed flagged 97; 81 s
+seed 1 translation rot  0.00 deg trans   50 GSD: flagged 8/8 clean perturbed; median recovered rot nan trans 0.76; unperturbed flagged 143; 87 s
+seed 1 combined    rot  0.05 deg trans    1 GSD: flagged 8/8 clean perturbed; median recovered rot 0.49 trans 0.33; unperturbed flagged 4; 75 s
+seed 1 combined    rot  0.10 deg trans    2 GSD: flagged 8/8 clean perturbed; median recovered rot 0.64 trans 0.33; unperturbed flagged 19; 80 s
+seed 1 combined    rot  0.25 deg trans    5 GSD: flagged 8/8 clean perturbed; median recovered rot 0.62 trans 0.36; unperturbed flagged 47; 85 s
+seed 1 combined    rot  0.50 deg trans   10 GSD: flagged 8/8 clean perturbed; median recovered rot 0.64 trans 0.41; unperturbed flagged 62; 80 s
+seed 1 combined    rot  1.00 deg trans   25 GSD: flagged 8/8 clean perturbed; median recovered rot 0.63 trans 0.64; unperturbed flagged 138; 87 s
+seed 1 combined    rot  2.00 deg trans   50 GSD: flagged 8/8 clean perturbed; median recovered rot 0.63 trans 0.60; unperturbed flagged 174; 91 s
+{"gsd_m": 0.14103249788421204, "renderer_agreement": 0.6502235217853822, "M": 1850, "excluded_before": [59], "settings": {"rot_levels_deg": [0.05, 0.1, 0.25, 0.5, 1.0, 2.0], "trans_levels_gsd": [1, 2, 5, 10, 25, 50], "seeds": [0, 1], "n_isolated": 5, "n_blocks": 1, "block_len": 3, "gnss_sd_m": 0.3, "gnss_sd_deg": 0.02, "smooth_sd_m": 0.3, "smooth_sd_deg": 0.02, "gn_iters": 8, "disc_radius_m": 2.1, "detect_rule": {"rot_deg": 0.5, "trans_gsd": 10}, "recover_rule": {"rot_deg": 1.0, "trans_gsd": 25}, "target": 0.8}, "wallclock_s": 3074.4}

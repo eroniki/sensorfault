@@ -1,0 +1,49 @@
+{
+ "gsd_m": 0.14103249788421204,
+ "renderer_agreement": 0.6502235217853822,
+ "M": 1850,
+ "excluded_before": [
+  59
+ ],
+ "settings": {
+  "rot_levels_deg": [
+   0.05,
+   0.1,
+   0.25,
+   0.5,
+   1.0,
+   2.0
+  ],
+  "trans_levels_gsd": [
+   1,
+   2,
+   5,
+   10,
+   25,
+   50
+  ],
+  "seeds": [
+   0,
+   1
+  ],
+  "n_isolated": 5,
+  "n_blocks": 1,
+  "block_len": 3,
+  "gnss_sd_m": 0.3,
+  "gnss_sd_deg": 0.02,
+  "smooth_sd_m": 0.3,
+  "smooth_sd_deg": 0.02,
+  "gn_iters": 8,
+  "disc_radius_m": 2.1,
+  "detect_rule": {
+   "rot_deg": 0.5,
+   "trans_gsd": 10
+  },
+  "recover_rule": {
+   "rot_deg": 1.0,
+   "trans_gsd": 25
+  },
+  "target": 0.8
+ },
+ "wallclock_s": 3074.4
+}

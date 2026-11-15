@@ -23,4 +23,4 @@ baselines: [gate, gate_perturbed_poses]
 metrics:
   primary: [detection_rate_before_refinement, pose_error_after_refinement_deg, pose_error_after_refinement_gsd,
     fraction_recovered]
-implemented: false
+implemented: matrixcity_block3_e1_setting  # experiments/h7_pose_check.py; UseGeo not run

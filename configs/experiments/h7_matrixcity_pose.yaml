@@ -1,0 +1,37 @@
+# H7 pose perturbation check on MatrixCity block 3 (E1 setting). Written before the full run, 2026-11-15.
+extends: ../h7_pose_perturbation_check.yaml
+dataset: matrixcity small_city aerial block 3 (exact geometry; E1 surfels, 96x54 per view, 1% depth noise)
+scene: E1 grid scene of Figure S5 (8 sigma on 40% of view 59, seed 1); the gate loop excluded view 59 before H7
+world: the surfel-disc model (disc radius 2.1 m) re-rendered at the true poses + 1% noise, so that the renderer
+  used by the gate and by the refinement is exact at the true poses (E1's own surfel assignment agrees on
+  65% of pixels; depths agree to a median 0.00 sigma but differ > 1 sigma on ~6% of pixels at building edges)
+gsd_m: 0.141  # full-resolution ground sampling distance at the block's median range (327 m)
+perturbations:
+  groups_per_seed: {isolated: 5, block_of_3_shared_perturbation: 1, flagged_view: 1}
+  one_group_at_a_time: true  # first attempt perturbed 17 views at once; their wrong depth swamped 69 others
+  seeds: [0, 1]
+  sweeps: {control: [[0, 0]], rotation_deg: [0.05, 0.1, 0.25, 0.5, 1.0, 2.0], translation_gsd: [1, 2, 5, 10, 25, 50],
+    combined: paired levels}
+  direction: random rotation axis and translation direction per group
+gate:
+  pose_term: J_q Sigma_q J_q^T in Sigma_r (rank-6 Woodbury); Sigma_q from the strip spline with GNSS/IMU and
+    smoothness priors only (no depth term of the view)
+  flagged: rejected in the Holm round, alpha 0.05, M = N R_max = 1850, ranked by log p; B = 1 as in E1's grid stage
+refinement:
+  spline: uniform cubic B-spline of pose corrections per strip, one control per frame interval
+  priors_fixed_a_priori: {gnss_sd_m: 0.3, gnss_sd_deg: 0.02, smooth_sd_m: 0.3, smooth_sd_deg: 0.02}
+  render_and_compare: depth of the view vs the fused surfel map at the estimated pose, per-view scale and
+    offset alignment marginalised, Huber weights at 3 sigma (IRLS), Gauss-Newton with step halving, 8 iterations
+  exploratory_not_preregistered: same refinement without the GNSS/IMU prior of the perturbed frames
+criteria:
+  a: detection rate over perturbed clean views (isolated + block) >= 0.8 at every level with >= 0.5 deg or >= 10 GSD
+  b: median recovered fraction (1 - error after / perturbation, per perturbed component) >= 0.8 at every level up to
+    1 deg and 25 GSD
+  reported_also: flagged-view rows, unperturbed views flagged (swamping), induced error in the unperturbed component
+revisions_during_the_run:
+  - "Refinement bug fixed after the first full run (results discarded): the spline had been applied as smooth
+    corrections to the input poses, so its smoothness prior held a perturbed frame at its input. The spline is now
+    the trajectory (a base fitted to the input poses with the same priors, corrections on that base), as designed.
+    Detection (a) was unaffected (100% at every level in both runs). No prior, threshold or criterion was changed."
+  - "Render-and-compare: Huber weights and step halving added after plain Gauss-Newton diverged on single views
+    (wrong surfel at building edges); added before any H7 outcome was computed."
