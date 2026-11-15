@@ -453,6 +453,7 @@ def main():
     # --- C2: same error repeated on neighbouring frames of a strip (masking) -----------------------
     rep = []
     rc = cfg["repeat"]
+    measure(views, np.random.default_rng(0))  # placeholder data; only the strip order is used
     g_order = Gate(views, geo, cfg, B=1)
     strips = {}
     for i in g_order.order:
