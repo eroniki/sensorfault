@@ -13,12 +13,13 @@ git config core.hooksPath .githooks   # once per clone: pre-commit rebuilds and 
 ```
 Class `elsarticle` with option `preprint,12pt`, bibliography style `elsarticle-num`, both from TeX Live.
 `draft_v0.pdf` is the last committed build; the pre-commit hook rebuilds it whenever `main.tex`, `sections/`,
-`refs/references.bib` or `latexmkrc` is part of a commit, so it always matches the sources in the same commit.
+`figures/`, `refs/references.bib` or `latexmkrc` is part of a commit, so it always matches the sources in the same commit.
 
 ## Layout
 - `main.tex` front matter, abstract, declarations, section includes
 - `sections/` `intro`, `related`, `method`, `setup`, `results`, `conclusion`, `macros`
 - `refs/references.bib` cited entries only; `refs/EVIDENCE.md` how each was checked
+- `figures/` PDF figures (toy results; made by `scripts/make_figures.py --paper` in `eroniki/depthcal-gs`)
 - `draft_v0.pdf` committed build; `scripts/build.sh` builds it; `.githooks/pre-commit` keeps it current
 
 ## Licence note
