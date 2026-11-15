@@ -1,0 +1,32 @@
+% Toy residual maps for one fault family (\toyfault = square|warp|edge): clean versus faulted view, true and estimated covariance.
+% Data: data/toy_<fault>_<variant>_<clean|fault>_<r|e>.csv, data/toy_render_macros.tex (T, threshold, shared colour limits), data/toy_outline_<fault>.csv.
+\input{\tikzdir/data/toy_render_macros.tex}
+\newcommand{\toyg}[1]{\csname #1\endcsname}
+% #1 variant, #2 state, #3 kind (r|e), #4 colormap, #5 extra axis options
+\newcommand{\toypanel}[6]{%
+  \edef\vlim{\toyg{ToyV#3@\toyfault @#1}}%
+  \addplot[matrix plot*, mesh/cols=16, mesh/rows=16, point meta=explicit, point meta min=-\vlim, point meta max=\vlim, colormap name=#4]
+    table[x=x, y=y, meta=z, col sep=space]{\tikzdir/data/toy_\toyfault _#1_#2_#3.csv};
+  \ifnum#6=1 \addplot[black, line width=0.6pt, unbounded coords=jump, forget plot] table[x=x, y=y]{\tikzdir/data/toy_outline_\toyfault.csv};\fi}
+\pgfplotsset{toyax/.style={axis on top, enlargelimits=false, xmin=0, xmax=16, ymin=0, ymax=16, xtick=\empty, ytick=\empty, width=0.135\figw, height=0.135\figw,
+  colorbar style={width=0.18cm, tick label style={font=\figfont\tiny}, tick align=outside, tick style={line width=0.4pt}}}}
+\begin{tikzpicture}
+\begin{groupplot}[amb, toyax, group style={group size=4 by 2, horizontal sep=0.095\figw, vertical sep=1.3cm}, title style={align=center, font=\figfont\scriptsize}]
+\nextgroupplot[title={Raw residual $r$\\clean view}, ylabel={True cov.}]
+\toypanel{oracle}{clean}{r}{rdbu}{}{0}
+\nextgroupplot[title={Raw residual $r$\\faulted view}, colormap name=rdbu, colorbar]
+\toypanel{oracle}{fault}{r}{rdbu}{}{1}
+\nextgroupplot[title={Whitened $e$, clean\\$T=\toyg{ToyT@\toyfault @oracle@clean}$, thr.\ \toyg{ToyThr@\toyfault @oracle@clean}\\\toyg{ToyFlag@\toyfault @oracle@clean}}]
+\toypanel{oracle}{clean}{e}{piyg}{}{0}
+\nextgroupplot[title={Whitened $e$, faulted\\$T=\toyg{ToyT@\toyfault @oracle@fault}$, thr.\ \toyg{ToyThr@\toyfault @oracle@fault}\\\toyg{ToyFlag@\toyfault @oracle@fault}}, colormap name=piyg, colorbar]
+\toypanel{oracle}{fault}{e}{piyg}{}{1}
+\nextgroupplot[title={Raw residual $r$\\clean view}, ylabel={Estimated cov.}]
+\toypanel{kernel}{clean}{r}{rdbu}{}{0}
+\nextgroupplot[title={Raw residual $r$\\faulted view}, colormap name=rdbu, colorbar]
+\toypanel{kernel}{fault}{r}{rdbu}{}{1}
+\nextgroupplot[title={Whitened $e$, clean\\$T=\toyg{ToyT@\toyfault @kernel@clean}$, thr.\ \toyg{ToyThr@\toyfault @kernel@clean}\\\toyg{ToyFlag@\toyfault @kernel@clean}}]
+\toypanel{kernel}{clean}{e}{piyg}{}{0}
+\nextgroupplot[title={Whitened $e$, faulted\\$T=\toyg{ToyT@\toyfault @kernel@fault}$, thr.\ \toyg{ToyThr@\toyfault @kernel@fault}\\\toyg{ToyFlag@\toyfault @kernel@fault}}, colormap name=piyg, colorbar]
+\toypanel{kernel}{fault}{e}{piyg}{}{1}
+\end{groupplot}
+\end{tikzpicture}

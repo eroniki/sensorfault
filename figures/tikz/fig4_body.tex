@@ -1,0 +1,31 @@
+% Toy statistic: minimum detectable fault (80 % power) per covariance variant, and false alarms at the chi2 threshold.
+% Data: data/fig4_mdf_wide.csv, data/fig4_null.csv (synthetic Gaussian toy, 1 seed)
+\newcommand{\figfourbar}[4]{% #1 column, #2 colour/style, #3 shift, #4 legend text
+  \addplot[ybar, #2, draw=black, line width=0.3pt, bar shift=#3, bar width=7pt, nodes near coords, point meta=explicit symbolic,
+    every node near coord/.append style={font=\figfont\tiny, rotate=90, anchor=west, /pgf/number format/.cd}]
+    table[x expr=\coordindex, y=#1, meta=#1_lab, col sep=comma]{\tikzdir/data/fig4_mdf_wide.csv};
+  \addplot[ybar, forget plot, fill=none, draw=none, bar shift=#3, bar width=7pt, postaction={pattern=north east lines, pattern color=white}]
+    table[x expr=\coordindex, y expr=\thisrow{#1_c}*\thisrow{#1}, col sep=comma]{\tikzdir/data/fig4_mdf_wide.csv};
+  \addlegendentry{#4}}
+\pgfplotsset{figfour/.style={ybar, barleg}}
+\newcommand{\figfournull}[2]{\addplot[ybar, fill=#2, draw=black, line width=0.3pt, bar shift=0pt, bar width=9pt, nodes near coords,
+  restrict expr to domain={\thisrow{vi}}{#1:#1}, every node near coord/.append style={font=\figfont\tiny, /pgf/number format/.cd, fixed, precision=3}]
+  table[x=vi, y=far, col sep=comma]{\tikzdir/data/fig4_null.csv};}
+\begin{tikzpicture}
+\begin{groupplot}[amb, group style={group size=2 by 1, horizontal sep=0.1\figw}, height=0.22\figw]
+\nextgroupplot[figfour, width=0.43\figw, ymin=0, ymax=5.2, ytick={0,1,2,3,4}, xtick={0,1,2}, xticklabels={Square, Smooth warp, Edge-aligned}, xmin=-0.55, xmax=2.55,
+  ylabel={Minimum detectable fault [sd]}, legend to name=figfourleg, legend columns=2, legend style={/tikz/every even column/.append style={column sep=6pt}}]
+\figfourbar{known}{fill=ambBlack}{-14pt}{known: true $(a,b)$ and covariance}
+\figfourbar{oracle}{fill=ambRed}{-7pt}{fitted $(s,t)$, true covariance}
+\figfourbar{kernel}{fill=ambBlue}{0pt}{estimated kernel (robust)}
+\figfourbar{kernel_nr}{fill=ambBrown}{7pt}{estimated kernel (plain)}
+\figfourbar{shrunk}{fill=ambGreen}{14pt}{shrunk sample covariance}
+\nextgroupplot[figfour, width=0.25\figw, ymin=0, ymax=0.34, xtick={0,1,2,3,4}, xticklabels={known, oracle, kernel, kernel (plain), shrunk}, x tick label style={rotate=30, anchor=east},
+  xmin=-0.6, xmax=4.6, ylabel={False-alarm rate [-]}]
+\draw[dotted, black, line width=0.5pt] (axis cs:-0.6,0.05) -- (axis cs:4.6,0.05);
+\figfournull{0}{ambBlack}\figfournull{1}{ambRed}\figfournull{2}{ambBlue}\figfournull{3}{ambBrown}\figfournull{4}{ambGreen}
+\end{groupplot}
+\node[anchor=south] at ($(group c1r1.north east)+(0.8cm,0.3cm)$) {\ref{figfourleg}};
+\subcap{$(group c1r1.south)+(0,-1.0cm)$}{(a) Detectability (hatched: not reached)}
+\subcap{$(group c2r1.south)+(0,-1.35cm)$}{(b) False alarms at $\chi^2$ threshold}
+\end{tikzpicture}
