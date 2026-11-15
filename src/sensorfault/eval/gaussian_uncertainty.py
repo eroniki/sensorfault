@@ -335,3 +335,30 @@ def leave_block_out_newton(
     """Cavity without a whole block: subtract the block's summed information and take one Newton
     step with the block's summed gradient (exact for the linear-Gaussian model)."""
     return leave_view_out_newton(mean, L, L_block, grad_block)
+
+
+# ---------------------------------------------------------------------------------------------
+# Residual precision with the block-sparse surfel term (frozen equation, design v3.4)
+# ---------------------------------------------------------------------------------------------
+
+
+def residual_precision_apply(
+    wn: np.ndarray, U: np.ndarray, inv: np.ndarray, Lam_cav: np.ndarray, X: np.ndarray
+) -> np.ndarray:
+    """Apply Sigma_r^{-1} to X for Sigma_r = W^{-1} + U P U^T, by Woodbury.
+
+    ``wn`` (n,) is the diagonal noise precision W, ``U`` (n, 3) holds each pixel's row
+    w_uk J_uk on the (nu, tau1, tau2) block of its surfel ``inv[u]``, and ``Lam_cav`` (K, 3, 3) the
+    cavity information P^{-1} of each surfel. Pixels rendered by the same surfel are correlated
+    through its error; different surfels are independent. Cost: one pass over the pixels.
+        Sigma_r^{-1} X = W X - W U (Lam_cav + U^T W U)^{-1} U^T W X
+    """
+    X = X if X.ndim == 2 else X[:, None]
+    S = Lam_cav.copy()
+    np.add.at(S, inv, wn[:, None, None] * U[:, :, None] * U[:, None, :])
+    Sinv = np.linalg.inv(S)
+    WX = wn[:, None] * X
+    UtWX = np.zeros((len(S), X.shape[1], 3))
+    np.add.at(UtWX, inv, WX[:, :, None] * U[:, None, :])
+    corr = np.einsum("kij,kcj->kci", Sinv, UtWX)
+    return WX - wn[:, None] * np.einsum("nci,ni->nc", corr[inv], U)

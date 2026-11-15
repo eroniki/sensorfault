@@ -328,3 +328,27 @@ def test_leave_block_out_equals_refit_without_the_block_and_sequential_subtracti
     k = 40
     g = gu.subblock_map(RS[k])[0]
     assert g @ (L - LB)[k] @ g < g @ (L - infos[2][0])[k] @ g
+
+
+def test_residual_precision_with_block_sparse_surfel_term_matches_dense_inverse():
+    rng = np.random.default_rng(10)
+    n, K = 60, 7
+    inv = rng.integers(0, K, n)
+    U = rng.normal(size=(n, 3))
+    wn = rng.uniform(0.5, 2.0, n)
+    A = rng.normal(size=(K, 3, 3))
+    Lam = np.einsum("kij,klj->kil", A, A) + 0.5 * np.eye(3)
+    P = np.linalg.inv(Lam)
+    Ud = np.zeros((n, 3 * K))
+    for u in range(n):
+        Ud[u, 3 * inv[u] : 3 * inv[u] + 3] = U[u]
+    Pd = np.zeros((3 * K, 3 * K))
+    for k in range(K):
+        Pd[3 * k : 3 * k + 3, 3 * k : 3 * k + 3] = P[k]
+    Sigma = np.diag(1.0 / wn) + Ud @ Pd @ Ud.T
+    X = rng.normal(size=(n, 4))
+    got = gu.residual_precision_apply(wn, U, inv, Lam, X)
+    assert np.allclose(got, np.linalg.solve(Sigma, X))
+    # the diagonal-only surface term is different whenever pixels share a surfel
+    diag = 1.0 / (1.0 / wn + np.einsum("ni,nij,nj->n", U, P[inv], U))
+    assert not np.allclose(got, diag[:, None] * X)
