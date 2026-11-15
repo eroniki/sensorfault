@@ -161,6 +161,8 @@ def train(cfg: dict, workdir: str, resume: str = "auto", max_steps: int | None =
         stop["flag"] = True
     signal.signal(signal.SIGTERM, handler)
     signal.signal(signal.SIGINT, handler)
+    run_t0 = time.time()
+    wall0 = extra.get("wall_s", 0.0)
     last_ckpt_t = time.time()
     window, t_win = [], time.time()
     consecutive_bad = 0
@@ -227,6 +229,7 @@ def train(cfg: dict, workdir: str, resume: str = "auto", max_steps: int | None =
             logf.flush()
             print(json.dumps(rec), flush=True)
             unet.train()
+        extra["wall_s"] = wall0 + (time.time() - run_t0)          # total training wall time across resumes
         due = (stop_at is not None and step == stop_at) or (time.time() - last_ckpt_t) / 60 >= cfg.get("ckpt_every_min", 60) or (cfg.get("ckpt_every_steps") and step % cfg["ckpt_every_steps"] == 0)
         if due or stop["flag"] or step == total:
             save_ckpt(wd / f"ckpt_{step:07d}.pt", unet, opt, scaler, step, cfg, extra)

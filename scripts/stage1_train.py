@@ -46,7 +46,7 @@ def main():
             cfg[k] = v
     cfg = expand(cfg)
     print(json.dumps({"config": cfg}), flush=True)
-    out = train(cfg, a.workdir, resume=None if a.resume == "none" else a.resume, max_steps=a.max_steps)
+    out = train(cfg, a.workdir, resume=None if a.resume == "none" else a.resume, max_steps=a.max_steps, stop_at=a.stop_at)
     print(json.dumps({"done": out}), flush=True)
 
 

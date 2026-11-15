@@ -163,3 +163,27 @@ def test_validation_is_skipped_when_a_dataset_has_no_val_frames(tmp_path, capsys
     assert not tr.empty and tr[0]["rgb"].shape == (3, 32, 32)
     with pytest.raises(FileNotFoundError):                      # but a missing TRAIN set is still fatal
         D.build_dataset({"type": "blendedmvs", "root": str(tmp_path)}, "train")
+
+
+def test_cli_honours_stop_at_and_resumes_to_the_end(tmp_path):
+    """The script path used by stage1_smoke.sh: --stop-at must really stop, and a second call must resume and finish (wall_s accumulates)."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    cfgp = tmp_path / "cfg.json"
+    cfgp.write_text(json.dumps(CFG))
+    script = str(Path(__file__).resolve().parents[1] / "scripts" / "stage1_train.py")
+    wd = tmp_path / "run"
+
+    def run(*extra):
+        r = subprocess.run([sys.executable, script, "--config", str(cfgp), "--workdir", str(wd), *extra], capture_output=True, text=True, timeout=600)
+        assert r.returncode == 0, r.stderr[-600:]
+        return r.stdout
+
+    out1 = run("--resume", "none", "--stop-at", "3")
+    assert (wd / "ckpt_0000003.pt").exists() and not (wd / "ckpt_0000006.pt").exists()
+    assert '"step": 3' in out1 and '"step": 4' not in out1
+    out2 = run("--resume", "auto")
+    assert "resumed from" in out2 and (wd / "ckpt_0000006.pt").exists()
+    done = [json.loads(line)["done"] for line in out2.splitlines() if line.startswith('{"done"')][0]
+    assert done["step"] == 6 and done["extra"]["wall_s"] > 0
