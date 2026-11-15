@@ -72,11 +72,9 @@ single pass that excludes every rejected view at once excluded 5--8\% of clean v
 frames out of 30 were never detected, in two of the ten scenes. In this exact, independent-noise setting
 the energy statistic was slightly conservative, mean $T/m=0.965$, and the per-view false-alarm rate of a
 single test at $p<0.05$ was 7.5\% with the temperature. The temperature is fitted from the conservative
-energy statistics and so slightly loosens the region scan; the Holm schedule absorbs this. One caveat on
-how these numbers were produced: E1's whitening kept the correlation between pixels that one surfel
-renders, a change to \eqref{eq:res} that is still awaiting approval and is not part of the method as
-stated; without it, the region scan raised false alarms on weakly supported views in a dry run. The
-loop also ranked views by $\log p$, so that a swamped neighbour whose p-value underflows to zero cannot be
+energy statistics and so slightly loosens the region scan; the Holm schedule absorbs this. Whitening kept the correlation between pixels that one surfel renders (Section~\ref{sec:method:gate});
+without it, the region scan raised false alarms on weakly supported views in a dry run. The loop
+ranked views by $\log p$, so that a swamped neighbour whose p-value underflows to zero cannot be
 dropped before the faulty view.
 
 \FloatBarrier
