@@ -239,3 +239,38 @@ noise to both.}
 \end{figure}
 \FloatBarrier
 
+\subsection{H7 Protocol Details}
+\label{sup:h7}
+\emph{World and renderer.} The E1 surfels (3~m voxels on the exact geometry) are rendered as discs of radius
+2.1~m, z-buffered, with ray--plane depth; the measured depth of each view is this render at its true pose
+plus noise of 1\% of depth, so that the renderer used by the gate and by the refinement is exact at the true
+poses. The fault of Figure~\ref{fig:e1qualviews} is re-injected into the same rectangle of view 59. At the true
+poses the gate rejects only view 59, as in E1.
+\emph{Perturbed groups.} Per seed, five isolated views on different strips of eight frames, one block of three
+consecutive frames, and view 59, each perturbed on its own; a block shares one perturbation. Rotation axes and
+translation directions are drawn at random per group. A first attempt that perturbed all groups at once
+swamped 69 unperturbed views at 1$^{\circ}$ and 25~GSD and was replaced before any result was used.
+\emph{Gate.} $\Sigma_r$ of \eqref{eq:res} with the pose term, rank six, added by a second Woodbury step;
+$J_q$ by central differences with the surfel assignment held fixed; $\Sigma_q$ from the strip spline with the
+GNSS/IMU and smoothness priors only. Because a perturbed group changes the statistics only of views that
+share surfels with it, those are recomputed and the others reused; this is exact.
+\emph{Refinement.} One spline control per frame interval; the spline is first fitted to the input poses with
+the two priors and then refined by Gauss--Newton on corrections to it, with Huber weights at $3\sigma$ on the
+render-and-compare residuals, the per-view scale and offset marginalised, step halving on the total cost, and
+eight iterations. Plain least squares diverged at building edges, where a pixel sees a different surfel, and
+was replaced by the Huber form before any H7 outcome was computed. A first full run had applied the spline to
+corrections of the input poses rather than to the trajectory, which kept a perturbed frame at its input; it
+was fixed and rerun, with no change to priors, thresholds or criteria (\texttt{configs/experiments/h7\_matrixcity\_pose.yaml}).
+\emph{Cost.} 51~min on four CPU threads, largest temperature 60\,$^{\circ}$C (CPU).
+
+\begin{figure}[!htbp]
+\centering
+\input{\hfigdir/fig_h7_scatter.tex}
+\caption{H7: pose error after refinement against the error before, for every perturbed clean view and
+component (red: as specified; black: exploratory, without the perturbed frame's prior). Points on the solid
+line are unchanged, points on the dotted line have 80\% of the error removed; points above the solid line got
+worse.}
+\label{fig:h7scatter}
+\end{figure}
+\FloatBarrier
+

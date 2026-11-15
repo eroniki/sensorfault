@@ -8,9 +8,11 @@ view is compared with the other views' rendered surface by a whitened test at a 
 fitted without it, with a stated false-alarm rate. The test is Baarda's and Teunissen's; the
 contribution is an uncertainty that renders and its use for testing views. The evaluation starts by
 measuring the depth model and requires the gate to beat cheap baselines on regional,
-appearance-driven failures. Only the first controlled experiment has been run. It used exact
-synthetic depth and independent noise, so it addresses the false-alarm control, the scene temperature
-and part of H6, but none of H1--H7 as stated.
+appearance-driven failures. Two controlled experiments have been run, on exact synthetic depth with
+independent noise. E1 addresses the false-alarm control, the scene temperature and part of H6. The H7
+pose check supports its detection prediction (a) and falsifies its recovery prediction (b): the
+refinement as specified removed 63\% of a rotation error and 38--80\% of a translation error, below the
+80\% target, and a perturbed view swamped up to 67 others.
 \TODO{Rewrite around the measured results; if H1 is a no-go, reframe as an analysis of the depth
 model's failures; report for each of H1--H6 whether it was supported or falsified.}
 
