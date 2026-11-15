@@ -25,6 +25,7 @@ class ToyConfig:
     sigma_r: float = 0.7       # render sd (render units)
     ell_r: float = 6.0
     wobble: float = 0.05       # per-sample scale/shift wobble from percentile normalisation
+    miscal: float = 1.0        # sample deviations are scaled by this relative to the truth's posterior (1 = calibrated)
     a_range: tuple = (0.8, 1.25)
     b_range: tuple = (-1.0, 1.0)
 
@@ -50,6 +51,8 @@ class World:
         if kind == "square":
             side = np.sqrt(area)
             f = ((xx > 0.3) & (xx < 0.3 + side) & (yy > 0.4) & (yy < 0.4 + side)).astype(float)
+        elif kind == "band":     # exactly `area` of the view (left band); area -> 1 approaches a constant shift
+            f = (xx < area).astype(float)
         elif kind == "warp":
             f = np.sin(2 * np.pi * 1.5 * xx) * np.cos(2 * np.pi * yy)
             f = f / np.abs(f).max()
@@ -75,7 +78,7 @@ class World:
         n, M = self.n, c.M
         d_true = self.mu + self.Lu @ rng.standard_normal(n)             # truth is one more draw of the posterior
         render = a * d_true + b + self.Lr @ rng.standard_normal(n)
-        S = self.mu[None] + (self.Lu @ rng.standard_normal((n, M))).T
+        S = self.mu[None] + c.miscal * (self.Lu @ rng.standard_normal((n, M))).T
         alpha = 1 + c.wobble * rng.standard_normal(M)
         beta = c.wobble * rng.standard_normal(M)
         S = alpha[:, None] * S + beta[:, None]

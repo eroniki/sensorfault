@@ -82,7 +82,7 @@ def main():
             res[f"{kind}_kappa8"] = {v: float((r[v] > thr[v]).mean()) for v in VARIANTS}
         sweep = {}
         for area in [0.05, 0.15, 0.30, 0.45, 0.60]:
-            r = run(pool, "square", 2.5, area, args.n1, 40_000 + args.seed)
+            r = run(pool, "band", 2.5, area, args.n1, 40_000 + args.seed)
             sweep[area] = {v: float((r[v] > thr[v]).mean()) for v in VARIANTS}
         res["area_sweep_kappa2.5"] = sweep
     res["meta"] = {"g": args.g, "n": n, "M": ToyConfig().M, "n0": args.n0, "n1": args.n1, "seconds": time.time() - t0,
@@ -128,7 +128,7 @@ def main():
     for kind in ["shift", "affine"]:
         L.append(f"| {kind} | " + " | ".join(f"{res[kind + '_kappa8'][v]:.2f}" for v in VARIANTS) + " |")
     L.append("")
-    L.append("## Square fault, kappa=2.5, power vs area fraction (robust vs non-robust fit)\n")
+    L.append("## Band fault covering exactly `area` of the view, kappa=2.5, power vs area fraction (robust vs non-robust fit)\n")
     L.append("| area | " + " | ".join(VARIANTS) + " |\n|---|" + "---|" * len(VARIANTS))
     for a, d in sweep.items():
         L.append(f"| {a} | " + " | ".join(f"{d[v]:.2f}" for v in VARIANTS) + " |")

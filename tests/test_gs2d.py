@@ -39,3 +39,21 @@ def test_2dgs_render_matches_the_analytic_room(views):
     rel = np.abs(depth[ok] - gt[ok]) / gt[ok]
     assert np.median(rel) < 0.03, np.median(rel)
     assert np.all(var[ok] > 0)
+
+
+def test_optimised_fit_never_touches_the_excluded_view_and_handles_sparse_depth():
+    """fit_2dgs on sparse depth (NaN holes) with the held-out view poisoned: must run and render with finite depth."""
+    import dataclasses
+
+    from dcal.gs2d_fit import fit_2dgs, render_view
+    from dcal.surface import PoisonedView
+
+    base = make_views(H, W, focal=64.0)
+    rng = np.random.default_rng(0)
+    sparse = {k: dataclasses.replace(v, depth=np.where(rng.random(v.depth.shape) < 0.25, v.depth, np.nan)) for k, v in base.items()}
+    j = 2
+    poisoned = {k: (PoisonedView(k) if k == j else v) for k, v in sparse.items()}
+    P, info = fit_2dgs(poisoned, j, iters=15)
+    rgb, depth, alpha = render_view(P, base[j].K, base[j].T_cw, (H, W))
+    assert info["n_surfels"] > 100 and torch.isfinite(depth).all() and torch.isfinite(rgb).all()
+    assert (alpha > 0.5).float().mean() > 0.2

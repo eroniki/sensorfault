@@ -24,7 +24,7 @@
 | Matterport3D | Read (EULA for Academic Use): non-commercial academic only; trained models are "Derived Information"; recipients must give academic institution | 90 buildings | Ruled out (academic institution). |
 | Hypersim | CC BY-SA 3.0 (README). Code licence separate. | 461 scenes, synthetic | Usable; ShareAlike may apply to a released derived dataset (weights unclear): legal check before release. |
 | TartanAir | CC BY 4.0 | 30 sim environments | Usable, synthetic. |
-| BlendedMVS / BlendedMVG | CC BY 4.0 | 113 + 389 scenes; depth rendered from textured meshes; metric scale not stated | Usable; real-image/mesh-rendered depth, good mixed pool. |
+| BlendedMVS / BlendedMVG | CC BY 4.0 (README); GL3D (source of the 389 extra scenes) README says MIT. Neither text addresses the Altizure source meshes or photos. | 113 + 389 scenes; depth rendered from reconstructed textured meshes (.pfm); released training images are **blended images** (high frequencies from the rendered mesh, low frequencies from the photo), not the original photos; depth units, scale and z-vs-range not stated; camera format per MVSNet (not read) | Usable (paper, README and GL3D README read 2026-11-15); photo realism and metric scale cannot be assumed |
 | Replica | Replica Dataset Research Terms (non-commercial research, no institution requirement) | 18 scenes | Usable; small, synthetic-like. |
 | DTU MVS | No licence text found ("freely available") | 124 scenes, lab, structured-light GT | Usable with caution; object-scale. |
 | Tanks and Temples | Page contradictory: CC BY 4.0 headline but grant "sole purpose of non-commercial scientific research", no redistribution | laser scans; counts not read | Evaluation only, no redistribution. |

@@ -162,36 +162,36 @@
   "0.05": {
    "known": 1.0,
    "oracle": 1.0,
-   "kernel": 0.6375,
-   "kernel_nr": 0.7375,
+   "kernel": 0.125,
+   "kernel_nr": 0.1375,
    "shrunk": 1.0
   },
   "0.15": {
    "known": 1.0,
    "oracle": 1.0,
-   "kernel": 1.0,
-   "kernel_nr": 1.0,
+   "kernel": 0.6625,
+   "kernel_nr": 0.8375,
    "shrunk": 1.0
   },
   "0.3": {
    "known": 1.0,
    "oracle": 1.0,
-   "kernel": 1.0,
-   "kernel_nr": 1.0,
+   "kernel": 0.7,
+   "kernel_nr": 0.875,
    "shrunk": 1.0
   },
   "0.45": {
    "known": 1.0,
    "oracle": 1.0,
-   "kernel": 0.9625,
-   "kernel_nr": 0.9875,
-   "shrunk": 1.0
+   "kernel": 0.5875,
+   "kernel_nr": 0.65,
+   "shrunk": 0.9875
   },
   "0.6": {
    "known": 1.0,
    "oracle": 1.0,
-   "kernel": 0.9625,
-   "kernel_nr": 0.9875,
+   "kernel": 0.45,
+   "kernel_nr": 0.55,
    "shrunk": 1.0
   }
  },
@@ -201,7 +201,7 @@
   "M": 10,
   "n0": 200,
   "n1": 80,
-  "seconds": 70.70027470588684,
+  "seconds": 84.924076795578,
   "chi2_thr95": 292.17485804729586
  }
 }
