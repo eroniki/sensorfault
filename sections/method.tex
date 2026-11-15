@@ -1,7 +1,20 @@
 \section{Method}
 \label{sec:method}
 
-\todofig{pipeline}{Pipeline: posed survey images, one depth map per image from the depth model; trajectory as a cubic B-spline over time, refined by render-and-compare without correspondences; depth-supervised 2DGS surfels rendered with gsplat, with a separate appearance block that never updates map geometry or opacity; warm-up, then opacity frozen; information $J^{\top}R^{-1}J$ on each surfel; for each tested view, the cavity without its block of neighbouring frames, rendered with its variance into the view, and the whitened test (contribution); rounds that retrain without flagged views.}
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_overview.tex}
+\caption{Method overview. Posed survey images with one depth map each (left) and a trajectory spline
+refined by render-and-compare build a depth-only 2DGS surfel map whose surfels carry information blocks
+$\Lambda_k$. To test view $j$, the block $\mathcal{B}_j$ of $B$ neighbouring strip frames is subtracted (red:
+the contribution), the remaining views' surface and its variance are rendered into view $j$, and the
+residual is whitened by $\Sigma_r$ of \eqref{eq:res}, whose surface term $UP^{(-j)}U^{\top}$ keeps the
+correlation between pixels of one surfel (the dots stand for the pose term $J_q\Sigma_qJ_q^{\top}$). A region scan
+and an energy statistic feed a Holm-controlled decision; the outer loop drops one flagged view per round
+and retrains. The thumbnails are the faulty view of E1 (Section~\ref{sec:results:e1}): its true depth,
+the cavity render, the standardised residual and the region-scan statistic per tile.}
+\label{fig:pipeline}
+\end{figure}
 
 \subsection{Setting, Measurement Model and Faults}
 \label{sec:method:setting}
@@ -54,7 +67,24 @@ $\Sigma_q=\mathbf{b}(t_j)\,\Sigma_{\mathrm{ctrl}}\,\mathbf{b}(t_j)^{\top}$ with 
 basis row at the view's time stamp, enters the test through $J_q\Sigma_qJ_q^{\top}$
 (Section~\ref{sec:method:gate}). Perturbed starting poses are an ablation, and a controlled check (H7) perturbs the poses of chosen
 views by known amounts after the gate has run, to measure whether the gate flags them and whether the
-refinement pulls them back. On ETH3D the registered poses are used as given.
+refinement pulls them back. On ETH3D the registered poses are used as given. Figure~\ref{fig:aerial}
+sketches the aerial setting: strips, a held-out block of neighbouring frames
+(Section~\ref{sec:method:block}) and the spline with its pose-graph factors.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_aerial.tex}
+\caption{Aerial setting (schematic, not to scale of any dataset). (\textbf{a})~A lawnmower flight of
+four strips; each dot is a frame. To test view $j$ (red cross), the block $\mathcal{B}_j$ of $B=3$
+neighbouring frames of its strip is left out together with it (red footprints); the footprints of the
+adjacent strips at the same along-track position (grey) overlap the block from the side and keep its
+ground testable. (\textbf{b})~One strip's cross-track offset over time: the cubic B-spline (red) is
+defined by its control points (orange) and fitted to the GNSS/IMU positions (black +), then refined in a
+pose graph with smoothness, GNSS/IMU and render-and-compare depth factors (red squares) against the
+surfel map. When view $j$ is tested its own render-and-compare factor is removed (grey), so its pose
+cannot absorb its depth fault.}
+\label{fig:aerial}
+\end{figure}
 
 \subsection{Surfels with an Uncertainty That Renders}
 \label{sec:method:surfels}
@@ -171,7 +201,7 @@ surfel's estimation error, so the off-diagonal terms matter even under independe
 statistic that ignored them would add a shared error coherently and raise false alarms, which a dry
 run of our first experiment showed on weakly supported views. Whitening uses the Woodbury identity with
 one $3\times3$ block per surfel, so its cost stays linear in the number of pixels; correlations between
-different surfels are still ignored. $\Sigma_q$ is the covariance of view $j$'s pose from the spline,
+different surfels are still ignored (Figure~\ref{fig:upu}). $\Sigma_q$ is the covariance of view $j$'s pose from the spline,
 estimated without its depth,
 and $J_q$ the Jacobian of the rendered depth with respect to that pose (the shared bias term is part
 of the rendered prediction and is omitted from the notation). The scene temperature is fitted without view $j$: $\hat\gamma_{-j}^{2}$ solves
@@ -196,6 +226,23 @@ probability $\beta_{\mathrm{md}}$ is $(z_\alpha+z_{\beta_{\mathrm{md}}})/\kappa$
 as in Baarda's reliability theory \cite{stat_teunissen_dia}. Thresholds are set for a 5\% per-view
 false alarm and calibrated on clean development views (H5). A view is kept, flagged, or reported
 untestable; flagged views are handled by the outer loop below.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_upu.tex}
+\caption{Why the surface term must keep $UP^{(-j)}U^{\top}$: an analytic example, not a measurement. Thirty
+pixels on one image row are rendered by three surfels (12, 10 and 8 pixels); each pixel adds unit
+independent sensor noise, and each surfel an offset and a tilt error with covariance $P_k$, large for the
+weakly supported first surfel (variances 1.0 and 0.3 $\sigma^{2}$) and small for the others (0.04 and 0.01).
+(\textbf{a})~Three draws of the residual: under the weak surfel (shaded) the pixels move together.
+(\textbf{b})~The full covariance $\Sigma_r$ has a dense block per surfel; (\textbf{c})~a diagonal-only
+model keeps the per-pixel variances but drops these blocks. (\textbf{d})~The variance of the residual
+summed over the first $w$ pixels of the weak surfel, full over diagonal: a region statistic under the
+diagonal model understates it by a factor that grows with the region, 6.1 over the whole surfel here.
+On E1, this ratio per region-scan tile had median 1.54 and maximum 9.3 on a weakly supported view
+(Figure~\ref{fig:e1qualunc}).}
+\label{fig:upu}
+\end{figure}
 
 \subsection{Leave-$B$-Out: Blocks of Neighbouring Frames}
 \label{sec:method:block}
