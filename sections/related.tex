@@ -1,0 +1,16 @@
+\section{Related Work}
+\label{sec:related}
+\runin{Diffusion monocular depth.}
+Marigold~\cite{ke2024marigold} fine-tunes a latent image diffusion model on synthetic data to predict affine-invariant depth and
+ensembles members after aligning their scale and shift; its ensemble spread is not evaluated against error.
+\runin{Multi-view diffusion for depth.}
+MVGD~\cite{guizilini2025mvgd} generates novel-view images and depth from posed views with a pixel-space diffusion model trained
+from scratch; it outputs no uncertainty, and for stereo and video depth the target image is also a conditioning input.
+\runin{Guidance for consistency.}
+DepthSync~\cite{depthsync2025} guides a video diffusion depth model at inference with scale and geometry losses between neighbouring frames;
+the target frame's own prediction enters the guide, and it reports no uncertainty.
+\runin{Depth rectification in splatting.}
+AffineGS~\cite{tse2026affinegs} corrects a depth network's output toward the splat render of the same view with a per-pixel affine field;
+it has no uncertainty and no leave-view-out step.
+\TODO{Fuller literature pass (video depth diffusion, uncertainty for depth, fault detection and exclusion, splatting with depth priors).
+Claims in this section rest on the papers as read; see \path{refs/EVIDENCE.md}.}

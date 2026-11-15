@@ -1,0 +1,13 @@
+\section{Introduction}
+\label{sec:intro}
+\TODO{Motivation: monocular depth is useful for multi-view reconstruction, but a single image leaves global scale free and
+the network fails regionally; a point estimate has no covariance to test against.}
+
+\runin{Contribution (planned).}
+(i) A diffusion model that samples an affine-invariant depth posterior for a view from its RGB image alone (unguided mode).
+(ii) Sampling-time guidance from a Gaussian-splat surface fitted to the \emph{other} views only (guided mode), whose output is the
+multi-view-consistent depth product.
+(iii) Semi-self-supervised training: ground-truth depth where it exists, render-and-compare elsewhere, with the labelled fraction varied.
+(iv) The spread of unguided samples as a covariance for a leave-view-out fault test; calibration is reported, not only accuracy.
+(v) A fault-injection protocol for a learned prior that may explain a real fault as plausible depth.
+\TODO{Reduce to the contributions the experiments support.}
