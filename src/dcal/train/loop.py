@@ -144,6 +144,9 @@ def train(cfg: dict, workdir: str, resume: str = "auto", max_steps: int | None =
     samples_per_step = mb * accum
     ds = MixedDepthDataset(cfg["datasets"], "train", res, seed, total * samples_per_step)
     val = MixedDepthDataset(cfg["datasets"], "val", res, seed + 1, cfg.get("val_samples", 16)) if cfg.get("val_samples", 16) else None
+    if val is not None and val.empty:
+        print("warning: no validation data found in any dataset; validation is disabled", flush=True)
+        val = None
     start_k = step * samples_per_step
     loader = torch.utils.data.DataLoader(torch.utils.data.Subset(ds, range(start_k, len(ds))), batch_size=mb, shuffle=False,
                                          num_workers=cfg.get("workers", 4), drop_last=True, persistent_workers=cfg.get("workers", 4) > 0)

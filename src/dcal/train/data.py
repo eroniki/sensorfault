@@ -251,8 +251,19 @@ class MixedDepthDataset(torch.utils.data.Dataset):
     """Map-style dataset over the global sample index k (see module docstring)."""
 
     def __init__(self, specs: list[dict], split: str, res: int, seed: int, length: int):
-        self.sets = [build_dataset(s, split) for s in specs]
-        w = np.array([s.get("weight", 1.0) for s in specs], float)
+        sets, kept = [], []
+        for sp in specs:
+            try:
+                sets.append(build_dataset(sp, split))
+                kept.append(sp)
+            except FileNotFoundError as e:
+                if split == "train":
+                    raise
+                print(f"warning: no {split} data for {sp.get('type')}: {e}", flush=True)      # e.g. Hypersim train scenes only: no val frames
+        self.sets = sets
+        self.empty = not sets
+        specs = kept
+        w = np.array([s.get("weight", 1.0) for s in specs], float) if specs else np.ones(1)
         self.p = w / w.sum()
         self.res, self.seed, self.length = res, seed, length
         self.split = split

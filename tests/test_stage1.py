@@ -142,3 +142,24 @@ def test_blendedmvs_depth_convention_check_picks_z_depth_on_synthetic_views(tmp_
     (EA, dA), (EB, dB) = view(0.0), view(0.5)
     e = cbd.hypothesis_errors(dA, EA, K, dB, EB, K)
     assert e["z"][0] < 0.01 < e["range"][0], e
+
+
+def test_validation_is_skipped_when_a_dataset_has_no_val_frames(tmp_path, capsys):
+    """Hypersim splits by scene: a root with only train scenes has no val frames; that must not crash the run."""
+    import h5py
+    from PIL import Image
+    s = tmp_path / "ai_001_001" / "images"
+    (s / "scene_cam_00_final_preview").mkdir(parents=True)
+    (s / "scene_cam_00_geometry_hdf5").mkdir(parents=True)
+    Image.fromarray(np.random.randint(0, 255, (30, 40, 3), np.uint8)).save(s / "scene_cam_00_final_preview" / "frame.0000.tonemap.jpg")
+    with h5py.File(s / "scene_cam_00_geometry_hdf5" / "frame.0000.depth_meters.hdf5", "w") as f:
+        f["dataset"] = np.random.uniform(1, 5, (30, 40)).astype(np.float32)
+    csv_path = tmp_path / "split.csv"
+    csv_path.write_text("scene_name,camera_name,frame_id,split_partition_name\nai_001_001,cam_00,0,train\n")
+    specs = [{"type": "hypersim", "root": str(tmp_path), "split_csv": str(csv_path), "weight": 1}]
+    val = D.MixedDepthDataset(specs, "val", 32, 0, 4)
+    assert val.empty and "no val data" in capsys.readouterr().out
+    tr = D.MixedDepthDataset(specs, "train", 32, 0, 4)
+    assert not tr.empty and tr[0]["rgb"].shape == (3, 32, 32)
+    with pytest.raises(FileNotFoundError):                      # but a missing TRAIN set is still fatal
+        D.build_dataset({"type": "blendedmvs", "root": str(tmp_path)}, "train")
