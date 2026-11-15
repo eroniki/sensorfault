@@ -32,12 +32,14 @@ regionally and for reasons of appearance: on reflective surfaces they predict th
 reflection, and on textureless walls they guess. Robust losses and distractor masks act per pixel,
 mostly from colour, and state no false-alarm rate. This paper proposes a depth-only view gate built
 on Gaussian surfels whose uncertainty renders. Each 2DGS-style surfel keeps its shape for rendering
-and, separately, a $9\times9$ uncertainty over its mean, rotation error and log scales; every view adds
-the alpha-weighted rasteriser information $J^{\top}R^{-1}J$, so fusion needs no correspondences and
-leaving a view out is a subtraction. The other views' surface and its variance are rendered into the
-tested view, whose whitened depth residuals are tested at a stated false-alarm rate; pixels that no
-other view sees are untestable, and the tested view spawns no surfels. Colour is a separate block that
-never updates geometry. The test is classical (Baarda, Teunissen, solution separation); the
+and, separately, a $10\times10$ uncertainty over its mean, rotation error, log scales and opacity, with
+opacity frozen after a warm-up; every view adds the alpha-weighted rasteriser information $J^{\top}R^{-1}J$,
+so fusion needs no correspondences and leaving a view out is a subtraction and one Newton step. The
+other views' surface and its variance are rendered into the tested view, whose whitened depth residuals
+are tested at a stated false-alarm rate; pixels that no other view sees are untestable, and the tested
+view spawns no surfels. The noise has a single free variable, a scene temperature fitted
+leave-view-out, and the depth model's bias is a shared distance term. Colour is a separate block that
+may refine poses but never updates the map geometry. The test is classical (Baarda, Teunissen, solution separation); the
 contribution is a per-Gaussian uncertainty that renders and its use for testing views. A
 pre-registered protocol first measures the residuals of a real depth model on ETH3D, tests whether it
 repeats its errors across views in textureless regions, and requires the gate to beat cheap

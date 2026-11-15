@@ -1,10 +1,11 @@
 \section{Conclusions, Limitations and Future Work}
 \label{sec:conclusion}
 We have proposed a depth-only view gate for depth-supervised Gaussian splatting. Each surfel keeps a
-$9\times9$ uncertainty, separate from its rendering shape, whose normal-offset and tilt block the
-rasteriser renders into depth variance; views add their alpha-weighted information, leaving a view
-out is a subtraction, and the tested view is compared with the other views' rendered surface by a
-whitened test with a stated false-alarm rate. The test is Baarda's and Teunissen's; the
+$10\times10$ uncertainty, separate from its rendering shape, with its opacity frozen after a warm-up;
+the rasteriser renders its normal-offset and tilt block into depth variance. Views add their
+alpha-weighted information, leaving a view out is a subtraction and one Newton step, and the tested
+view is compared with the other views' rendered surface by a whitened test at a scene temperature
+fitted without it, with a stated false-alarm rate. The test is Baarda's and Teunissen's; the
 contribution is an uncertainty that renders and its use for testing views. The evaluation starts by
 measuring the depth model and requires the gate to beat cheap baselines on regional,
 appearance-driven failures. None of H1--H6 has been tested.
@@ -14,21 +15,25 @@ model's failures; report for each of H1--H6 whether it was supported or falsifie
 \subsection{Limitations}
 \label{sec:disc:limits}
 (1)~Independent per-surfel blocks ignore cross-surfel correlations, the correlation of depth error
-within a view and the shared pose error of a view, so the rendered variance is overconfident; the
-threshold is calibrated on clean data, and H5 measures the gap. (2)~If the depth model repeats the
-same error across views, as H2 tests for textureless walls, the other views agree with the fault and
-the gate cannot see it. (3)~Pixels that no other view sees are untestable, so low overlap lowers
-availability. (4)~Several faulty views supporting the same region can make the leave-view-out surface
-follow the fault. (5)~The fusion is linearised at the fitted surfels; leave-view-out is exact only for
-the linearised model, and the alpha weights and the set of surfels come from a fit that used every
-view. (6)~Whole-view affine errors are absorbed by the alignment and are neither detected nor
-harmful. (7)~Colour never updates geometry, so appearance cues are not used for detection, and the
-gate depends on the depth model being right in most views. (8)~Poses come from the datasets; pose
-faults are out of scope. (9)~The measurement model is calibrated on a few static scenes for one
-default model.
+within a view and the shared pose error of a view, so the rendered variance is overconfident; we do not
+fix this here. The threshold is calibrated on clean data, H5 measures the gap, and deflation by
+$n_{\mathrm{eff}}/n$ or jackknife inflation are ablations only. (2)~The scene temperature corrects the
+noise level, not its shape or tails, and not a view whose nominal noise is genuinely larger than the
+scene's; such a view keeps an elevated false-alarm rate and is indistinguishable from a fault by design,
+so the guarantee is a scene-average false-alarm rate. (3)~If the depth model repeats the same error
+across views, as H2 tests for textureless walls, the other views agree with the fault and the gate
+cannot see it. (4)~Pixels that no other view sees are untestable, so low overlap lowers availability.
+(5)~Several faulty views supporting the same region can make the leave-view-out surface follow the
+fault, and the iterative exclusion locks onto the wrong consensus if they are a majority. (6)~The
+leave-out is a Newton step at the MAP, exact only for the linear model; opacity is frozen and not
+re-estimated without the tested view, and a surfel that the tested view caused to be pruned during the
+warm-up cannot be restored. (7)~Whole-view affine errors are absorbed by the alignment and are neither
+detected nor harmful; the depth bias is modelled only as a shared distance term. (8)~Colour refines the
+poses but never the map geometry, so appearance cues are not used for detection. (9)~Pose faults are
+out of scope. (10)~The noise shape is calibrated on a few static scenes for one default model.
 
 \subsection{Future Work}
 \label{sec:disc:future}
 Planned, none started: modelling cross-surfel correlation by low-rank or banded blocks; testing poses
-as well as depth; using the rendered uncertainty for view selection and for reconstruction from fewer
+as well as depth; a per-view bias field of the depth model, which is the subject of a separate paper; using the rendered uncertainty for view selection and for reconstruction from fewer
 views; online operation; and depth from physical sensors.

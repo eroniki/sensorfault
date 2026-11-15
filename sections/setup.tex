@@ -9,7 +9,8 @@ No experiment has been run for this version.
 \label{sec:setup:expsetup}
 \emph{Data.} ETH3D \cite{data_eth3d}, with laser-scan depth and calibrated poses, is primary and is
 where the residuals are measured; ScanNet++ \cite{data_scannetpp}, subject to its access terms, is
-secondary and contains many reflective and transparent surfaces. Poses come from the datasets.
+secondary and contains many reflective and transparent surfaces. Poses start from the datasets and are
+refined by matches and photometric refinement; a tested view's pose excludes its own depth.
 \emph{Depth model.} Depth Pro \cite{est_depthpro}, one prediction per image; Metric3D v2 and
 UniDepthV2, which output a confidence, supply the confidence baseline. \emph{Reconstruction.}
 Depth-supervised splatting of 2DGS surfels with gsplat, with the appearance block of
@@ -29,9 +30,11 @@ AbsRel, and surface accuracy, completeness and F-score. Details are in Supplemen
 Each hypothesis states what would falsify it, and several state where the gate is not expected to
 help. Thresholds match the pre-registered configuration files.
 \begin{description}
-  \item[H1] \emph{(residuals first; go/no-go).} Fit $\sigma(\cdot)$, $\ell$, $\nu$ and tails of the
-        aligned Depth Pro residuals on ETH3D development scenes; characterise natural regional
-        failures. \emph{Go} if $\ge10\%$ of views carry a failure covering $\ge2\%$ of pixels at
+  \item[H1] \emph{(residuals first; go/no-go).} Fit $\sigma(\cdot)$, $\ell$, $\nu$, the tails, the
+        shared distance-bias coefficient $\beta$, the range of the scene temperature $\gamma$ and
+        the per-view heterogeneity $\omega$ of the aligned Depth Pro residuals on ETH3D development
+        scenes; characterise natural regional failures. If $\omega\gtrsim0.05$, the region scan leads
+        and the energy test keeps its $\omega$-calibrated threshold. \emph{Go} if $\ge10\%$ of views carry a failure covering $\ge2\%$ of pixels at
         $>3\sigma$ and keeping those views lowers the fused-surface F-score by $\ge2$ points.
         \emph{No-go} (pivot to an analysis paper) below 5\% of views or below 1 point.
   \item[H2] \emph{(repetition).} Cross-view correlation of aligned errors at the same laser surface
@@ -44,17 +47,23 @@ help. Thresholds match the pre-registered configuration files.
         over no gate and the best robust-splatting baseline on failure scenes of ETH3D and ScanNet++,
         and change by $\le2\%$ on clean scenes. \emph{Falsified} if the paired interval includes zero
         on failure scenes, or clean scenes degrade by more than 2\%.
-  \item[H5] \emph{(calibration).} Raw mean $T_j/(n-2)>1.2$ on clean views; after deflation or
-        threshold calibration, the test-scene false-alarm rate is within $[0.5\alpha,1.5\alpha]$.
-        \emph{Falsified} if it leaves that band.
+  \item[H5] \emph{(calibration).} With independent per-surfel blocks, the raw mean $T_j/m_j$ on
+        clean views exceeds 1.2 (overconfidence). With the leave-view-out scene temperature and the
+        $\omega$-calibrated energy threshold, the per-view false-alarm rate on test scenes is within
+        $[0.5\alpha,1.5\alpha]$ without per-scene retuning; deflation by $n_{\mathrm{eff}}/n$ and
+        jackknife inflation are ablations. \emph{Falsified} if it leaves that band.
   \item[H6] \emph{(ablations).} Joint surface $-10$ points; keeping tested-view-only surfels $-20$
         points on large region failures; unwhitened $-5$ points; rendered blocks at least as calibrated
-        and powerful as the FisherRF-style and Bayes' Rays-style uncertainties. \emph{Falsified} if any
-        ablation is within its margin.
+        and powerful as the FisherRF-style and Bayes' Rays-style uncertainties; dropping the scene
+        temperature or the shared distance bias raises the clean false-alarm rate; a fold-wise opacity
+        warm-up changes the false-alarm rate and the power by less than 2 points, so freezing opacity is
+        safe. \emph{Falsified} if any ablation is within its margin, or the fold-wise warm-up changes
+        them by more.
 \end{description}
 H1 is a go/no-go and runs first; H2 predicts a blind spot rather than a success; H3 and H4 are the
 claims that would justify the method; H5 tests the stated approximation; H6 tests the design choices.
 
 \paragraph{Breakdown scenarios} Reported as honest negatives: errors repeated in all views
 (textureless walls, H2); low overlap, where pixels are untestable; faulty views that supply most of a
-region; a misspecified measurement model; and faults or misfits beyond the linearised fusion.
+region; a misspecified noise shape or a per-view heterogeneity above the calibrated $\omega$, which the
+scene temperature cannot fix; and faults or misfits beyond the linearised fusion.

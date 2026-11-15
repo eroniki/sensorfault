@@ -16,21 +16,36 @@ $\delta\mathbf{n}=\mathbf{R}(\delta\boldsymbol\phi\times\mathbf{e}_3)=\delta\phi
 component. Hence $\delta d$ depends on $\boldsymbol\theta$ only through
 $(\nu,\tau_1,\tau_2)=(\mathbf{n}^{\top}\delta\boldsymbol\mu,\ \delta\phi_2,\ -\delta\phi_1)$, which gives \eqref{eq:jac}.
 The in-plane components of $\delta\boldsymbol\mu$, the spin $\delta\phi_3$ and the scales do not change
-the depth to first order; with the alpha weights held fixed they are unobserved and keep their prior
-information $\Lambda_0$. The code checks \eqref{eq:jac} against finite differences of the exact
-ray-surfel depth.
+the ray-surfel depth to first order and keep their prior information $\Lambda_0$; they must not be
+reported as learned surface uncertainty.
 
-\subsection{Information Update, Posterior and Leave-View-Out}
-Linearise the measurement of view $i$ at the fitted surfels: $\hat d_i(u)=a_i\bigl(\hat D_i(u)+\sum_k
-w_{uk}J_{uk}\boldsymbol\theta_k\bigr)+b_i+\varepsilon_i(u)$. With independent pixel noise and
-independent surfel blocks, the Gaussian likelihood of view $i$ contributes \eqref{eq:info}, and the
-posterior of each surfel is $\mathcal{N}(\Lambda_k^{-1}\boldsymbol\eta_k,\Lambda_k^{-1})$. Because the
-model is linear, the information of view $j$ enters additively, and the posterior given all views
-except $j$ is obtained by subtracting it, \eqref{eq:loo}; no refit is needed. The posterior mean in
-the observed directions is the weighted least-squares solution, which does not depend on the
-linearisation point, so the subtraction is exact for the linearised model even though the
-linearisation point was fitted with view $j$. The code checks that the subtraction equals a fusion
-recomputed without the view.
+\runin{Opacity.} With $w_k=\alpha_kg_kT_k$, $T_k=\prod_{l\prec k}(1-\alpha_lg_l)$, $A=\sum_kw_kd_k$,
+$W=\sum_kw_k$ and $\hat D=A/W$,
+\[
+\frac{\partial w_m}{\partial\alpha_k}=\begin{cases}g_kT_k,&m=k,\\ -\dfrac{g_k\,w_m}{1-\alpha_kg_k},&m\succ k,\\ 0,&m\prec k,\end{cases}
+\]
+\[
+\frac{\partial\hat D}{\partial\,\mathrm{logit}\,\alpha_k}=\alpha_k(1-\alpha_k)\,\frac{\partial_{\alpha_k}A-\hat D\,\partial_{\alpha_k}W}{W},
+\]
+which includes the transmittance of the surfels behind $k$. The code checks this and \eqref{eq:jac}
+against finite differences of the exact compositing and ray-surfel depth.
+
+\subsection{Information Update, Posterior and Newton Leave-Out}
+Linearise the measurement of view $i$ at the MAP $\hat{\boldsymbol\theta}$: $\hat d_i(u)=a_i\bigl(\hat D_i(u)+\sum_k
+\mathbf{g}_{uk}\boldsymbol\theta_k\bigr)+b_i+\varepsilon_i(u)$. With independent pixel noise and independent
+surfel blocks the Gaussian likelihood of view $i$ contributes \eqref{eq:info}, and with opacity frozen the
+posterior of the geometric coordinates is Gaussian with the precision of the geometric block. For the
+linear model, $\Lambda\hat{\boldsymbol\theta}=\boldsymbol\eta$ and
+$\Lambda^{(-j)}\hat{\boldsymbol\theta}^{(-j)}=\boldsymbol\eta-\boldsymbol\eta^{(j)}$, so
+\[
+\hat{\boldsymbol\theta}^{(-j)}-\hat{\boldsymbol\theta}=\bigl(\Lambda^{(-j)}\bigr)^{-1}\bigl(\Lambda^{(j)}\hat{\boldsymbol\theta}-\boldsymbol\eta^{(j)}\bigr)
+=\bigl(\Lambda^{(-j)}\bigr)^{-1}\nabla\mathcal{L}_j(\hat{\boldsymbol\theta}),
+\]
+which is \eqref{eq:loo}: one Newton step on the loss without view $j$, started at the full MAP (the
+infinitesimal jackknife). It is exact for the linear-Gaussian model and a first-order approximation
+otherwise; the code checks that it equals a fusion recomputed without the view. The shared bias $\beta$
+has scalar normal equations $\sum_i h_i\beta=\sum_i g_i$, so its leave-view-out value subtracts
+$(h_j,g_j)$.
 
 \subsection{Solution Separation Equals the Leave-One-Out Innovation}
 \begin{proposition}
@@ -69,3 +84,26 @@ $z_{\alpha/R}$. A pattern in the span of $A$ (a whole-view affine error) has $\k
 detectable, which is why it is not a fault. With spatially correlated noise, $\kappa$ follows from
 $\Sigma_r$, not from the pixel count, and the effective number of pixels
 $n_{\mathrm{eff}}=\mathrm{tr}(C)^{2}/\mathrm{tr}(C^{2})$ summarises the energy statistic.
+
+\subsection{Scene Temperature and Per-View Heterogeneity}
+With $\Sigma_\varepsilon=\gamma^{2}DCD$ dominating $\Sigma_r$, $T_i(\gamma)=T_i(1)/\gamma^{2}$, so
+$\hat\gamma^{2}_{-j}=\mathrm{median}_{i\ne j}\,T_i(1)/q_{0.5}(\chi^{2}_{m_i})$; in general it is a monotone
+one-dimensional root. Its relative standard deviation is about $1.25\sqrt{2/n_{\mathrm{eff}}}/\sqrt{N-1}$
+(0.8\% at $n_{\mathrm{eff}}=10^{3}$, $N=30$). A fraction $\epsilon<\tfrac12$ of faulty views moves the
+median to the $1/(2(1-\epsilon))$ quantile of the clean distribution, raising $\hat\gamma$: the test
+becomes conservative, with breakdown at $\epsilon=\tfrac12$, consistent with the minority assumption.
+As in temperature scaling \cite{cal_guo_temperature}, one scale does not change the ranking of views
+within a scene, only the operating point; unlike there, $\gamma$ is fitted on the unlabelled views of
+the test scene, which is valid only leave-view-out and under the minority assumption.
+
+The energy statistic has $m$ of order $n_{\mathrm{eff}}$ degrees of freedom, so it is sensitive to the
+noise level of a view. If view $j$'s true noise scale is $r$ times the temperature, its false-alarm rate
+at nominal $\alpha=0.05$ is $P(r^{2}\chi^{2}_m>q_{0.95}(\chi^{2}_m))$, which is 0.050, 0.117, 0.229, 0.710
+and 0.995 at $r=1$, 1.01, 1.02, 1.05 and 1.10 for $m=10^{3}$. If $\log r\sim\mathcal{N}(0,\omega^{2})$
+across clean views, holding the average false-alarm rate at $\alpha$ needs the threshold
+$c/m=1.075$, 1.102, 1.196 and 1.400 for $\omega=0$, 0.02, 0.05 and 0.10, which multiplies the energy
+minimum detectable bias by 1, 1.17, 1.64 and 2.43. The matched region scan only scales $z$ by $1/r$;
+with $R=100$ regions its family false-alarm rate moves from 0.050 to 0.064, 0.092 and 0.155 at $r=1.02$,
+1.05 and 1.10. Hence $\omega$ is measured in week two (H1), the region scan leads if
+$\omega\gtrsim0.05$, and the energy threshold uses $n_{\mathrm{eff}}$, not the pixel count. The code
+reproduces these numbers.

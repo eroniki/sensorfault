@@ -20,14 +20,17 @@ that the other views of the same scene observe the same surface with known uncer
 
 \paragraph{Approach}
 We propose a \emph{depth-only view gate} built on Gaussian surfels whose uncertainty renders. Each
-2DGS-style surfel keeps its shape covariance for rendering and, separately, a $9\times9$
-uncertainty over its mean, its tangent-space rotation error and its log scales. Every view adds the
-alpha-weighted rasteriser information $J^{\top}R^{-1}J$ to the surfels it sees, so the fused surface is
-a Bayesian posterior obtained by rendering, without correspondences. Leaving a view out is a
-subtraction of its information. The gate renders the other views' surface, and its variance, into
-the tested view and tests the whitened depth residuals: pixels that no other view sees are
-untestable, and the tested view spawns no surfels of its own. Colour is a separate appearance block
-that never updates the geometry; it reaches geometry only through the depth model.
+2DGS-style surfel keeps its shape covariance for rendering and, separately, a $10\times10$
+uncertainty over its mean, its tangent-space rotation error, its log scales and its opacity, with the
+opacity frozen after a warm-up. Every view adds the alpha-weighted rasteriser information
+$J^{\top}R^{-1}J$ to the surfels it sees, so the fused surface is a Laplace posterior obtained by
+rendering, without correspondences. Leaving a view out is a subtraction of its information and one
+Newton step. The gate renders the other views' surface, and its variance, into the tested view and
+tests the whitened depth residuals: pixels that no other view sees are untestable, and the tested view
+spawns no surfels of its own. The noise model has one free variable, a scene temperature, and the
+depth model's systematic error is a distance term shared by all views. Colour is a separate
+appearance block that may refine the poses but never updates the map geometry; it reaches geometry
+only through the depth model.
 
 \paragraph{What is and is not new}
 The test is classical (Baarda's data snooping, Teunissen's DIA procedure \cite{stat_teunissen_dia} and
@@ -39,9 +42,9 @@ false-alarm rate (Section~\ref{sec:related}).
 
 \paragraph{Contributions}
 \begin{itemize}
-  \item Gaussian surfels with a separate $9\times9$ uncertainty whose normal-offset and tilt block
-        renders into per-pixel depth variance, fused on rendering by $J^{\top}R^{-1}J$ with exact
-        leave-view-out by subtraction (Sections~\ref{sec:method:surfels}--\ref{sec:method:fusion}).
+  \item Gaussian surfels with a separate $10\times10$ uncertainty (opacity frozen after a warm-up)
+        whose normal-offset and tilt block renders into per-pixel depth variance, fused on rendering by
+        $J^{\top}R^{-1}J$ with leave-view-out by subtraction and one Newton step (Sections~\ref{sec:method:surfels}--\ref{sec:method:fusion}).
   \item A depth-only view gate that tests whitened residuals against the other views' rendered
         surface, with untestable pixels and no spawning by the tested view
         (Section~\ref{sec:method:gate}).

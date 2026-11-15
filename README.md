@@ -2,8 +2,9 @@
 
 Draft v0 of *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian
 Surface*, in the Elsevier `elsarticle` template (preprint first; no pay-to-publish venue). Companion code and plan: `eroniki/sensorfault`.
-Design v3: a depth-only view gate for depth-supervised Gaussian splatting, built on surfels whose 9x9 uncertainty
-renders into depth variance; leave-view-out is a subtraction of a view's information.
+Design v3: a depth-only view gate for depth-supervised Gaussian splatting, built on surfels whose 10x10 uncertainty
+(opacity frozen after a warm-up) renders into depth variance; leave-view-out is a subtraction and one Newton step;
+one scene temperature is the only free noise variable; reference design: `eroniki/sensorfault` `docs/design-3dgs-bayes.md`.
 
 **Status: pre-experiment draft.** No experiment has been run. Every result table and figure is a
 placeholder marked `TODO` in red; the hypotheses H1-H6 in Sec. 4 are pre-registered *predictions*,
@@ -14,7 +15,7 @@ not findings. Do not submit before the TODOs are resolved.
 latexmk -pdf main.tex        # output: build/main.pdf (needs TeX Live; uses ./latexmkrc)
 ```
 The class is `elsarticle` (TeX Live) with `elsarticle-num`; the layout is `5p,twocolumn`, and changing the class option to `preprint` gives the single-column preprint format.
-The main text (title to Future Work) is limited to 8 pages (currently about 4.5); the declarations and references follow, then the Supplementary Material (S1--S4, same PDF).
+The main text (title to Future Work) is limited to 8 pages (currently about 5); the declarations and references follow, then the Supplementary Material (S1--S4, same PDF).
 `draft_v0.pdf` is the last committed build.
 
 ## Outline
