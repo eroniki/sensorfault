@@ -1,0 +1,111 @@
+{
+ "scene": {
+  "delta_sigma": 8,
+  "area": 0.4,
+  "seed": 1,
+  "faulty_view": 59
+ },
+ "views": {
+  "clean": {
+   "view": 69,
+   "frame": 88,
+   "strip": [
+    -180.0,
+    -500.0
+   ],
+   "p": 0.7120756062882829,
+   "zmax": 2.404010948684338,
+   "z_threshold": 4.803525339527307,
+   "flagged_tiles": 0,
+   "testable": 0.9990228649599374
+  },
+  "faulty": {
+   "view": 59,
+   "frame": 59,
+   "strip": [
+    -90.0,
+    120.0
+   ],
+   "p": 0.0,
+   "zmax": 80.10414177450481,
+   "z_threshold": 4.802777175516725,
+   "flagged_tiles": 21,
+   "testable": 0.9626865671641791
+  },
+  "swamped": {
+   "view": 58,
+   "frame": 58,
+   "strip": [
+    -90.0,
+    120.0
+   ],
+   "p": 0.0,
+   "zmax": 29.8796491463551,
+   "z_threshold": 4.785781490557717,
+   "flagged_tiles": 16,
+   "testable": 0.8525384453338951
+  },
+  "swamped_after": {
+   "view": 58,
+   "frame": 58,
+   "strip": [
+    -90.0,
+    120.0
+   ],
+   "p": null,
+   "zmax": 2.0703506126346176,
+   "z_threshold": 4.785374054393813,
+   "flagged_tiles": 0,
+   "testable": 0.8205182220349695
+  }
+ },
+ "scales": {
+  "depth_m": [
+   50.46560986328125,
+   403.538515625
+  ],
+  "raw_residual_m": 30.90672582293821,
+  "std_residual": 5,
+  "tile_z_max": 20,
+  "sd_m": 7.254988029549017,
+  "surface_sd_m": 7.03286326045062,
+  "tile_ratio_max": 9.325807066286663
+ },
+ "uncertainty": {
+  "weak": {
+   "view": 56,
+   "frame": 56,
+   "testable": 0.6773034657650042,
+   "median_sd_m": 1.2287262376733026,
+   "median_surface_sd_m": 0.5182167795966153,
+   "tile_var_ratio_max": 9.325807066286663,
+   "tile_var_ratio_median": 1.5440555721130012
+  },
+  "strong": {
+   "view": 69,
+   "frame": 88,
+   "testable": 0.9990228649599374,
+   "median_sd_m": 3.6402276597951184,
+   "median_surface_sd_m": 0.9850059503761006,
+   "tile_var_ratio_max": 1.0022624401116522,
+   "tile_var_ratio_median": 1.0
+  }
+ },
+ "topdown": {
+  "extent_m": [
+   -402.0,
+   402.0,
+   -926.0,
+   -221.0
+  ],
+  "height_m": [
+   -3.365428865929568,
+   139.08773127642363
+  ],
+  "offset_sd_m": [
+   0.27604206808030796,
+   30.0
+  ],
+  "cell_m": 3.0
+ }
+}

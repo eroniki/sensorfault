@@ -1,0 +1,16 @@
+% E1 qualitative: top-down surfel map of MatrixCity block 3, camera centres (black) and tested views (red)
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.4cm}, width=7.2cm, height=7.2cm, axis equal image,
+  xlabel={$x$ (m)}, ylabel={$y$ (m)}, tick label style={font=\tiny}, label style={font=\scriptsize}, title style={font=\scriptsize}, enlargelimits=false]
+\nextgroupplot[title={surfel height, -3--139 m}]
+\addplot graphics[xmin=-402.0, xmax=402.0, ymin=-926.0, ymax=-221.0] {\qfigdir/top_height.png};
+\addplot[only marks, mark=*, mark size=0.8pt, black] table[x=x, y=y, col sep=comma] {\qfigdir/cameras.csv};
+\addplot[only marks, mark=square*, mark size=2.2pt, red, nodes near coords, point meta=explicit symbolic, nodes near coords style={font=\tiny, anchor=west, fill=white, inner sep=1pt}]
+  table[x=x, y=y, meta=label, col sep=comma] {\qfigdir/tested.csv};
+\nextgroupplot[title={normal-offset sd (log), 0.28--30.00 m}]
+\addplot graphics[xmin=-402.0, xmax=402.0, ymin=-926.0, ymax=-221.0] {\qfigdir/top_sd.png};
+\addplot[only marks, mark=*, mark size=0.8pt, black] table[x=x, y=y, col sep=comma] {\qfigdir/cameras.csv};
+\addplot[only marks, mark=square*, mark size=2.2pt, red, nodes near coords, point meta=explicit symbolic, nodes near coords style={font=\tiny, anchor=west, fill=white, inner sep=1pt}]
+  table[x=x, y=y, meta=label, col sep=comma] {\qfigdir/tested.csv};
+\end{groupplot}
+\end{tikzpicture}

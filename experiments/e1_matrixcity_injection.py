@@ -171,8 +171,11 @@ class Gate:
             np.add.at(E, v["us"], self.eta[i])
         self.Lsum, self.Esum = L, E
 
-    def stats(self, j, active):
-        """Energy T, dof m, max |z| over tiles, aligned-RMS score, testable fraction for view j."""
+    def stats(self, j, active, return_maps=False):
+        """Energy T, dof m, max |z| over tiles, aligned-RMS score, testable fraction for view j.
+
+        With ``return_maps`` the per-pixel and per-tile quantities used by the qualitative figures are
+        returned as well (no effect on the statistics)."""
         v = self.v[j]
         blk = [i for i in self.block_of(j) if i in active or i == j]
         us = v["us"]
@@ -244,7 +247,7 @@ class Gate:
         # aligned RMS (baseline): OLS alignment, unweighted, in units of the median sigma
         ab0 = np.linalg.lstsq(A, y, rcond=None)[0]
         rms = float(np.sqrt(np.mean((y - A @ ab0) ** 2)) / np.sqrt(np.median(s2)))
-        return {
+        out = {
             "T": T,
             "m": m,
             "zmax": float(np.max(np.abs(z))),
@@ -252,6 +255,36 @@ class Gate:
             "rms": rms,
             "testable": float(ok.mean()),
         }
+        if return_maps:
+            # variance of each tile sum: noise + surface; full within-surfel term vs its diagonal only
+            key = tiles * len(Lc) + inv
+            uk, ki = np.unique(key, return_inverse=True)
+            Jsum = np.zeros((len(uk), 3))
+            np.add.at(Jsum, ki, J)
+            Pk = P[uk % len(Lc)]
+            full = np.zeros(self.n_tiles)
+            np.add.at(full, uk // len(Lc), np.einsum("ni,nij,nj->n", Jsum, Pk, Jsum))
+            diag = np.bincount(tiles, weights=V, minlength=self.n_tiles)
+            noise = np.bincount(tiles, weights=s2, minlength=self.n_tiles)
+            out.update(
+                pix=v["pix"][ok],
+                r=r,
+                D=D,
+                dbar=v["dbar"][ok],
+                y=y,
+                s2=s2,
+                V=V,
+                z_std=r / np.sqrt(s2 + V),
+                z_tile=z,
+                tile_valid=valid,
+                tile=tiles,
+                tile_var_ratio=np.where(
+                    valid, (noise + full) / np.maximum(noise + diag, 1e-12), np.nan
+                ),
+                supported_frac=float(ok.mean()),
+                all_pix=v["pix"],
+            )
+        return out
 
     def pvalues(self, active, views_to_test=None):
         self.fuse(active)
