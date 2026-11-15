@@ -1,6 +1,6 @@
 # Stage 1 on the TITAN RTX: supervised fine-tune of SDXL + LoRA for affine-invariant depth
 
-Status: **code and config written and tested locally; smoke run and full run not started yet** (the TITAN session fills the run record at the bottom).
+Status: **smoke run passed on the TITAN (2026-11-15); the first full-run segment is running and stops at step 2,000** (`--stop-at 2000`, the author's decision after the smoke run; continuing past 2,000 needs the author's go-ahead). Run record at the bottom.
 
 ## What is trained
 
@@ -13,7 +13,7 @@ Status: **code and config written and tested locally; smoke run and full run not
   - **BlendedMVS** (113 scenes, blended images + rendered `.pfm` depth), weight 0.6; the last 6 scenes (sorted by id) are held out for validation. The BlendedMVS+/++ volumes (the other BlendedMVG scenes) are not included in the first run.
   - **Hypersim** subset (first N training-split scenes from the official split file; preview JPG + `depth_meters` converted from ray distance to planar depth with the nominal focal length 886.81 px, per-scene tilt-shift ignored [assumption]), weight 0.4; its validation split is used for validation.
   - TartanAir: reader exists (`TartanAirDataset`, untested on real data) but it is **not** in the first run.
-- **Length:** `total_steps` = 10,000 (320K samples; Marigold used 576K) in `configs/stage1_sdxl_lora.json`. Expected wall time [EST, before the smoke run measures it]: about 40-50 h on the TITAN RTX (stage 0: roughly 0.85 s per micro-batch of 2 at 512 px with checkpointing, plus the fp32 VAE encodes). If the smoke run says more than about 72 h, reduce `total_steps` and write the number here.
+- **Length:** `total_steps` = 10,000 (320K samples; Marigold used 576K) in `configs/stage1_sdxl_lora.json`. Expected wall time [EST, before the smoke run measures it]: about 40-50 h on the TITAN RTX (stage 0: roughly 0.85 s per micro-batch of 2 at 512 px with checkpointing, plus the fp32 VAE encodes). If the smoke run says more than about 72 h, reduce `total_steps` and write the number here. **Measured:** 13.1 s per optimiser step at batch 32 (about 36-37 h for 10,000 steps). **First segment: stop at step 2,000** with a checkpoint (`TRAIN_ARGS="--stop-at 2000"`), keeping `total_steps` = 10,000 so that the cosine schedule is unchanged and a go-ahead resumes the same run. At step 2,000 the learning rate is still near its peak (about 9.5e-5), so validation there is a trend signal, not a finished model.
 
 ## Files
 
@@ -40,16 +40,18 @@ Status: **code and config written and tested locally; smoke run and full run not
 - BlendedMVS images are blended composites (not photographs) and its depth convention is unverified (step 3); Hypersim uses assumed nominal intrinsics; Hypersim's CC BY-SA terms matter only if weights or derived data are ever released.
 - The validation set is small (32 samples).
 
-## Run record (to be filled by the TITAN session)
+## Run record (TITAN session)
 
 | Item | Value |
 |---|---|
-| Smoke run date, verdict, s/step, peak memory | |
-| BlendedMVS depth convention verdict | |
-| Datasets actually used (scenes/images) | |
-| Full run start (date and time, host) | |
-| Config (commit, overrides) | |
-| total_steps, s/step measured, **expected length** | |
-| Checkpoint directory and newest checkpoint | |
-| tmux session / pid file | |
-| Notes (disk, throughput, incidents) | |
+| Smoke run date, verdict, s/step, peak memory | 2026-11-15, **SMOKE PASSED** (all 9 checks). 7.28-7.45 s/step at batch 16 (4 x 4, 512 px), 2.15-2.20 samples/s, 1510 s wall. Peak 8.94 GB allocated / 9.68 GB on the device (11.34 / 12.58 GB in the window that includes validation sampling). Loss 0.857 (step 45) to 0.472 (step 200); grad norm 0.19-0.46; grad scale 4096 throughout; 0 skipped, 0 non-finite. Validation: step 100 val_loss 0.529, val_affine_absrel 0.872; step 200 val_loss 0.528, val_affine_absrel 0.838. **Smoke-only overrides:** an 8-scene BlendedMVS subset with `val_scenes` 2 (558 train / 253 val pairs) and Hypersim ai_001_001-005 + val ai_005_005, ai_006_007; the full run uses the config default `val_scenes` 6 on the full set. Resume test: at fe4dc37 the CLI did not pass `--stop-at` (fixed in d0e8b01), so leg 1 was stopped with SIGTERM at step 109 and leg 2 resumed from `ckpt_0000109.pt` to 200 (the stop path the full run uses) |
+| BlendedMVS depth convention verdict | **z-depth** (`check_blendedmvs_depth.py`, 12 pairs per scene): 5a3ca9cb270f0e3f14d0eddb z 0.00115 vs range 0.0707; 5bf03590d4392319481971dc z 0.139 vs range 0.395 (higher errors on that scene, z still about 3x better). No conversion needed |
+| Datasets actually used (scenes/images) | BlendedMVS low-res v1.0.0 (16 split parts size-checked against the release, joined, unzip CRC OK): 113 scenes, 17,819 pairs; train 107 scenes / 17,116 pairs, validation the last 6 scenes / 703 pairs. Hypersim: 12 training-split scenes ai_001_001-ai_001_009 and ai_002_001-003 (1,991 pairs); validation-split ai_005_005, ai_006_007, ai_030_008 (257 pairs). ETH3D not read |
+| Full run start (date and time, host) | 2026-11-15 20:02:36 +03, TITAN RTX host. A launch at 20:02:09 exited at config load (the launch copy's comment contained a literal `${...}`, which the config expander rejects); nothing was trained |
+| Config (commit, overrides) | Branch `titan/stage1c` at 00dd71a (main d0e8b01 + a `TRAIN_ARGS` passthrough in `stage1_run.sh`). `configs/stage1_sdxl_lora.json` unchanged except that its environment-variable paths are resolved in a launch copy kept outside the repo: a detached tmux session takes the tmux server's environment, not the caller's. Interpreter `python -s` (user site off). `TRAIN_ARGS="--stop-at 2000"` |
+| total_steps, s/step measured, **expected length** | `total_steps` 10,000 (LR schedule over 10k unchanged); **stops at step 2,000** (the author's decision). 13.1 s/step at step 10 (batch 32, 2.44 samples/s), so about 7.3 h + validation for the 2,000-step segment; the full 10k would be about 36-37 h |
+| Validation at 500 / 1,000 / 1,500 / 2,000 | to be filled when the segment stops |
+| Checkpoint directory and newest checkpoint | outside the repo: `~/workspace/depthcal-runs/stage1/` (checkpoint every 500 steps or 90 min, newest 3 kept plus every 2,000 steps); final checkpoint: to be filled |
+| tmux session / pid file | tmux session `depthcal-stage1`. **The `pid` file holds the bash subshell (2244456), not Python (2244457)**, so `kill -TERM $(cat pid)` would not stop training cleanly; stop this run early with `kill -TERM 2244457` (checkpoint, then exit) |
+| Resume after a go-ahead | the same environment (`SDXL_DIR`, `STAGE1_WORK` = the workdir, `CONFIG` = the launch copy, `PY="python -s"`) and **no `TRAIN_ARGS`**: `scripts/stage1_run.sh` resumes from `ckpt_0002000.pt` to step 10,000 |
+| Notes (disk, throughput, incidents) | SDXL from Hugging Face, anonymous (a stale stored token had caused a 401). BlendedMVS from the GitHub release at about 50-100 kB/s per connection, so 16 parallel connections; the fetch script had fetched only the last split part (fixed in aa8acb3). Hypersim from Apple's CDN; validation scenes had been missing (fixed in fe4dc37). Training uses 9.7 GB on the device (12.6 GB during validation); one heavy job at a time on the shared GPU |
