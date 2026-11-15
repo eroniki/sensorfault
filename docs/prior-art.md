@@ -48,3 +48,23 @@ its description comes from sensorfault design note sec. 8.5).
 ChronoDepth, DepthCrafter, RollingDepth (video diffusion depth, temporal consistency); OracleGS (2509.23258), UAR-Scenes
 (2503.15742) (diffusion priors improving 3DGS, opposite direction); Pixel-Perfect Depth (2601.05246) (pixel-space diffusion depth).
 Novelty claims are limited to what the three read-in-full papers support; a final prior-art sweep is needed before submission.
+
+## AffineGS (Tse, Peng, Chen, Yao; arXiv 2611.07709v1, NeurIPS 2026) - read in full (appendices A-G, most of H; last ~8k chars of the checklist only as a tool summary)
+- **Formulation:** per-pixel affine map between 1/d (monocular disparity, Depth-Anything-V2-Large) and the 3DGS-rendered depth D: `1/d = alpha(u,v) D(u,v) + beta(u,v)` (Eq. 1).
+  alpha = ||grad d|| / (d^2 ||grad D|| + eps) (Eq. 3, with the smoothness approximation grad alpha ~ grad beta ~ 0), beta = 1/d - alpha D; alpha clamped to its 5th/95th percentiles;
+  both fields smoothed by a guided filter (CPU, OpenCV) with guide d and radius 550-650 px on MuSHRoom; "All fields are re-estimated at every iteration" (Fig. 2).
+  A global least-squares scalar pair (a, b) anchors scale. Losses: photometric + gradient (L_grad) + normal (L_normal) + L1 depth to the rectified depth; weights 0.1/0.08/0.4.
+- **What sets the correction for view j:** only view j's own disparity and its own current render. **No leave-view-out**, no use of other views for the correction.
+  alpha is computed from the same render that L_grad and L_depth then supervise (not discussed in the paper).
+- **No uncertainty, no confidence weighting, no calibration, no fault detection**; only percentile clamps. RANSAC appears only in an analysis.
+- **Table 1 (global affine 58.9% inliers vs K=5 regions 92.7%, MuSHRoom):** evaluated at a 0.02 residual threshold against ground-truth sensor depth, with a K-region partition fitted
+  in-sample; the method itself uses per-pixel fields, not K regions. It is an oracle-style analysis, not a held-out result.
+- **Base system and data:** Splatfacto (Nerfstudio) 3DGS, 30k iterations, one RTX 3090, about 1.5 h per MuSHRoom scene. Initialised from 1M back-projected points of **sensor depth**
+  (so not sensor-free). Datasets: NeRF-LLFF sparse view, MuSHRoom (6 scenes), ScanNet++ (2 iPhone scenes).
+- **Results (arXiv numbers):** MuSHRoom mesh F-score 0.7097 (DN-Splatter with monodepth 0.2765, with sensor depth 0.9243); ScanNet++ F 0.3207 (below SuGaR 0.4367 and 2DGS 0.4196);
+  the project page lists different ScanNet++ numbers (F 0.4765), which look inconsistent with arXiv Table 5. No error bars (checklist item 7 "No"). Stated limits: no absolute physical scale;
+  failures on transparent surfaces, mirrors, domain gaps.
+- **Code:** public repo https://github.com/eldentse/AffineGS (sidebar label Apache-2.0; LICENSE file not read; built on DN-Splatter and Nerfstudio 1.1.3, gsplat 1.0.0). The LLFF experiments are in a separate
+  repo (not fetched). The paper itself is CC BY-NC-SA 4.0 on arXiv; DAv2-Large weights are CC-BY-NC-4.0 per its README. So AffineGS **can be run as a baseline** (earlier note that no code existed is corrected).
+- **Difference for us:** AffineGS corrects the depth network's output toward its own render to improve geometry; it is self-referential per view, uncertainty-free, and makes no statement about faults.
+  We make no correction: the model outputs depth, view j's data never enters its render, the sample spread is calibrated, and the statistic tests local shape after a two-parameter scale/shift fit.

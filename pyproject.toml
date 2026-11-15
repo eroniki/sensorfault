@@ -1,0 +1,10 @@
+[project]
+name = "dcal"
+version = "0.0.0"
+description = "Calibrated multi-view-consistent depth sampling (working package, placeholder name)"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
