@@ -1,124 +1,128 @@
-# PLAN v2: calibrated, multi-view-consistent depth sampling with a diffusion model
+# PLAN v3: calibrated, multi-view-consistent depth sampling with an affine-invariant diffusion model
 
 Working title; repo name is a placeholder. Local private repo, no remote, nothing public.
 Affiliation: Independent Researcher. Elsevier template, preprint first, no pay-to-publish venue.
-Separate paper from `eroniki/sensorfault`: nothing here is merged into that method. Its design note
-(`docs/design-3dgs-bayes.md`, main @ cf745d1) is background only; section 8 was read, not reused as method.
-No employer IP, data or names.
+Separate paper from `eroniki/sensorfault`; its design note (main @ cf745d1) is background only.
+No employer IP, data or names. Supersedes v1 (GMRF bias field) and v2 (metric log-depth).
+Evidence files: `docs/prior-art.md`, `docs/licences.md`. Marks: **[EST]** estimate; **[UNVERIFIED]** not read from a primary source.
 
-Supersedes PLAN v1 (GMRF bias field, now dropped). No bias field, no correction term, no dependency on another depth network.
+## 1. Contribution
 
-Marks: **[EST]** = back-of-envelope, not measured. **[UNVERIFIED]** = from a web search snippet or memory; check the primary source before it goes in the paper.
+A diffusion model that samples an **affine-invariant** per-view depth posterior from RGB, can be guided at sampling time by a 2DGS surface built from the other views (never view j), and whose sample spread is a **calibrated** covariance of view j's *local shape*, used in the sensorfault-style leave-view-out fault test.
 
-## 1. Contribution (one sentence)
+## 2. Decisions recorded (author, 2026-11-14)
 
-A diffusion model that samples a per-view depth posterior from RGB, can be guided at sampling time by a 2DGS surface built from the *other* views, and whose sample spread is a **calibrated** covariance usable in the sensorfault leave-view-out fault test.
+1. Test statistic uses **unguided** samples; **guided** sampling is the product.
+2. Target is **affine-invariant depth**, not metric. Reason: a single RGB image leaves global scale nearly free, so metric samples spread along one near-rank-one scale direction and the test loses power on local geometry, where faults live. Camera embedding dropped (see 3.1).
+3. If ScanNet++ is out, use a shortlist (section 8). Status: **effectively out**, see 8 and the flag in section 11.
+4. SD 2.x first, **provided its licence checks out**. Status: **not verified** (HF returns 401); see 7 and section 11.
 
-## 2. Model
+## 3. Model
 
-- **Backbone:** latent image diffusion model, fine-tuned (not trained from scratch). Initialise from the *image* generator, not from Marigold or any depth model, to keep "independent of other networks". See section 7.
-- **Target:** metric log-depth of view j, encoded by the backbone VAE (replicated to 3 channels, Marigold-style trick). Metric because ETH3D and ScanNet++ poses are metric. Condition on RGB latent (channel concat) plus a camera embedding (focal length / FoV), since metric depth is not recoverable from pixels alone. Decision pending: affine-invariant target plus separate scale head, if metric training proves unstable.
-- **Two sampling modes**, kept strictly separate (this matters for the fault test, section 5):
-  - **U (unguided):** RGB-only posterior p(D_j | I_j). This is the "measurement" with its own covariance Sigma_eps,j.
-  - **G (guided):** same sampler plus guidance toward the leave-j-out 2DGS render (below). This is the consistent-depth product.
-- **Guidance (diffusion posterior sampling style):** at step t, form x0-hat, decode to depth, compare with the render D_render^{-j} under that render's variance Sigma_surf^{-j}; add the gradient of the Gaussian log-likelihood to the score with a strength schedule. The render comes from a structure-only 2DGS fitted on the other views' depth and **never uses view j's RGB-derived depth** (hard rule; asserted in code by view-id masks).
-- **Chicken-and-egg:** the 2DGS is built from other views' depth, which themselves need guidance. Plan: round 0 = U samples per view, fit 2DGS (gsplat/2DGS, depth + normal), round r>0 = G samples from round r-1 fields, refit. Leave-j-out field via the influence-function step (sensorfault design note sec. 2) or K-fold view blocks. 2 rounds first.
-- **Output:** M samples per view -> mean, per-pixel variance, and low-rank-plus-diagonal covariance (rank <= M-1, shrinkage), so Sigma_r for the fault test is a stationary-kernel-free, sample-based matrix. Metric: samples are in log-depth; convert with delta method before whitening.
+### 3.1 Representation
+- Latent diffusion, Marigold recipe: frozen VAE, depth replicated to 3 channels, RGB latent concatenated, widened first layer, only the U-Net trained, v-objective. Initialise from the **image** generator, not a depth model.
+- Target: per-view percentile-normalised depth (2%/98% to [-1, 1], Marigold Eq. 3). Depth, not disparity, because the 2DGS render is depth and the test fits scale/shift in depth space.
+- **No camera embedding.** Affine-invariance removes the need for metric scale, and Marigold works without intrinsics. Known cost: unknown focal length leaves a residual shape ambiguity that partly leaks into the fitted shift; we log it as a measured limitation on ETH3D, and keep intrinsics only for projection/render geometry outside the network.
+- Honest novelty note: affine-invariant fine-tuned latent diffusion depth with ensembling **is Marigold**. Our contribution is everything after it (guidance, calibration, fault test, semi-supervision).
 
-## 3. Training: semi-self-supervised
+### 3.2 Unguided mode U (measurement)
+- M samples (start M = 10) from RGB of view j only. Align the samples to each other (Marigold's joint scale/shift, Eq. 4), then take the pixel-wise mean m and the **post-alignment sample covariance** Sigma_U (low-rank + diagonal, shrinkage). Removing the per-sample affine wobble is the point: what remains is local-shape variability.
+- Rank budget: the aligned samples have at most M-3 informative directions; a diagonal/stationary-kernel part is needed for the rest (decision after step 5.3).
 
-- **Supervised term (labelled views):** standard v/eps-prediction loss on GT depth latents. Truth sources: ETH3D laser scans (reprojected, masked where invalid) and ScanNet++ (LiDAR/laser depth) **after licence check** [UNVERIFIED, do not download until confirmed].
-- **Self-supervised term (unlabelled views):** render-and-compare. Take x0-hat for view j at a random t, decode, compare with the stop-gradient leave-j-out 2DGS render of the same scene (depth, plus normal consistency), weighted by render variance. Photometric cross-view warping against the *RGB* of other views gives an independent signal not routed through the 2DGS.
-- **Anti-collapse safeguards:** EMA teacher produces the 2DGS inputs (not the student); render supervision only where >= 2 other views support the pixel; supervised batches always present.
-- **Label fraction:** control rho_scene = fraction of *training scenes* with GT, plus pixel density within labelled scenes (as delivered). Schedule:
-  - Stage 1: rho = 100% on the labelled training pool, supervised only (the usable upper bound).
-  - Stage 2: add the unlabelled term, ramping the unlabelled share of each batch 0 -> 50% over the first third, then fixed.
-  - Study grid: rho_scene in {100, 30, 10, 3, 0}%. At 0% there is no metric anchor except posed metric cameras and photometric consistency; whether it bootstraps is a research question, reported honestly either way.
-- **Leakage rule:** two protocols, never mixed. (a) *Inductive*: test scenes are never seen in training, labelled or not. (b) *Transductive / test-time*: the unlabelled term may use the test scene's RGB and poses but never its GT, and the tested view j is excluded from the render it is compared with. Report both.
-- ETH3D has only ~13 scenes with public GT [UNVERIFIED count]: use scene-wise cross-validation for ETH3D evaluation and ScanNet++ (if licensed) as the main training pool.
+### 3.3 Guided mode G (product)
+- DPS-style guidance at late steps only (start: last 2 of ~5-10 steps, following DepthSync's finding that early x0-hat is too noisy to guide).
+- Guide target: depth render D_r^{-j} and per-pixel variance Sigma_r^{-j} from a structure-only 2DGS fitted on the other views' depth. Loss at step t: `min_{s,t} || s*dec(x0hat) + t - D_r^{-j} ||^2_{Sigma_r^{-1}}` over pixels with >= 2 supporting views. (s,t) solved in closed form per step (variable projection), so the guided sample inherits the render's scale/shift.
+- Hard rule: nothing derived from view j's RGB enters D_r^{-j}; enforced by view-id masks and a unit test.
+- Chicken-and-egg: round 0 = U samples -> 2DGS; round r>0 = G samples -> refit. Leave-j-out field by influence-function step (sensorfault note sec. 2) or K-fold view blocks. 2 rounds first.
 
-## 4. Uncertainty and calibration
+## 4. The test statistic (unguided samples, two fitted parameters)
 
-- Spread over M samples (start M = 10) gives the per-view covariance (section 2).
-- Report calibration, not only accuracy, against GT on held-out scenes: NLL, PIT histogram and interval coverage (50/80/95%), regression ECE, CRPS, AUSE (sparsification), and the whitened-residual statistic T/(n-2) -> 1 on clean views, as in sensorfault.
-- Ablate a per-scene temperature on Sigma (fit leave-view-out, as sensorfault sec. 9) vs no post-hoc scaling. A diffusion model's raw spread is not guaranteed calibrated; expect to need it, and say so.
-- Expected failure: sample spread captures *model* (aleatoric-like) variability but under-represents bias common to all samples; report on dev GT.
+For view j with unguided mean m (affine-aligned samples) and leave-j-out render D_r^{-j} with variance Sigma_r^{-j}:
 
-## 5. Fault test and the key risk
+1. **Fit only a per-view scale and shift** of the U samples to the render: `(s, t) = argmin || s*m + t*1 - D_r^{-j} ||^2_{W}`, robust (Huber/IRLS) so that a fault covering a minority of pixels does not drag the fit, with W = (s^2 Sigma_U + Sigma_r^{-j})^{-1} (one fixed-point iteration).
+2. **Residual** `r = s*m + t*1 - D_r^{-j}`. Test the local shape: `T = r^T (s^2 Sigma_U + Sigma_r^{-j})^{-1} r`.
+3. **Account for the two parameters:**
+   - Degrees of freedom: reference `chi2` with `n_eff - 2` (the same projection as the (a_i, b_i) step in the sensorfault note), where n_eff comes from the correlation of the whitened residual.
+   - **Threshold calibrated empirically with the identical pipeline**: for clean held-out views run the same fit, residual and whitening, and set the threshold from the empirical null (conformal / permutation). The fit's cost is then inside the null by construction, rather than assumed from `chi2`. Report both thresholds.
+   - Known blind spot, stated up front: any fault in span{m, 1} (global scale/shift of the whole view) is absorbed by (s, t) and is **undetectable by design**; only local-shape faults are tested. The robust fit also requires the minority assumption (fault < half the supported pixels); beyond it the fit absorbs the fault, and we report the fraction at which power collapses.
+- "Barely circular": (s, t) use view j's samples and the render, but the render never uses view j, and two numbers cannot encode local shape. Check empirically: power of (a) (s,t) fitted on the whole view vs (b) (s,t) fitted on a held-out half of pixels, to bound the leakage.
 
-Risk: a learned prior has no Gaussian guarantee and may **explain a real fault as plausible depth** (a "hallucinated consistency"). Under sensorfault's flat-prior analysis this is the absorption problem; here it is non-linear and has no closed-form detectability.
+## 5. Training: semi-self-supervised
 
-- **Test statistic uses mode U only.** Residual r_j = (unguided sample mean for view j) - (leave-j-out render), whitened by Sigma_eps,j (sample covariance) + Sigma_surf^{-j}. Mode G is the product and is *not* tested against its own guidance (that would be circular). Open decision: confirm with author that "sample spread" in the brief means U-mode spread.
-- **Fault-injection design** (families mirror sensorfault: region, smooth warp, edge-aligned region; confirm against its configs):
-  1. *Depth-space injection:* add the fault to view j's U-sample (tests the statistic only, a control). Compare power with the Gaussian baseline; this isolates the non-Gaussian null.
-  2. *Image-space injection (tests the prior):* alter I_j so that the true geometry is unchanged but the image implies different depth: object paste/removal, mirror/glass-like regions, blur, exposure, a plausible inpainted patch; magnitude swept so implied depth shift is 0.25-4 sigma.
-  3. *Geometry-space injection:* wrong pose or focal length for view j. Pose faults need the pose-hold rule from the sensorfault note.
-  4. *Adversarial-plausible:* shift a region by delta along the surface normal while keeping image statistics natural (inpainting model, or a patch from another scene at matching scale), the case where a prior is most likely to absorb.
-- **Metrics:** minimum detectable fault (MDF) in sigma at fixed false-alarm alpha, power curves, false-alarm rate on clean views, and the **absorption ratio** = fraction of the injected displacement reproduced by the U-sample mean. Absorption ratio ~ 1 and low power = the prior is hiding faults.
-- **Null:** do not assume chi-squared. Calibrate the threshold empirically (conformal / permutation on clean held-out views), then check the Gaussian threshold as a comparison.
-- **Mitigations to test if absorption is high:** (i) lower-capacity conditioning (drop camera embedding), (ii) lower guidance strength, (iii) tempered sampling, (iv) train with injected faults as negatives, (v) report as limitation with measured MDF.
+- **Labelled views:** standard v-loss on percentile-normalised GT depth.
+- **Unlabelled views:** scale-and-shift-invariant render-and-compare: `min_{s,t} || s*dec(x0hat) + t - D_r^{-j} ||^2` against the stop-gradient leave-j-out render, variance-weighted, >= 2 supporting views; plus photometric warping to other views' RGB (independent of the 2DGS). The invariance means the render never imposes a scale.
+- Safeguards: EMA teacher builds the 2DGS; labelled data always in each batch; render supervision only where supported.
+- **Label fraction:** rho_scene = fraction of training scenes with GT. Stage 1 supervised (rho = 100% of the labelled pool); stage 2 ramps the unlabelled share 0 -> 50% over the first third, then constant. Grid {100, 30, 10, 3, 0}%. At 0% there is no metric anchor but none is needed now (affine-invariant), so the 0% arm is a meaningful test of render-and-compare alone.
+- Protocols never mixed: **inductive** (test scenes unseen) and **transductive** (test-scene RGB and poses used by the unlabelled term, never its GT, and never view j in its own render).
 
-## 6. Baselines and prior art
+## 6. Calibration and the fault-injection test
 
-- **Baselines:** Marigold-style depth diffusion (single view, ensemble spread as uncertainty), same samples-per-view; AffineGS (arXiv 2611.07709: dense edge-aware affine disparity field, no uncertainty, no fault test; characterised from the sensorfault note sec. 8.5, **I have not read the paper itself**). Cheap controls: per-view aligned RMS and ensemble/MDE-confidence tests, as in sensorfault.
-- **Prior art (shallow search 2026-11-14, titles/abstract-level only; must read before any novelty claim):**
-  - Marigold (Ke et al.): single-view latent diffusion depth, ensembling; no multi-view guidance.
-  - MVGD, Guizilini et al., CVPR 2025: multi-view geometric diffusion generating novel-view images and depth from posed images, scale-aware, no explicit 3D representation. **Closest work.** Likely difference: we guide with an explicit 2DGS render of the other views, never the tested view, and evaluate calibration and fault detection. Must verify what MVGD reports about uncertainty.
-  - DepthSync (arXiv 2507.01603): diffusion guidance for scale- and geometry-consistent *video* depth; closest on the guidance mechanism. Check how its guidance is built (render vs depth sync) and whether it is leave-view-out.
-  - ChronoDepth, DepthCrafter, RollingDepth: video-diffusion depth, temporal not multi-view-geometric consistency.
-  - OracleGS (arXiv 2509.23258), UAR-Scenes (2503.15742): diffusion priors used to *improve 3DGS*, the opposite direction.
-  - Pixel-Perfect Depth (arXiv 2601.05246): pixel-space diffusion depth; relevant to flying pixels at edges.
-- **Where we differ (to be confirmed by reading):** (1) leave-view-out guidance from an explicit surface; (2) sample spread evaluated as calibrated covariance; (3) a fault-injection protocol for the learned prior; (4) semi-self-supervision with a controlled label fraction.
+- Calibration metrics, in aligned (affine-fixed) space against GT after a per-view GT-fit of (s,t): NLL, PIT, interval coverage, regression ECE, CRPS, AUSE, and clean-view T/(n_eff - 2) -> 1. Marigold reports no spread-vs-error evaluation, so there is no prior number to beat; the baseline is Marigold's own M-sample spread.
+- Optional per-scene temperature on Sigma_U (leave-view-out, as sensorfault sec. 9), ablated.
+- **Fault-injection families** (mirror sensorfault: region, smooth warp, edge-aligned region; confirm against its configs):
+  1. Depth-space on the U sample (control for the statistic and the empirical null; includes the (s,t) cost).
+  2. Image-space on I_j (tests the prior): paste/removal, glass-like or mirror regions, blur, exposure, inpainted plausible patch; sweep implied depth shift 0.25-4 sigma.
+  3. Pose/focal error on view j (pose-hold rule from the sensorfault note).
+  4. Adversarial-plausible: normal-direction shift with natural image statistics.
+- Metrics: minimum detectable fault (sigma) at fixed alpha, power curves, clean false-alarm rate, **absorption ratio** (fraction of injected displacement reproduced by the U mean), and power vs fault area fraction (the robust-fit collapse point).
+- Mitigations if absorption is high: lower guidance (n/a to the test), tempered sampling, train with injected faults as negatives, fewer capacity-heavy conditioning, or report as a measured limitation.
 
-## 7. Backbone candidates and licences (all [UNVERIFIED]: web snippets or memory; read each model card/LICENSE)
+## 7. Backbones (details in `docs/licences.md`)
 
-| Candidate | Why | Licence as found | Use limits to flag |
-|---|---|---|---|
-| Stable Diffusion 2.x (865M UNet, VAE) | Marigold's base; small; fits fine-tuning budget | CreativeML OpenRAIL++-M (memory) | Use-based restrictions; derivatives must carry them |
-| SDXL | Higher resolution | OpenRAIL++-M (snippet, "use-case restrictions") | Same; heavier (2.6B) |
-| SD 3.5 Medium | DiT, strong base | Stability Community License (memory: free under a revenue threshold, registration) | Revenue cap; read terms for derivatives and preprints |
-| FLUX.1 schnell | DiT, distilled | Apache-2.0 (snippets agree) | Distilled, few-step: guidance and calibration may behave differently |
-| FLUX.1 dev | Strong | Non-commercial (snippets) | Non-commercial; avoid |
-| PixArt / Qwen-Image family | DiT alternatives | not checked | check |
+| Candidate | Status |
+|---|---|
+| **SD 2.x** | **Licence NOT verified**: HF pages and API return 401, the Stability GitHub LICENSE-MODEL is 404. Needs an authenticated check. The only evidence is Marigold's v1-1 card labelling the SD2 licence "CreativeML Open RAIL++-M". Not cleared. |
+| **SDXL base 1.0** | Licence read: CreativeML Open RAIL++-M. Fine-tuning allowed; restrictions and the licence must pass to derivatives. 2.6B U-Net: needs LoRA/8-bit optimiser on the 24 GB TITAN. Candidate fallback. |
+| SD 3.5 Medium | Stability Community License read: free for research; "Powered by Stability AI" and a Notice file if distributing; may not be used to improve a foundational generative model. MMDiT, different fine-tune recipe from Marigold. |
+| FLUX.1 schnell | Apache-2.0 per card (LICENSE not read); few-step distilled. FLUX.1 dev: non-commercial, avoid. |
 
-Recommended first backbone: **SD 2.x**, because it is the Marigold base (clean baseline comparison), fits a 24 GB card, and the licence is workable for a non-commercial preprint. Dependent models, as baselines only: Marigold v1-0 (Apache-2.0 on its card; v1-1 reported as OpenRAIL++-M by a third-party card, conflicting), Depth Anything V2 (README: Small Apache-2.0, Base/Large/Giant CC-BY-NC-4.0), Depth Pro (licence not found). GeoWizard, Lotus licences not confirmed.
+Marigold weights are SD2-derived depth models: baseline only. Recommendation: confirm SD 2.x access this week; if unavailable or its terms unacceptable, take **SDXL** as the first backbone (licence verified) and keep SD 2.x for a comparison arm only if cleared.
 
-## 8. Datasets
+## 8. Datasets (details in `docs/licences.md`)
 
-ETH3D (high-res multi-view, laser GT; evaluation-first). ScanNet++ (training pool and second benchmark; **licence/terms check before download**). No employer data. No data in git; only manifests and hashes.
+- **ETH3D:** **13 training scenes with public ground truth** (DSLR, 14-76 images each, laser scans and rendered depth maps), 12 test scenes without GT (use as unlabelled/transductive RGB). No licence text on the site: cite, do not redistribute, ask the maintainers before releasing derived data. 13 scenes means leave-one-scene-out evaluation.
+- **ScanNet++: effectively ruled out** (flag in 11). Terms read: non-commercial; handwritten requester + PI signatures; independent applicants must be established researchers with a verifiable research profile; clause 7 binds a for-profit employer; no sharing of data.
+- **Shortlist:** BlendedMVG/BlendedMVS (CC BY 4.0, 113 + 389 scenes, depth rendered from meshes, metric scale unconfirmed), Hypersim (CC BY-SA 3.0, 461 scenes, synthetic), TartanAir (CC BY 4.0, 30 environments), Replica (research terms, 18 scenes), DTU (no licence text, 124 scenes, object-scale). Matterport3D, Waymo, KITTI, ARKitScenes, 7-Scenes are non-commercial/institutional and not planned. Real indoor laser-GT at ScanNet++ scale has no permissive replacement here.
+- Labelled pool for stage 1: BlendedMVG + Hypersim (+ TartanAir); evaluation: ETH3D (primary), DTU (secondary). Unlabelled pool: any posed RGB.
 
-## 9. Compute estimate [EST] (nothing rented, no large jobs run)
+## 9. Prior art and where we differ (details in `docs/prior-art.md`)
 
-Assumptions: A100-80GB-equivalent hours; an H100 is roughly 2x faster. SD-2 UNet at ~512x768; DDIM/few-step sampling for evaluation. Marigold reports ~2.5 days on one RTX 4090 for its fine-tune (memory, [UNVERIFIED]), used only as an anchor.
+- **Marigold:** single image, same affine-invariant recipe and median-of-aligned ensemble; spread never evaluated against error. We add multi-view guidance, calibration, and the test.
+- **MVGD (CVPR 2025):** pixel-space diffusion trained from scratch (~6k A100-h), learned multi-view conditioning, scale-aware (not metric, not affine-invariant), **no uncertainty output, no guidance, no 3D render, and for depth the target image is also used as conditioning (not leave-view-out)**; code/weights unconfirmed. We fine-tune a pretrained backbone, exclude view j by construction, guide with an explicit surface carrying variance, calibrate, and inject faults.
+- **DepthSync (2507.01603):** training-free guidance on DepthCrafter, pairwise warp/tracking losses between neighbouring frames of a video window, **not leave-one-out** (target's own decoded depth enters), no uncertainty or fault test, 961 s/90 frames on an A100, no code found. We use a fused leave-j-out surface with a likelihood weighted by render variance, and adopt their late-step-only guidance as the starting schedule.
+- **AffineGS (2611.07709):** dense edge-aware affine disparity rectification of a depth network's output, no uncertainty/fault test; not read beyond the abstract. No code link found; re-implement if needed.
+- Not read in full (abstract-level): ChronoDepth, DepthCrafter, OracleGS, UAR-Scenes, Pixel-Perfect Depth. A final sweep is required before any novelty claim.
 
-| Stage | What | GPU-h low-high | Where |
-|---|---|---|---|
-| 0. Debug | Tiny subset, 256 px, LoRA or 8-bit Adam, toy guidance loop, unit tests | 20-40 | TITAN RTX (24 GB, Turing: fp16 only, no bf16) |
-| 1. Supervised fine-tune | Labelled pool, metric log-depth + camera conditioning | 40-80 | rented, 1 GPU |
-| 2a. 2DGS fits | ~300 scenes x 15-30 min x 2-3 refit rounds | 150-450 (mostly small-GPU) | rented or TITAN RTX |
-| 2b. Semi-self-supervised training | Render-and-compare, EMA teacher, 2 rounds | 100-250 | rented |
-| 3. Label-fraction grid | 5 values of rho_scene, shortened schedule | 150-400 | rented |
-| 4. Sampling and calibration eval | ~1000 views x M=10 x 10-50 steps, U and G, per config | 5-40 per config; ~8 configs | rented / TITAN RTX |
-| 5. Fault-injection study | 4 families x ~5 magnitudes x ~100 views x M samples | 20-60 | rented |
-| 6. Baselines (Marigold, AffineGS) | Same views/samples | 20-50 | either |
-| **Total** | | **~550-1350 A100-h** | |
+## 10. Compute [EST] (nothing rented; no large jobs)
 
-Biggest uncertainty: the number of ScanNet++ scenes and 2DGS fit cost. Cheapest cut: drop to 100 scenes (halves 2a) and fewer rho values. Decision rule before renting: run stage 0 and a 1-scene stage 1 on the TITAN RTX; only rent if the unguided model beats a trivial baseline on that scene.
+Anchors, now read from the sources: Marigold fine-tune ~2.5 days on one RTX 4090 (18K iterations, batch 32); MVGD ~6k A100-h from scratch (we are far below); DepthSync guidance ~961 s per 90 frames on an A100.
 
-## 10. First step (no large jobs)
+| Stage | A100-h low-high | Where |
+|---|---|---|
+| 0. Debug (256 px, LoRA/8-bit Adam, toy guidance, unit tests) | 20-40 | TITAN RTX (24 GB, fp16 only) |
+| 1. Supervised fine-tune (Marigold-scale, 18K it, batch 32) | 40-80 | 1 rented GPU |
+| 2a. 2DGS fits (labelled+unlabelled pool, ~300 scenes x 15-30 min x 2-3 rounds); lower if the pool is BlendedMVG subset | 100-400 | small GPU |
+| 2b. Semi-self-supervised training with render-and-compare | 100-250 | rented |
+| 3. Label-fraction grid (5 values, shortened) | 150-400 | rented |
+| 4. Sampling and calibration eval (M=10, guided ~5-15 s/sample [EST from DepthSync cost]) | 10-60 per config, ~8 configs | rented/TITAN |
+| 5. Fault-injection study | 20-60 | rented |
+| 6. Baselines (Marigold re-run, AffineGS re-implementation) | 20-60 | either |
+| **Total** | **~500-1300** | |
 
-1. Read MVGD, DepthSync and the Marigold paper in full; update section 6 with verified differences. (No compute.)
-2. Verify licences in section 7 and ScanNet++ terms; record in `docs/licences.md`.
-3. Stage 0 on TITAN RTX: build the data interface for one ETH3D scene (GT reprojection, view-id masks) and a unit test that the guidance render for view j provably uses no data from view j.
-4. Mode-U fault-test control (injection family 1) on synthetic samples: confirms the statistic and the empirical-null code before any model exists.
+Gate before renting: 1 ETH3D scene on the TITAN with the unguided model plus the statistic (section 4) on synthetic faults; rent only if it beats a trivial baseline.
 
-## 11. Open decisions for the author
+## 11. Open items needing the author
 
-- Is the test statistic built from U-mode samples (recommended) and G-mode the product?
-- Metric log-depth with camera embedding, or affine-invariant plus scale head?
-- ScanNet++ if licence allows; otherwise what second labelled source?
-- Backbone: SD 2.x first (recommended)?
+1. **SD 2.x access:** unverifiable from here (401). Check from a logged-in HF session; else SDXL.
+2. **ScanNet++ clause 7 and eligibility:** as read, the terms bind a for-profit employer and require a verifiable research profile and a PI/supervisor signature. Do not apply unless the author decides this fits the "no employer" rule.
+3. ETH3D has no stated licence: acceptable to use for research with citation and no redistribution?
+4. MVGD/DepthSync/AffineGS code: none found; the AffineGS project page was not read.
 
-## 12. Housekeeping
+## 12. Next steps (no compute)
 
-Python/PyTorch, gsplat, 2DGS, diffusers. No latency targets. Elsevier template, preprint first.
+1. Author resolves items 11.1-11.3.
+2. Read the AffineGS body and project page; update section 9.
+3. Write the unit test "render for view j uses no data from view j" and a CPU toy of the statistic with (s,t) fitting and the empirical null (synthetic Gaussian samples + injected faults) to check the two-parameter cost and the robust-fit collapse point, before any model exists.
+4. ETH3D data interface (GT reprojection, view masks), manifests and hashes only; no data in git.
+
+Python/PyTorch, diffusers, gsplat, 2DGS. No latency targets.
