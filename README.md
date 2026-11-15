@@ -1,10 +1,11 @@
 # sensorfault
 
-Research scaffold for **view-level fault rejection in depth-supervised Gaussian splatting** (design v3). One
+Research scaffold for **view-level fault rejection in depth-supervised Gaussian splatting** (design v3.1; reference design `docs/design-3dgs-bayes.md`). One
 metric depth model is applied to each image; 2DGS-style surfels are fitted by depth supervision and rendered with gsplat;
-colour is a separate appearance block that never updates geometry. Each surfel keeps its shape for rendering plus a
-separate 9x9 uncertainty whose normal-offset and tilt block renders into depth variance. Views add alpha-weighted
-J^T R^-1 J information; leaving a view out is a subtraction; the other views' surface is rendered into the tested view
+colour is a separate appearance block that may refine poses but never updates map geometry. Each surfel keeps its shape
+for rendering plus a separate 10x10 uncertainty (opacity frozen after a warm-up) whose normal-offset and tilt block
+renders into depth variance. Views add alpha-weighted J^T R^-1 J information; leaving a view out is a subtraction and one
+Newton step; the noise has one free variable (a scene temperature) and the bias is a shared distance term; the other views' surface is rendered into the tested view
 and its whitened depth residuals are tested (depth only, no correspondences, unseen pixels untestable, the tested view
 spawns nothing). Faults are regional and appearance-driven (reflections, textureless walls); the gate must beat cheap
 baselines (aligned RMS, depth confidence, robust depth losses, RobustNeRF, SpotLessSplats). See `PLAN.md`.
@@ -55,8 +56,8 @@ Optional extras: `pip install -e ".[tsdf]"` (Open3D), `".[gs]"` (torch, gsplat),
 | H2 | The depth model repeats its error across views in textureless regions (gate blind there) but not on reflections | `configs/h2_cross_view_repetition.yaml` |
 | H3 | At 5% false alarm the gate beats the best cheap/robust baseline by >=15 points on reflective-region failures | `configs/h3_detection_vs_cheap_baselines.yaml` |
 | H4 | Depth-supervised splatting with the gate improves AbsRel and F-score on ETH3D and ScanNet++ | `configs/h4_reconstruction_with_and_without_gate.yaml` |
-| H5 | Independent blocks are overconfident; calibrated false alarm stays in [0.5, 1.5] alpha | `configs/h5_rendered_uncertainty_calibration.yaml` |
-| H6 | Ablations: leave-view-out, no spawning, whitening, rendered 9x9 vs FisherRF-style and Bayes' Rays-style | `configs/h6_gate_design_ablations.yaml` |
+| H5 | Independent blocks are overconfident; with the scene temperature and omega-calibrated threshold, false alarm stays in [0.5, 1.5] alpha | `configs/h5_rendered_uncertainty_calibration.yaml` |
+| H6 | Ablations: leave-view-out, no spawning, whitening, temperature, shared bias, fold-wise opacity warm-up, rendered 10x10 vs FisherRF-style and Bayes' Rays-style | `configs/h6_gate_design_ablations.yaml` |
 
 Breakdown scenarios: `configs/breakdown_*.yaml`; ablations: `configs/ablations_gate.yaml`. All are
 `preregistered_draft` and flagged `implemented: false`. The manuscript is in the private repo

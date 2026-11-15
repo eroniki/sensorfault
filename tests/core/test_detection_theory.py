@@ -76,3 +76,31 @@ def test_energy_detects_zero_mean_warp_that_mean_shift_cannot():
     energy_power = np.mean((x1**2).mean(1) > thr)
     mean_power = np.mean(np.abs(x1.sum(1) / np.sqrt(n)) > dt.z_alpha(0.05))
     assert energy_power > 0.95 and mean_power < 0.3
+
+
+def test_temperature_recovers_scale_and_is_conservative_under_faults():
+    from scipy.stats import chi2
+
+    rng = np.random.default_rng(11)
+    m, gamma2 = 500, 1.3
+    T = gamma2 * chi2.rvs(m, size=200, random_state=rng)
+    assert dt.temperature_median_ratio(T, m) == pytest.approx(gamma2, rel=0.02)
+    # leave-view-out: the tested view does not enter its own temperature
+    T2 = T.copy()
+    T2[0] = 1e6
+    assert dt.temperature_median_ratio(T2, m, exclude=0) == dt.temperature_median_ratio(
+        T, m, exclude=0
+    )
+    # a minority of faulty views raises gamma (conservative), it does not lower it
+    Tf = T.copy()
+    Tf[:40] *= 3.0
+    assert dt.temperature_median_ratio(Tf, m) > dt.temperature_median_ratio(T, m)
+    g = dt.fit_temperature(lambda i, gam: (T[i] / gam**2, m), range(len(T)))
+    assert g**2 == pytest.approx(dt.temperature_median_ratio(T, m), rel=1e-6)
+
+
+def test_energy_test_heterogeneity_numbers_of_the_design_note():
+    fa = [dt.energy_false_alarm_given_scale(1000, 0.05, r) for r in (1.0, 1.01, 1.02, 1.05, 1.10)]
+    assert np.allclose(fa, [0.050, 0.117, 0.229, 0.710, 0.995], atol=0.002)
+    c = [dt.energy_threshold_heterogeneous(1000, 0.05, w) / 1000 for w in (0.0, 0.02, 0.05, 0.10)]
+    assert np.allclose(c, [1.075, 1.102, 1.196, 1.400], atol=0.002)

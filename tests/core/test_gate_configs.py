@@ -90,9 +90,16 @@ def test_surface_appearance_and_uncertainty_blocks():
     b = load_config(CFG / "base.yaml")
     assert b["surface"]["representation"] == "2dgs_surfels" and b["surface"]["renderer"] == "gsplat"
     ap = b["appearance"]
-    assert ap["updates_geometry"] is False and ap["gate_inputs"] == "depth only"
+    assert ap["updates_map_geometry"] is False and ap["updates_opacity"] is False
+    assert ap["refines_poses"] is True and ap["gate_inputs"] == "depth only"
     u = b["uncertainty"]
-    assert u["dim"] == 9 and len(u["state"]) == 9
+    assert u["dim"] == 10 and len(u["state"]) == 10 and u["state"][-1] == "d_logit_alpha"
+    assert "frozen" in u["opacity"]["schedule"] and u["opacity"]["rho"] == 0.5
+    assert "Newton" in u["leave_view_out"]
+    assert set(u["overconfidence_ablations"]) == {
+        "information_deflation_n_eff_over_n",
+        "jackknife_inflation",
+    }
     assert u["rendered_subblock"] == ["normal_offset_nu", "tilt_tau1", "tilt_tau2"]
     assert u["leave_view_out"].startswith("subtraction") and u["correspondences"] == "none"
     assert "overconfident" in u["limitation"]
@@ -128,3 +135,21 @@ def test_theory_modules_named_in_config_exist():
     root = CFG.parent
     assert (root / b["uncertainty"]["theory_module"]).exists()
     assert (root / b["integrity"]["theory_module"]).exists()
+
+
+def test_single_free_noise_variable_and_shared_distance_bias():
+    mm = load_config(CFG / "base.yaml")["measurement_model"]
+    npar = mm["noise_parameters"]
+    assert npar["free"] == ["gamma (one scene temperature)"]
+    assert npar["per_view"] == "none" and npar["per_pixel"] == "none"
+    assert "leave-view-out" in npar["gamma_estimator"]
+    sb = mm["shared_bias"]
+    assert sb["term"] == "distance" and "beta d^2" in sb["model"]
+    assert sb["per_view_bias_field"].startswith("not in this paper")
+    assert "omega" in mm["calibration"]["fit"] and "beta" in mm["calibration"]["fit"]
+
+
+def test_poses_use_rule_b_and_pose_faults_stay_out_of_scope():
+    p = load_config(CFG / "base.yaml")["poses"]
+    assert "photometric" in p["source"] and "excludes its own depth" in p["tested_pose"]
+    assert p["pose_faults"] == "out of scope in this paper"

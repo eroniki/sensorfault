@@ -62,7 +62,7 @@ CENTRES = [np.array([x, y, 0.0]) for x in (-0.15, 0.0, 0.15) for y in (-0.1, 0.1
 MUS, RS = _scene()
 VIEWS = [_view(MUS, RS, c) for c in CENTRES]
 VIEWS1 = [_view(MUS, RS, c, ntop=1) for c in CENTRES]  # one surfel per pixel
-PRIOR = np.eye(9) * 1e-6
+PRIOR = np.eye(gu.DIM) * 1e-6
 
 
 def _measure(view, theta, a, b, sd, rng, extra=None):
@@ -108,13 +108,13 @@ def test_depth_jacobian_finite_difference_and_scale_columns():
     J = gu.depth_jacobian(mu, R, c, Rc, r)
     d0, _ = gu.ray_surfel_depth(mu, R, c, Rc, r)
     eps = 1e-6
-    for i in range(9):
-        th = np.zeros(9)
+    for i in range(gu.DIM):
+        th = np.zeros(gu.DIM)
         th[i] = eps
         m2, R2, _ = gu.perturb_surfel(mu, R, s, th)
         d1, _ = gu.ray_surfel_depth(m2, R2, c, Rc, r)
         assert (d1 - d0) / eps == pytest.approx(J[i], abs=1e-4)
-    assert np.allclose(J[6:], 0.0)
+    assert np.allclose(J[6:], 0.0)  # scales and opacity act through the weights only
     assert rng is not None
 
 
@@ -123,7 +123,7 @@ def test_subblock_map_matches_normal_perturbation():
     phi = np.array([1e-6, -2e-6, 3e-6])
     dn = (R @ gu.so3_exp(phi))[:, 2] - R[:, 2]
     G = gu.subblock_map(R)
-    th = np.concatenate([np.zeros(3), phi, np.zeros(3)])
+    th = np.concatenate([np.zeros(3), phi, np.zeros(4)])
     tau = G @ th
     assert R[:, 0] @ dn == pytest.approx(tau[1], abs=1e-10)
     assert R[:, 1] @ dn == pytest.approx(tau[2], abs=1e-10)
@@ -131,7 +131,7 @@ def test_subblock_map_matches_normal_perturbation():
 
 def test_leave_view_out_is_exact_subtraction():
     rng = np.random.default_rng(1)
-    theta = np.zeros((len(MUS), 9))
+    theta = np.zeros((len(MUS), gu.DIM))
     infos = [_info(v, _measure(v, theta, 1.0, 0.0, 0.01, rng), 1.0, 0.0, 0.01) for v in VIEWS]
     L, eta = gu.fuse(PRIOR, infos)
     for j in (0, 3):
@@ -142,7 +142,7 @@ def test_leave_view_out_is_exact_subtraction():
 
 def test_posterior_covariance_matches_monte_carlo():
     rng = np.random.default_rng(2)
-    theta = np.zeros((len(MUS), 9))
+    theta = np.zeros((len(MUS), gu.DIM))
     theta[:, :3] = rng.normal(0, 0.005, (len(MUS), 3))
     k = 40  # centre surfel
     ests = []
@@ -150,7 +150,7 @@ def test_posterior_covariance_matches_monte_carlo():
         infos = [_info(v, _measure(v, theta, 1.0, 0.0, 0.01, rng), 1.0, 0.0, 0.01) for v in VIEWS]
         L, eta = gu.fuse(PRIOR, infos)
         mean, cov = gu.posterior(L, eta)
-        ests.append(gu.subblock_map(RS[k]) @ mean[k])
+        ests.append(gu.subblock_map(RS[k])[:, gu.GEO] @ mean[k])
     ests = np.array(ests)
     C = gu.offset_tilt_cov(cov[k], RS[k])
     assert np.var(ests[:, 0]) == pytest.approx(C[0, 0], rel=0.2)
@@ -162,7 +162,7 @@ def test_posterior_covariance_matches_monte_carlo():
 def _gate_z(rng, extra=None, defl=1.0, corr=None, j=2, reps=1, views=None):
     views = VIEWS1 if views is None else views
     zs = []
-    theta = np.zeros((len(MUS), 9))
+    theta = np.zeros((len(MUS), gu.DIM))
     for _ in range(reps):
         ys = []
         for i, v in enumerate(views):
@@ -213,7 +213,7 @@ def test_tested_view_spawns_nothing_and_unseen_is_untestable():
     _, w_kept, W_kept = gu.composite_weights(ag, order, keep=np.array([False, True]))
     assert w_all[0] > w_all[1]
     assert w_kept[0] == 0 and w_kept[1] == 1.0 and W_kept == pytest.approx(0.6)
-    L_other = np.stack([PRIOR, PRIOR + np.diag([0, 0, 50.0] + [0] * 6)])
+    L_other = np.stack([PRIOR, PRIOR + np.diag([0, 0, 50.0] + [0] * 7)])
     keep = gu.supported(L_other, RS[:2], PRIOR, 1.0)
     assert keep.tolist() == [False, True]
     _, _, W_none = gu.composite_weights(ag, order, keep=np.array([False, False]))
@@ -225,3 +225,67 @@ def test_independent_blocks_are_overconfident_under_correlated_noise():
     z_def = _gate_z(np.random.default_rng(5), corr=0.02, defl=0.05, reps=10)
     assert np.std(z) > 1.3
     assert np.std(z_def) < np.std(z)
+
+
+def test_opacity_jacobian_matches_finite_differences():
+    rng = np.random.default_rng(6)
+    alpha = rng.uniform(0.2, 0.9, 4)
+    g = rng.uniform(0.3, 1.0, 4)
+    d = np.array([1.0, 1.5, 2.0, 2.4])
+    order = np.arange(4)
+    D, w_hat, dD = gu.composite_depth_opacity_jacobian(alpha, g, d, order)
+    assert w_hat.sum() == pytest.approx(1.0)
+    eps = 1e-6
+    for k in range(4):
+        logit = np.log(alpha / (1 - alpha))
+        logit[k] += eps
+        a2 = 1 / (1 + np.exp(-logit))
+        D2, _, _ = gu.composite_depth_opacity_jacobian(a2, g, d, order)
+        assert (D2 - D) / eps == pytest.approx(dD[k], abs=1e-5)
+
+
+def test_newton_leave_out_at_the_map_equals_refit_without_the_view():
+    rng = np.random.default_rng(7)
+    theta = np.zeros((len(MUS), gu.DIM))
+    theta[:, :3] = rng.normal(0, 0.003, (len(MUS), 3))
+    ys = [_measure(v, theta, 1.0, 0.0, 0.01, rng) for v in VIEWS1]
+    infos = [_info(v, y, 1.0, 0.0, 0.01) for v, y in zip(VIEWS1, ys)]
+    prior = np.eye(gu.DIM) * 1e-2  # well-conditioned prior for an exact comparison
+    L, eta = gu.fuse(prior, infos)
+    mean, _ = gu.posterior(L, eta)  # MAP of the linear model (opacity frozen)
+    j = 1
+    # gradient of view j's loss at the MAP: -(eta_j - Lambda_j theta_map) on the 9 geometric coords
+    Lj, ej = infos[j]
+    grad = -(ej[:, gu.GEO] - np.einsum("kij,kj->ki", Lj[:, gu.GEO, gu.GEO], mean))
+    g10 = np.zeros((len(MUS), gu.DIM))
+    g10[:, gu.GEO] = grad
+    m_newton, cov_newton = gu.leave_view_out_newton(mean, L, Lj, g10)
+    Lr, er = gu.fuse(prior, [x for i, x in enumerate(infos) if i != j])
+    m_ref, cov_ref = gu.posterior(Lr, er)
+    assert np.allclose(m_newton, m_ref, atol=1e-8)
+    assert np.allclose(cov_newton, cov_ref)
+
+
+def test_opacity_support_rule_drops_surfels_set_by_the_tested_view():
+    L_data = np.zeros((3, gu.DIM, gu.DIM))
+    Lj = np.zeros((3, gu.DIM, gu.DIM))
+    L_data[:, gu.OPA, gu.OPA] = [10.0, 10.0, 0.0]
+    Lj[:, gu.OPA, gu.OPA] = [8.0, 2.0, 0.0]
+    assert gu.opacity_supported(L_data, Lj, rho=0.5).tolist() == [False, True, True]
+
+
+def test_shared_distance_bias_and_its_leave_view_out():
+    rng = np.random.default_rng(8)
+    beta, hs, gs = 0.01, [], []
+    for _ in range(5):
+        d = rng.uniform(1, 5, 500)
+        e = beta * d**2 + 0.01 * rng.standard_normal(500)
+        h, g = gu.distance_bias_normal_equations(d, 1.0, e, np.full(500, 1e-4))
+        hs.append(h)
+        gs.append(g)
+    hs, gs = np.array(hs), np.array(gs)
+    assert gu.distance_bias_fit(hs, gs) == pytest.approx(beta, rel=0.02)
+    keep = np.arange(5) != 2
+    assert gu.distance_bias_fit(hs, gs, exclude=2) == pytest.approx(
+        gu.distance_bias_fit(hs[keep], gs[keep])
+    )

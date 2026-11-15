@@ -1,4 +1,5 @@
-# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.1: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: h6_gate_design_ablations
@@ -10,13 +11,17 @@ hypothesis:
     loses >=10 points; keeping surfels supported only by the tested view loses >=20 points on large region
     failures (they occlude the other views surface); constant-sigma (unwhitened) residuals lose >=5 points;
     the rendered 9x9 uncertainty is at least as calibrated and powerful as FisherRF-style diagonal Fisher
-    and Bayes-Rays-style uncertainty.'
+    and Bayes-Rays-style uncertainty. Dropping the scene temperature or the shared distance bias raises
+    the clean false-alarm rate; fold-wise warm-up of the opacity changes the false-alarm rate and the
+    MDB by less than 2 points (frozen opacity is safe).'
   falsification_criterion: Falsified if any ablation is within its margin of the full gate.
   independent_variables: [variant]
   controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
   levels:
-    variant: [gate, gate_joint, gate_keep_unsupported, gate_unwhitened, gate_fisherrf_diag, gate_bayesrays]
-baselines: [gate, gate_joint, gate_keep_unsupported, gate_unwhitened, gate_fisherrf_diag, gate_bayesrays]
+    variant: [gate, gate_joint, gate_keep_unsupported, gate_unwhitened, gate_fisherrf_diag, gate_bayesrays,
+      gate_no_temperature, gate_no_shared_bias, gate_foldwise_warmup]
+baselines: [gate, gate_joint, gate_keep_unsupported, gate_unwhitened, gate_fisherrf_diag, gate_bayesrays,
+  gate_no_temperature, gate_no_shared_bias, gate_foldwise_warmup]
 metrics:
   primary: [detection_power_at_fa_0.05, false_alarm_rate]
   joint_loss_points: 10

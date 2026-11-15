@@ -1,4 +1,5 @@
-# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.1: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 baselines:
 - id: no_gate
@@ -12,7 +13,8 @@ baselines:
 - id: gate
   family: gate
   fuser: view_gate
-  params: {uncertainty: rendered_9x9, leave_view_out: subtraction, spawn: none, statistic: combined_region_scan_energy}
+  params: {uncertainty: rendered_10x10_opacity_frozen, leave_view_out: subtraction, spawn: none, statistic: combined_region_scan_energy,
+    noise: scene_temperature, shared_bias: distance}
 - id: gate_joint
   family: ablation
   fuser: view_gate
@@ -37,3 +39,19 @@ baselines:
   family: ablation
   fuser: view_gate
   params: {uncertainty: bayes_rays_style_perturbation_field}
+- id: gate_jackknife_inflated
+  family: ablation
+  fuser: view_gate
+  params: {overconfidence: jackknife_inflation}
+- id: gate_no_temperature
+  family: ablation
+  fuser: view_gate
+  params: {noise: dev_calibrated_level_only}
+- id: gate_no_shared_bias
+  family: ablation
+  fuser: view_gate
+  params: {shared_bias: none}
+- id: gate_foldwise_warmup
+  family: ablation
+  fuser: view_gate
+  params: {opacity_warmup: fold_wise_K5}

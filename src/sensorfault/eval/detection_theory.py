@@ -289,3 +289,60 @@ def sigma_surf_diag(a: float, sigma2_comp: np.ndarray) -> np.ndarray:
     Pass the result as ``Sigma_surf`` to :func:`residual_covariance`.
     """
     return np.diag(a * a * np.asarray(sigma2_comp, dtype=float))
+
+
+# ---------------------------------------------------------------------------------------------
+# Noise temperature (one free noise variable per scene) and per-view heterogeneity
+# (docs/design-3dgs-bayes.md, section 9)
+# ---------------------------------------------------------------------------------------------
+
+
+def temperature_median_ratio(T: np.ndarray, m: np.ndarray, exclude: int | None = None) -> float:
+    """Scene temperature gamma^2 from the views' energy statistics, leave-view-out.
+
+    Solves median_{i != j} [T_i(gamma) / q_0.5(chi2_{m_i})] = 1 in the regime where Sigma_eps
+    dominates Sigma_r, so that T_i(gamma) = T_i(1) / gamma^2: gamma^2 is the median ratio.
+    ``T`` are the statistics at gamma = 1 and ``m`` their degrees of freedom (n_eff-based)."""
+    T = np.asarray(T, dtype=float)
+    m = np.broadcast_to(np.asarray(m, dtype=float), T.shape)
+    keep = np.ones(len(T), bool)
+    if exclude is not None:
+        keep[exclude] = False
+    return float(np.median(T[keep] / chi2.median(m[keep])))
+
+
+def fit_temperature(stat_fn, views, lo: float = 1e-3, hi: float = 1e3) -> float:
+    """General form: gamma solving median_i [stat_fn(i, gamma) / q_0.5(chi2_{m_i})] = 1, where
+    ``stat_fn(i, gamma)`` returns (T_i(gamma), m_i) and T_i is decreasing in gamma (1-D root)."""
+
+    def f(log_g: float) -> float:
+        g = float(np.exp(log_g))
+        r = [t / chi2.median(m) for t, m in (stat_fn(i, g) for i in views)]
+        return float(np.median(r)) - 1.0
+
+    return float(np.exp(brentq(f, np.log(lo), np.log(hi))))
+
+
+def energy_false_alarm_given_scale(m: float, alpha: float, r: float) -> float:
+    """Per-view false-alarm rate of the energy test at nominal alpha when the view's true noise
+    scale is r times the scene temperature: P(r^2 chi2_m > q_{1-alpha}(chi2_m))."""
+    c = chi2.ppf(1.0 - alpha, m)
+    return float(chi2.sf(c / r**2, m))
+
+
+def energy_threshold_heterogeneous(
+    m: float, alpha: float, omega: float, n_nodes: int = 40
+) -> float:
+    """Threshold c holding the average false-alarm rate at alpha when log r ~ N(0, omega^2) across
+    clean views (per-view heterogeneity measured on dev after temperature scaling)."""
+    if omega <= 0:
+        return float(chi2.ppf(1.0 - alpha, m))
+    x, wq = np.polynomial.hermite_e.hermegauss(n_nodes)
+    wq = wq / wq.sum()
+    r2 = np.exp(2.0 * omega * x)
+
+    def fa(c: float) -> float:
+        return float(np.sum(wq * chi2.sf(c / r2, m))) - alpha
+
+    c0 = chi2.ppf(1.0 - alpha, m)
+    return float(brentq(fa, c0 * 0.5, c0 * 10.0))

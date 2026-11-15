@@ -1,4 +1,5 @@
-# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.1: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 extends: base.yaml
 id: h1_residual_measurement
@@ -6,7 +7,8 @@ status: preregistered_draft
 design: v3_rendered_uncertainty_gate
 hypothesis:
   id: H1
-  prediction: 'Run FIRST, on ETH3D dev with Depth Pro: fit sigma(.), ell, nu and tails of the aligned
+  prediction: 'Run FIRST, on ETH3D dev with Depth Pro: fit sigma(.), ell, nu, tails, the shared distance-bias
+    coefficient beta, the scene temperature range and the per-view heterogeneity omega of the aligned
     residuals; characterise natural regional failures (area fraction, magnitude, appearance class) and
     their harm. Go if at least 10% of views carry a regional failure covering >=2% of pixels at >3 sigma
     after alignment, and keeping those views lowers the fused-surface F-score by >=2 points.'
@@ -18,10 +20,12 @@ hypothesis:
     appearance_class: [reflective_or_glass, textureless_wall, other]
 baselines: [no_gate, oracle_gate]
 metrics:
-  primary: [fitted_sigma_ell_nu, tail_index, failure_area_fraction, failure_magnitude_sigma, failure_harm]
+  primary: [fitted_sigma_ell_nu, tail_index, failure_area_fraction, failure_magnitude_sigma, failure_harm,
+    beta, gamma_hat_range, omega]
   go_view_fraction: 0.1
   nogo_view_fraction: 0.05
   go_harm_fscore_points: 2
+  omega_scan_first: 0.05
 implemented: false
 first_task: true
 key_figure: 'Figure 1: natural failures in (area fraction, magnitude) with harm, by appearance class'
