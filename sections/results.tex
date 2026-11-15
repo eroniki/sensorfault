@@ -116,6 +116,37 @@ are in Figure~\ref{fig:rgbviews}.}
 
 \FloatBarrier
 
+\subsection{Surfaces Against Ground Truth}
+\label{sec:results:surface}
+Both models of MatrixCity block~3 were also compared as surfaces. Each view's depth was back-projected,
+each view kept its highest point per grid cell, and the surface model (DSM) is the median of these over
+the views that see the cell; the same operator, applied to the exact depth of the 185 frames, gives the
+ground truth (Supplement~\ref{sup:surface}). For the RGB 2DGS model (median depth, 2~m cells), the
+height residual on land had median $+0.49$~m, RMSE 6.0~m, and 81\% of cells within 1~m. Water, 46\% of
+the covered area and a flat plane in the ground truth, was not recovered: median $+5.7$~m, 95th percentile
+$+48$~m, 5\% of cells within 1~m (Figure~\ref{fig:surfacecompact}b). The textureless water surface is the
+kind of region where image-based geometry fails. For the E1 surfels (4~m cells), the scene of
+Figure~\ref{fig:e1compact} was fused twice: with all views, and without the one view the gate's loop
+excluded (the faulty view, after two rounds). Over the cells under the injected fault, the median
+residual was $-2.16$~m with the faulty view and $-0.16$~m without it, against $-0.19$~m for the same
+noise without a fault; 18\%, 54\% and 57\% of these cells were within 1~m. Over the whole block the three
+surfaces differ by at most 0.03~m in median and RMSE, because the fault covers 3\% of the cells.
+
+\begin{figure}[!htbp]
+\centering
+\input{\sfigdir/fig_surface_compact.tex}
+\caption{Surfaces of MatrixCity block~3 against the exact-depth ground truth (north up). (\textbf{a})~Ground-truth
+height, hillshaded. (\textbf{b})~RGB 2DGS model minus ground truth (2~m cells); the water at the bottom is
+reconstructed metres to tens of metres too high. (\textbf{c}, \textbf{d})~E1 surfels minus ground truth (4~m
+cells) for the fault scene of Figure~\ref{fig:e1compact}, fused with all views and without the view that the
+gate excluded, enlarged to the window marked in (a) ($x$ 170--402~m, $y$ $-712$ to $-508$~m); dashed: the convex
+hull of the cells under the injected fault. Grey: no surface. Statistics are in
+Table~\ref{tab:surface}; the full set is in Figures~\ref{fig:surfacergb}--\ref{fig:surfacenormals}.}
+\label{fig:surfacecompact}
+\end{figure}
+
+\FloatBarrier
+
 \subsection{Planned Results}
 The first result on real data will be the residual measurement of H1 (Figure~\ref{fig:residuals}), including the altitude comparison
 of off-the-shelf depth models (Table~\ref{tab:altitude}); the pose perturbation check of H7 is

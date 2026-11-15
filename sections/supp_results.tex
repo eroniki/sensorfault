@@ -171,3 +171,71 @@ MatrixCity block~3; dashed: the mean.}
 \label{fig:rgbtest}
 \end{figure}
 \FloatBarrier
+
+\subsection{Surface Comparison}
+\label{sup:surface}
+\emph{Fusion.} Every surface is a digital surface model on a fixed grid over block~3: each view's depth is
+back-projected along its pixel rays, each view keeps the highest point per cell, and the cell's height is
+the median of these per-view maxima over the views that see it (at least three); cells with fewer views
+are left empty. The same operator is applied to every source, so that the residuals compare depths, not
+fusion methods. The ground truth uses MatrixCity's exact z-depth of the 185 training frames, point-sampled at
+$480\times270$. The RGB 2DGS model of Supplement~\ref{sup:rgb} was rendered at the same pixels (median depth,
+pixels with accumulated opacity above 0.5) and gridded at 2~m. The E1 surfels have one depth per pixel at
+$96\times54$, $\hat D=\bar d+J\boldsymbol\theta$ with $\boldsymbol\theta$ the fused posterior offset of
+each surfel, and are gridded at 4~m against a ground truth gridded the same way. Cells whose
+ground-truth height is below $-2$~m are water (the plane at $-3.4$~m; land and roads start at $+0.5$~m). No model
+was retrained; rendering and fusion took about 3~min (largest temperatures 40\,$^{\circ}$C GPU and
+60\,$^{\circ}$C CPU).
+
+\emph{Findings.} The RGB 2DGS surface is close to the ground truth on land, slightly high (median
+$+0.49$~m), with errors at building edges and a tail of larger errors (RMSE 6.0~m against a 90th
+percentile of the absolute residual of 1.7~m); on water it is high by metres to tens of
+metres with streaks along the viewing directions, and its depth-derived normals there are wrong by a median
+of 30$^{\circ}$ against 12$^{\circ}$ on land (Figure~\ref{fig:surfacenormals}). In the E1 fault scene, the
+faulty view pulled the fused surface under its fault down by a median of 1.6~m (on minus off: median
+$+1.59$~m, 95th percentile $+6.5$~m); without it the surface returns to the no-fault reference. The E1 RMSE
+of 6--9~m in all three cases is dominated by building edges (the blue outlines in
+Figure~\ref{fig:surfacegate}d,e), where 3~m voxel surfels on the exact geometry cannot follow vertical walls;
+it is the same with and without the fault.
+
+\begin{table}[!htbp]
+\centering
+\caption{Height residuals (reconstruction minus ground truth) of the surfaces of MatrixCity block~3:
+median, root mean square, 5th and 95th percentiles, 90th percentile of the absolute residual, and share
+of cells within 1~m. E1 rows: the fault scene of Figure~\ref{fig:e1qualviews} ($8\sigma$ on 40\% of view 59)
+fused with all views (gate off) and without the view the gate excluded (gate on), and the same noise
+without the fault.}
+\label{tab:surface}
+\footnotesize\setlength{\tabcolsep}{4pt}
+\input{\sfigdir/tab_surface.tex}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\input{\sfigdir/fig_surface_rgb.tex}
+\caption{Surface of the RGB 2DGS model against ground truth, 2~m cells, north up: (\textbf{a})~ground-truth
+height and (\textbf{b})~RGB 2DGS height, hillshaded; (\textbf{c})~their difference. Grey: no surface.}
+\label{fig:surfacergb}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\input{\sfigdir/fig_surface_gate.tex}
+\caption{Effect of the gate on the fused E1 surfels, 4~m cells: (\textbf{a})~ground truth; (\textbf{b}, \textbf{c})~the
+surfels fused with all views and without the view that the gate's Holm loop excluded (view 59, the
+faulty one; two rounds); (\textbf{d}, \textbf{e})~their residuals; (\textbf{f})~gate on minus gate off. Dashed: the
+convex hull of the cells under the injected fault. Outside it the two surfaces nearly agree.}
+\label{fig:surfacegate}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\input{\sfigdir/fig_surface_normals.tex}
+\caption{Normals from depth for view 69 (frame 88): ground truth and RGB 2DGS median depth, encoded as
+colour (world frame), and the angle between them. Median angle: 12.3$^{\circ}$ on land, 30.0$^{\circ}$ on water
+(top of the view); on land 40\% of pixels are within 10$^{\circ}$. Finite differences at $480\times270$ add
+noise to both.}
+\label{fig:surfacenormals}
+\end{figure}
+\FloatBarrier
+
