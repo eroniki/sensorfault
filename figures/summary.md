@@ -32,3 +32,14 @@ All numbers come from results already produced (no new runs for this table). Fig
 | fig6 | `fig6_toy_miscalibration` | synthetic toy |
 
 Regenerate: `python scripts/run_guard_checks.py` (seconds; GPU optional), then `python scripts/make_figures.py`.
+
+## Renders (image panels, `figures/renders/`)
+
+| File | Shows | Data |
+|---|---|---|
+| `toy_square.png` | clean vs faulted residual maps with T and threshold, square fault, true and estimated covariance | synthetic Gaussian toy, 1 seed (7) for the paired view; threshold from 150 clean views |
+| `toy_warp.png` | same, smooth warp (the estimated-kernel statistic does NOT flag it) | synthetic Gaussian toy, 1 seed (7) for the paired view; threshold from 150 clean views |
+| `toy_edge.png` | same, edge-aligned region | synthetic Gaussian toy, 1 seed (7) for the paired view; threshold from 150 clean views |
+
+The ETH3D pipes render panels (held-out views and guard cases) are **not made yet**: no 2DGS parameters were saved by the earlier runs, so they cannot be rendered without re-running the fits.
+

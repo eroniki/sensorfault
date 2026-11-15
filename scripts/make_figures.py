@@ -370,7 +370,25 @@ def summary(pipes, guards, toy, mdf_res, miscal, area):
           "| fig4 | `fig4_toy_mdf_by_variant` | synthetic toy |",
           "| fig5 | `fig5_toy_area_and_global` | synthetic toy |",
           "| fig6 | `fig6_toy_miscalibration` | synthetic toy |", "",
-          "Regenerate: `python scripts/run_guard_checks.py` (seconds; GPU optional), then `python scripts/make_figures.py`."]
+          "Regenerate: `python scripts/run_guard_checks.py` (seconds; GPU optional), then `python scripts/make_figures.py`.", "",
+          "## Renders (image panels, `figures/renders/`)", "", "| File | Shows | Data |", "|---|---|---|"]
+    desc = {"toy_square": "clean vs faulted residual maps with T and threshold, square fault, true and estimated covariance",
+            "toy_warp": "same, smooth warp (the estimated-kernel statistic does NOT flag it)",
+            "toy_edge": "same, edge-aligned region"}
+    for name, d in desc.items():
+        if (FIG / "renders" / f"{name}.png").exists():
+            L.append(f"| `{name}.png` | {d} | synthetic Gaussian toy, 1 seed (7) for the paired view; threshold from 150 clean views |")
+    for j in (2, 6, 10):
+        f = FIG / "renders" / f"pipes_view{j}.png"
+        if f.exists():
+            L.append(f"| `pipes_view{j}.png` | held-out view {j}: input RGB, rendered RGB, rendered depth, GT depth with validity mask, abs. error | REAL ETH3D pipes |")
+    for name, d in (("pipes_guard_poisoned", "poisoned-view guard case"), ("pipes_guard_leaky", "deliberately leaky fit")):
+        f = FIG / "renders" / f"{name}.png"
+        if f.exists():
+            L.append(f"| `{name}.png` | {d}, same panel layout | REAL ETH3D pipes |")
+    if not (FIG / "renders" / "pipes_view2.png").exists():
+        L += ["", "The ETH3D pipes render panels (held-out views and guard cases) are **not made yet**: no 2DGS parameters were saved by the earlier runs, so they cannot be rendered without re-running the fits."]
+    L += [""]
     (FIG / "summary.md").write_text("\n".join(L) + "\n")
 
 
