@@ -29,7 +29,17 @@ def pct(x: float) -> str:
 
 def main(path: str) -> None:
     root = Path(path)
-    R = json.loads((root / "results.json").read_text())
+    R = json.loads((root / "clean.json").read_text())
+    rt = R["runtime_s"]
+    for stage, key in (("grid", "single_view_grid"), ("repeat", "repeated")):
+        f = root / f"{stage}.json"
+        if f.exists():
+            d = json.loads(f.read_text())
+            R[key] = d[key]
+            rt += d["runtime_s"]
+        else:
+            R[key] = []
+    R["runtime_s"] = round(rt, 1)
     n = R["info"]["n_views"]
     lines = [
         f"# E1 summary: {R['config']['block']}",
@@ -61,6 +71,8 @@ def main(path: str) -> None:
 
     # single-view grid
     G = R["single_view_grid"]
+    if not G:
+        G = [{"delta": 0, "area": 0, "gate_detect_matched": False, "rms_detect_matched": False, "loop_detect": False, "loop_false": 0, "clean_flag_matched": 0.0}]
     deltas = sorted({g["delta"] for g in G})
     areas = sorted({g["area"] for g in G})
     lines += [

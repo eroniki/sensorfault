@@ -332,6 +332,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="results/e1")
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--stage", choices=["clean", "grid", "repeat"], required=True)
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -351,6 +352,13 @@ def main():
     print(json.dumps(info), flush=True)
     res = {"config": cfg, "info": info}
 
+    stage = a.stage
+    if stage != "clean":
+        prev = json.loads((out / "clean.json").read_text())
+        res["matched_thresholds"] = prev["matched_thresholds"]
+        p_thr = prev["matched_thresholds"]["gate_p"]
+        rms_thr = prev["matched_thresholds"]["aligned_rms"]
+        cfg["seeds_clean"] = 0
     # --- C0: clean scenes, nominal noise and noise 1.3x the offline level ---------------------------
     clean = {}
     for scale in (1.0, cfg["repeat"]["noise_scale"]):
@@ -378,16 +386,20 @@ def main():
                 )
             print(f"clean scale={scale} seed={seed} t={time.time() - t0:.0f}s", flush=True)
         clean[str(scale)] = rows
-    res["clean"] = clean
-    # per-view thresholds for matched 5% false alarm (single pass), from nominal clean runs
-    nom = [r for r in clean["1.0"] if r["temperature"]]
-    p_thr = float(np.quantile(np.concatenate([r["p"] for r in nom]), cfg["alpha"]))
-    rms_thr = float(np.quantile(np.concatenate([r["rms"] for r in nom]), 1 - cfg["alpha"]))
-    res["matched_thresholds"] = {"gate_p": p_thr, "aligned_rms": rms_thr}
+    if stage == "clean":
+        res["clean"] = clean
+        nom = [r for r in clean["1.0"] if r["temperature"]]
+        p_thr = float(np.quantile(np.concatenate([r["p"] for r in nom]), cfg["alpha"]))
+        rms_thr = float(np.quantile(np.concatenate([r["rms"] for r in nom]), 1 - cfg["alpha"]))
+        res["matched_thresholds"] = {"gate_p": p_thr, "aligned_rms": rms_thr}
+        res["runtime_s"] = round(time.time() - t0, 1)
+        (out / "clean.json").write_text(json.dumps(res, indent=1, default=float))
+        print("done clean", res["runtime_s"], flush=True)
+        return
 
     # --- C1: one faulty view, region fault grid ---------------------------------------------------
     grid = []
-    for delta in cfg["deltas_sigma"]:
+    for delta in cfg["deltas_sigma"] if stage == "grid" else []:
         for area in cfg["areas"]:
             for seed in range(cfg["seeds_cell"]):
                 rng = np.random.default_rng(2000 + 97 * seed + int(10 * delta) + int(100 * area))
@@ -416,7 +428,12 @@ def main():
                     }
                 )
             print(f"grid delta={delta} area={area} t={time.time() - t0:.0f}s", flush=True)
-    res["single_view_grid"] = grid
+    if stage == "grid":
+        res["single_view_grid"] = grid
+        res["runtime_s"] = round(time.time() - t0, 1)
+        (out / "grid.json").write_text(json.dumps(res, indent=1, default=float))
+        print("done grid", res["runtime_s"], flush=True)
+        return
 
     # --- C2: same error repeated on neighbouring frames of a strip (masking) -----------------------
     rep = []
@@ -436,35 +453,32 @@ def main():
         for scale in (1.0, rc["noise_scale"]):
             measure(views, rng, scale)
             inject_world_patch(views, idx, geo, centre, rc["radius_m"], rc["delta_sigma"])
-            for B in cfg["block_sizes"]:
-                for temp in (True, False):
-                    for cap in (1, cfg["round_cap"]):
-                        for whiten in (True, False):
-                            if (not whiten) and (B != 1 or cap == 1 or not temp):
-                                continue
-                            loop = run_loop(
-                                Gate(views, geo, cfg, B=B, whiten=whiten, temperature=temp), n, cap
-                            )
-                            rep.append(
-                                {
-                                    "seed": seed,
-                                    "noise_scale": scale,
-                                    "B": B,
-                                    "temperature": temp,
-                                    "round_cap": cap,
-                                    "whiten": whiten,
-                                    "faulty": idx,
-                                    "detected": len([i for i in loop.excluded if i in idx]),
-                                    "false": len([i for i in loop.excluded if i not in idx]),
-                                    "rounds": loop.rounds,
-                                    "alarm": loop.alarm,
-                                }
-                            )
+            combos = [
+                (B, True, cap, True) for B in cfg["block_sizes"] for cap in (1, cfg["round_cap"])
+            ]
+            combos += [(3, False, cfg["round_cap"], True), (3, True, cfg["round_cap"], False)]
+            for B, temp, cap, whiten in combos:
+                loop = run_loop(Gate(views, geo, cfg, B=B, whiten=whiten, temperature=temp), n, cap)
+                rep.append(
+                    {
+                        "seed": seed,
+                        "noise_scale": scale,
+                        "B": B,
+                        "temperature": temp,
+                        "round_cap": cap,
+                        "whiten": whiten,
+                        "faulty": idx,
+                        "detected": len([i for i in loop.excluded if i in idx]),
+                        "false": len([i for i in loop.excluded if i not in idx]),
+                        "rounds": loop.rounds,
+                        "alarm": loop.alarm,
+                    }
+                )
         print(f"repeat seed={seed} t={time.time() - t0:.0f}s", flush=True)
     res["repeated"] = rep
     res["runtime_s"] = round(time.time() - t0, 1)
-    (out / "results.json").write_text(json.dumps(res, indent=1, default=float))
-    print("done", res["runtime_s"], flush=True)
+    (out / "repeat.json").write_text(json.dumps(res, indent=1, default=float))
+    print("done repeat", res["runtime_s"], flush=True)
 
 
 if __name__ == "__main__":
