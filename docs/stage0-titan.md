@@ -62,10 +62,30 @@ The harness builds SDXL's U-Net from its config with random weights (2.61B param
 
 ## Where this differs from PLAN section 7
 
-- PLAN assumes frozen **fp16** base weights (about 5 GB). The harness keeps them in fp32 (10.3 GB). Storing them in fp16 would lower every row by about 5.1 GB [EST, not measured] and might let 768 px run without checkpointing. That would need a harness change and a re-run; not done here.
+- PLAN assumes frozen **fp16** base weights (about 5 GB). The harness keeps them in fp32 (10.3 GB). Storing them in fp16 would lower every row by about 5.1 GB [EST, not measured] and might let 768 px run without checkpointing. That would need a harness change and a re-run; not done here. (Measured since: see "Frozen base weights in fp16" below. The drop is 5.3-5.6 GB with checkpointing and 9.6-9.8 GB without.)
 - The step has **no VAE and no text encoders** (random latents, zero text embeddings). The fp32 VAE adds about 0.3 GB of weights plus encoder activations unless latents are pre-encoded.
 - Random weights and 5 steps measure memory and time only. They say nothing about convergence or about fp16 overflow with real SDXL weights.
 
 ## Rough consequence for PLAN section 10 [EST]
 
 From step time alone, a Marigold-scale stage 1 (18K iterations x batch 32 = 576K samples) at batch 2 with checkpointing would take about 70 h at 512 px and 75 h at 768 px on this card, before data loading and VAE encoding. It would be less if larger batches cut the per-sample time, as the overhead reading above suggests.
+
+## Frozen base weights in fp16
+
+Re-run with `--base-fp16` (frozen base weights stored in fp16; the widened `conv_in` and LoRA stay fp32 and are trained), using `scripts/stage0_grid_basefp16.sh`, on the same host, software and UNet config as above. The GPU was idle before the grid (488 MiB, 1% utilisation). Raw JSON lines: `docs/stage0-titan-basefp16.jsonl`. Tests on this commit: 25 passed, 1 skipped (ETH3D real data).
+
+| res | batch | rank | ckpt | precision | trainable params | peak alloc GB | peak device GB | ms/step | fits 80% (20.6 GB) |
+|---|---|---|---|---|---|---|---|---|---|
+| 512 | 1 | 32 | yes | fp16 autocast, base fp16 | 46.5 M | 6.26 | 7.02 | 857 | yes |
+| 512 | 1 | 32 | no | fp16 autocast, base fp16 | 46.5 M | 8.20 | 8.59 | 469 | yes |
+| 512 | 2 | 32 | yes | fp16 autocast, base fp16 | 46.5 M | 6.45 | 7.07 | 845 | yes |
+| 512 | 2 | 32 | no | fp16 autocast, base fp16 | 46.5 M | 10.26 | 10.62 | 463 | yes |
+| 768 | 1 | 32 | yes | fp16 autocast, base fp16 | 46.5 M | 6.48 | 7.17 | 854 | yes |
+| 768 | 1 | 32 | no | fp16 autocast, base fp16 | 46.5 M | 10.76 | 11.33 | 474 | yes |
+| 768 | 2 | 32 | yes | fp16 autocast, base fp16 | 46.5 M | 6.87 | 7.84 | 898 | yes |
+| 768 | 2 | 32 | no | fp16 autocast, base fp16 | 46.5 M | 15.41 | 16.24 | 611 | yes |
+| 768 | 2 | 64 | yes | fp16 autocast, base fp16 | 92.9 M | 7.71 | 8.88 | 965 | yes |
+
+Against the fp32-base rows for the same settings:
+- **With checkpointing** the device peak falls by 5.3-5.6 GB (12.5-14.1 GB to 7.0-8.9 GB), about the 5.1 GB the halved weights account for. Step time is unchanged or up to 4% faster (845-965 ms against 856-1001 ms).
+- **Without checkpointing** it falls by 9.6-9.8 GB (18.2-21.1 GB to 8.6-11.3 GB). 768 px at batch 2 now runs, at 16.2 GB and 611 ms per step; with fp32 base weights it ran out of memory. [Inference] The extra 4.5 GB is the fp16 copy that autocast makes of every fp32 weight and keeps for the backward pass. With fp16 storage there is nothing to cast, and with checkpointing those copies are not kept across segments either.
