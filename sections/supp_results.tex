@@ -88,3 +88,45 @@ Perturbed starting poses          & \todocell & \todocell \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\subsection{E1 Qualitative Checks}
+\label{sup:e1qual}
+The figures below are computed from the MatrixCity block already used in E1, rebuilt from the seed of one
+grid scene ($8\sigma$ on 40\% of view 59); no new data and no training. Grey pixels are not testable,
+because no surfel supported by other views covers them.
+
+\begin{figure}[!htbp]
+\centering
+\input{\qfigdir/fig_e1_qual_views.tex}
+\caption{E1 qualitative check of the test. Rows: a clean view far from the fault (view 69); the faulty
+view; a clean neighbour on the same strip, swamped while the faulty view still shapes its cavity (view
+58); and the same neighbour once the faulty view is dropped. Columns: true depth; the cavity's rendered
+surfel depth; the raw residual after alignment; the residual standardised by $\sqrt{(\Sigma_r)_{uu}}$; and the
+region-scan statistic $|z|$ per tile with the tiles above the first Holm threshold outlined. Flagged tiles:
+0, 21, 16 and 0; largest $|z|$: 2.4, 80.1, 29.9 and 2.1.}
+\label{fig:e1qualviews}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\input{\qfigdir/fig_e1_qual_uncertainty.tex}
+\caption{E1 residual uncertainty for a weakly supported view (view 56, 68\% of pixels testable) and a
+strongly supported one (view 69, 100\%). Left: $\sqrt{(\Sigma_r)_{uu}}$, dominated by the depth noise,
+which grows with range. Middle: its surface part $\sqrt{V_{-j}(u)}$, large where few other views support
+the surfels. Right: the variance of each region-scan tile sum under the full within-surfel term
+$UP^{(-j)}U^{\top}$ divided by its diagonal-only value. It is 1.0 on the strongly supported view; on the weakly
+supported view the median is 1.54 and the largest 9.3. A diagonal-only test would understate those variances
+by the same factors, which is the source of the false alarms that the full term removes.}
+\label{fig:e1qualunc}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\input{\qfigdir/fig_e1_qual_topdown.tex}
+\caption{Top-down map of the surfels of MatrixCity block~3 (one 3~m cell per surfel voxel; highest surfel per
+cell), coloured by height and by the normal-offset standard deviation after fusing all 185 views
+(logarithmic; 30~m is the prior, where no view observes the surfel). Black: camera centres, an $8\times8$
+grid of positions flown in four headings. Red: the views in Figures~\ref{fig:e1qualviews} and~\ref{fig:e1qualunc}.}
+\label{fig:e1qualtop}
+\end{figure}
+
