@@ -144,10 +144,16 @@ Done (CPU, plus one 0.4 GB ETH3D scene, `pipes`, downloaded outside the repo; ma
   - **ground truth is sparse: 9-10% of pixels have depth**, so evaluation and supervision must use a validity mask and the label-fraction study needs a pixel-density control as well as the scene fraction.
 - 19 CPU tests pass (leave-out guard, statistic, ETH3D parsers/camera model/undistortion on synthetic data, manifest); a 20th, real-data test of the undistorted ground truth against the laser scan, passes when `ETH3D_PIPES` is set.
 
-Not done, and why:
-- **Stage 0 on the TITAN RTX: not run.** This session's machine has an RTX 2070 (8 GB); the TITAN RTX box is not reachable from here. Stage 0 stays a task for that machine (sizing harness to be written, below).
-- **Real 2DGS behind the leave-view-out interface:** see the next entry once attempted; until then only the toy point surface is tested.
+- **Real 2DGS rasteriser behind the leave-view-out interface (`src/dcal/gs2d.py`, `tests/test_gs2d.py`), on the RTX 2070 here:** structure-only surfels (one oriented disk per strided pixel of every view except j, no appearance, **no optimisation yet**) rendered with gsplat's `rasterization_2dgs`, fused per pixel with variance and support. `check_leave_out` passes (poisoned view, perturb-invariance, sensitivity), and the 2DGS render is **bit-identical** (atol 0) when view j's data change. On the synthetic room the render of view j from the others has median relative depth error 0.75% (edge views) to <0.01% (centre view); fit + render takes 0.09 s for 2.3k surfels and 9 MB of GPU memory. A bug found and fixed on the way: `inf * False = NaN` made depth NaN wherever any single source view missed a pixel.
+- **Stage-0 sizing harness (`scripts/stage0_sizing.py`, `tests/test_stage0_harness.py`):** Marigold-style step (8-channel widened conv_in, LoRA on attention, v-prediction, optional gradient checkpointing, fp16) validated for logic on a tiny random UNet (22k trainable of 841k parameters); **no SDXL number has been measured**.
+- 23 tests pass in the GPU environment (19 CPU tests, 2 gsplat, 2 harness), plus the real-data ETH3D test when `ETH3D_PIPES` is set (skipped otherwise).
 
-Next: (1) the author decisions in section 11; (2) real 2DGS surface behind `fit_surface/render` and re-run `check_leave_out`; (3) stage-0 sizing/LoRA harness to run on the TITAN; (4) a toy with a miscalibrated posterior and a large-area fault sweep.
+Not done, and why:
+- **Stage 0 on the TITAN RTX: not run.** This session's machine has an RTX 2070 (8 GB); the TITAN RTX box is not reachable from here. To run on it: fetch SDXL's ungated `unet/config.json` and run `scripts/stage0_sizing.py --config ... --res 512 --batch 1 --rank 32 --ckpt` (and 768, ranks 16-64, with and without checkpointing). The memory estimate in section 7 remains an estimate until then.
+- The 2DGS surface is not optimised (no photometric refinement, no per-surfel uncertainty, no densification) and has only been tested on a synthetic room, not on ETH3D. Fitting a real optimised 2DGS to the `pipes` scene is the next step.
+
+Environment note (`docs/env.md`): the working GPU stack here is Python 3.10 + torch 2.4.1+cu121 + gsplat 1.4.0 with the system nvcc 12.0 (first JIT build about 40 minutes at low priority on this shared host). Python 3.12 + torch 2.15/cu13.2 + nvcc 13.x failed (header mismatch, then ptxas/nvcc errors).
+
+Next: (1) author decisions in section 11; (2) optimise the 2DGS on `pipes` (depth + normal losses, structure-only) behind the same interface and re-run `check_leave_out`; (3) stage 0 on the TITAN with the harness; (4) a toy with a miscalibrated posterior and a large-area fault sweep.
 
 Python/PyTorch, diffusers, gsplat, 2DGS (the CPU toy and the ETH3D interface need only numpy/scipy, plus Pillow and py7zr for data). No latency targets.

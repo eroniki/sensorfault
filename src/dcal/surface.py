@@ -121,31 +121,35 @@ def perturb_view(view: ViewData, rng: np.random.Generator) -> ViewData:
 
 
 def check_leave_out(fit: FitFn, render_fn: RenderFn, views: Mapping[int, ViewData], j: int,
-                    rng: np.random.Generator) -> dict:
+                    rng: np.random.Generator, atol: float = 0.0) -> dict:
     """Empirical no-leak check for view ``j``. Returns booleans; all must be True for a compliant pipeline.
+
+    ``atol`` > 0 allows a numerical tolerance for non-bit-reproducible (GPU) renders; 0 demands bit-identical output.
 
     1. ``poisoned``: the pipeline runs with view j replaced by an object that raises on access.
     2. ``invariant``: the render for j is bit-identical when j's data is arbitrarily perturbed or removed.
     3. ``sensitive``: perturbing a *different* view does change the render (guards against a vacuous test).
     """
     target = views[j]
+    same = (lambda a, b: np.array_equal(a, b, equal_nan=True)) if atol == 0 else \
+        (lambda a, b: np.allclose(a, b, atol=atol, rtol=0.0, equal_nan=True))
     ref = render_fn(fit(views, j), target)
 
     poisoned_views = {k: (PoisonedView(k) if k == j else v) for k, v in views.items()}
     try:
         got = render_fn(fit(poisoned_views, j), target)
-        poisoned = all(np.array_equal(a, b, equal_nan=True) for a, b in zip(ref, got))
+        poisoned = all(same(a, b) for a, b in zip(ref, got))
     except LeakError:
         poisoned = False
 
     perturbed = dict(views)
     perturbed[j] = perturb_view(target, rng)
     got = render_fn(fit(perturbed, j), target)
-    invariant = all(np.array_equal(a, b, equal_nan=True) for a, b in zip(ref, got))
+    invariant = all(same(a, b) for a, b in zip(ref, got))
 
     other = next(k for k in views if k != j)
     perturbed = dict(views)
     perturbed[other] = perturb_view(views[other], rng)
     got = render_fn(fit(perturbed, j), target)
-    sensitive = not all(np.array_equal(a, b, equal_nan=True) for a, b in zip(ref, got))
+    sensitive = not all(same(a, b) for a, b in zip(ref, got))
     return {"poisoned": poisoned, "invariant": invariant, "sensitive": sensitive}

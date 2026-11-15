@@ -2,48 +2,15 @@
 import numpy as np
 import pytest
 
-from dcal.surface import (LeakError, PoisonedView, ViewData, check_leave_out, fit_surface, render)
+from dcal.surface import LeakError, PoisonedView, check_leave_out, fit_surface, render
+from scene_helpers import make_views
 
 H = W = 24
 
 
-def _look_at(eye, target=np.array([0.0, 0.0, 3.0])):
-    f = target - eye
-    f = f / np.linalg.norm(f)
-    r = np.cross(f, [0, -1, 0])
-    r /= np.linalg.norm(r)
-    d = np.cross(f, r)
-    R = np.stack([r, d, f])           # rows: x right, y down, z forward
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = -R @ eye
-    return T
-
-
-def _scene_depth(K, T_cw):
-    """Analytic depth of a room made of a floor (y = 1) and a back wall (z = 5)."""
-    v, u = np.mgrid[0:H, 0:W]
-    dirs = np.stack([(u + 0.5 - K[0, 2]) / K[0, 0], (v + 0.5 - K[1, 2]) / K[1, 1], np.ones_like(u, float)], -1)
-    T_wc = np.linalg.inv(T_cw)
-    o = T_wc[:3, 3]
-    dw = dirs @ T_wc[:3, :3].T
-    with np.errstate(divide="ignore", invalid="ignore"):
-        t_floor = np.where(dw[..., 1] > 1e-9, (1.0 - o[1]) / dw[..., 1], np.inf)
-        t_wall = np.where(dw[..., 2] > 1e-9, (5.0 - o[2]) / dw[..., 2], np.inf)
-    t = np.minimum(t_floor, t_wall)
-    # camera z-depth: dirs have unit z in camera frame, so ray parameter equals z-depth
-    return np.where(np.isfinite(t), t, 10.0)
-
-
 @pytest.fixture(scope="module")
 def views():
-    K = np.array([[24.0, 0, W / 2], [0, 24.0, H / 2], [0, 0, 1]])
-    rng = np.random.default_rng(0)
-    out = {}
-    for i, x in enumerate(np.linspace(-1.5, 1.5, 5)):
-        T = _look_at(np.array([x, 0.0, 0.0]))
-        out[i] = ViewData(i, rng.random((H, W, 3)), _scene_depth(K, T), K, T)
-    return out
+    return make_views(H, W, focal=24.0)
 
 
 def _render_fn(surface, target):
