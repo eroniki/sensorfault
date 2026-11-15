@@ -11,7 +11,7 @@
 \pgfplotsset{toyax/.style={axis on top, enlargelimits=false, xmin=0, xmax=16, ymin=0, ymax=16, xtick=\empty, ytick=\empty, width=0.135\figw, height=0.135\figw,
   colorbar style={width=0.18cm, tick label style={font=\figfont\tiny}, tick align=outside, tick style={line width=0.4pt}}}}
 \begin{tikzpicture}
-\begin{groupplot}[amb, toyax, group style={group size=4 by 2, horizontal sep=0.095\figw, vertical sep=1.3cm}, title style={align=center, font=\figfont\scriptsize}]
+\begin{groupplot}[amb, toyax, group style={group size=4 by 2, horizontal sep=0.095\figw, vertical sep=2.0cm}, title style={align=center, font=\figfont\scriptsize}]
 \nextgroupplot[title={Raw residual $r$\\clean view}, ylabel={True cov.}]
 \toypanel{oracle}{clean}{r}{rdbu}{}{0}
 \nextgroupplot[title={Raw residual $r$\\faulted view}, colormap name=rdbu, colorbar]
