@@ -1,0 +1,56 @@
+{
+ "heldout_2": {
+  "this_run": {
+   "coverage_of_valid_gt": 0.998,
+   "rel_err_median": 0.0008,
+   "rel_err_p90": 0.0029,
+   "psnr_db": 23.09
+  },
+  "recorded_earlier_run": {
+   "coverage_of_valid_gt": 0.998,
+   "rel_err_median": 0.0008,
+   "rel_err_p90": 0.003,
+   "psnr_db": 23.04
+  }
+ },
+ "heldout_6": {
+  "this_run": {
+   "coverage_of_valid_gt": 0.946,
+   "rel_err_median": 0.0019,
+   "rel_err_p90": 0.0065,
+   "psnr_db": 15.2
+  },
+  "recorded_earlier_run": {
+   "coverage_of_valid_gt": 0.947,
+   "rel_err_median": 0.0019,
+   "rel_err_p90": 0.0063,
+   "psnr_db": 15.19
+  }
+ },
+ "heldout_10": {
+  "this_run": {
+   "coverage_of_valid_gt": 0.996,
+   "rel_err_median": 0.0009,
+   "rel_err_p90": 0.0041,
+   "psnr_db": 20.24
+  },
+  "recorded_earlier_run": {
+   "coverage_of_valid_gt": 0.996,
+   "rel_err_median": 0.0009,
+   "rel_err_p90": 0.0043,
+   "psnr_db": 20.13
+  }
+ },
+ "poisoned": {
+  "coverage_of_valid_gt": 0.946,
+  "rel_err_median": 0.0019,
+  "rel_err_p90": 0.0064,
+  "psnr_db": 15.2
+ },
+ "leaky": {
+  "coverage_of_valid_gt": 1.0,
+  "rel_err_median": 0.0005,
+  "rel_err_p90": 0.0021,
+  "psnr_db": 21.68
+ }
+}

@@ -40,6 +40,9 @@ Regenerate: `python scripts/run_guard_checks.py` (seconds; GPU optional), then `
 | `toy_square.png` | clean vs faulted residual maps with T and threshold, square fault, true and estimated covariance | synthetic Gaussian toy, 1 seed (7) for the paired view; threshold from 150 clean views |
 | `toy_warp.png` | same, smooth warp (the estimated-kernel statistic does NOT flag it) | synthetic Gaussian toy, 1 seed (7) for the paired view; threshold from 150 clean views |
 | `toy_edge.png` | same, edge-aligned region | synthetic Gaussian toy, 1 seed (7) for the paired view; threshold from 150 clean views |
-
-The ETH3D pipes render panels (held-out views and guard cases) are **not made yet**: no 2DGS parameters were saved by the earlier runs, so they cannot be rendered without re-running the fits.
+| `pipes_view2.png` | held-out view 2: input RGB, rendered RGB, rendered depth, GT depth with validity mask, abs. error | REAL ETH3D pipes |
+| `pipes_view6.png` | held-out view 6: input RGB, rendered RGB, rendered depth, GT depth with validity mask, abs. error | REAL ETH3D pipes |
+| `pipes_view10.png` | held-out view 10: input RGB, rendered RGB, rendered depth, GT depth with validity mask, abs. error | REAL ETH3D pipes |
+| `pipes_guard_poisoned.png` | poisoned-view guard case, same panel layout | REAL ETH3D pipes |
+| `pipes_guard_leaky.png` | deliberately leaky fit, same panel layout | REAL ETH3D pipes |
 
