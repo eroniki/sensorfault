@@ -130,3 +130,44 @@ grid of positions flown in four headings. Red: the views in Figures~\ref{fig:e1q
 \label{fig:e1qualtop}
 \end{figure}
 
+
+\subsection{RGB Rendering Check}
+\label{sup:rgb}
+The gate uses depth only. As a check that the same block also supports a photometric surfel model, one
+2D Gaussian splatting model~\citep{gs_2dgs} was trained with gsplat~\citep{gs_gsplat} on the 185 RGB training images of
+MatrixCity block~3, all clean, at half resolution ($960\times540$). Training ran for 30\,000 iterations with an
+L1 plus 0.2 D-SSIM loss and, after the first third, the normal-consistency and distortion terms of 2DGS. It
+started from the 81\,152 E1 surfel centres, used the default gsplat densification, and was capped at
+$1.5\times10^{6}$ Gaussians so that it fits an 8~GB GPU. It took 31~min on one RTX~2070 (peak GPU memory
+3.2~GB; largest temperatures 66\,$^{\circ}$C GPU and 57\,$^{\circ}$C CPU). The 19 held-out test views of the
+block lie between the training positions and point in headings that the training views do not use.
+Table~\ref{tab:rgb} and Figure~\ref{fig:rgbtest} give PSNR and SSIM on them. The five test views at
+$x=70$~m (frames 20--24) are the weakest, at 16.7--17.7~dB; in frame~22 the upper part of the image
+lies beyond the area the training views cover and renders black (Figure~\ref{fig:rgbviews}, bottom row).
+
+\begin{table}[!htbp]
+\centering
+\caption{2DGS RGB reconstruction of MatrixCity block~3: test-split mean $\pm$ standard deviation over
+views, and the three training views of Figure~\ref{fig:e1qualviews}.}
+\label{tab:rgb}
+\input{\rfigdir/tab_rgb.tex}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\input{\rfigdir/fig_rgb_views.tex}
+\caption{2DGS RGB renders against ground truth. Top three rows: the training views of
+Figure~\ref{fig:e1qualviews} (their roles refer to the E1 depth test; the RGB images themselves are clean).
+Bottom two rows: a well-reconstructed and the worst held-out test view. Right: absolute error, averaged over
+the colour channels.}
+\label{fig:rgbviews}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\input{\rfigdir/fig_rgb_test.tex}
+\caption{Per-view PSNR (\textbf{a}) and SSIM (\textbf{b}) of the 2DGS model on the 19 held-out views of
+MatrixCity block~3; dashed: the mean.}
+\label{fig:rgbtest}
+\end{figure}
+\FloatBarrier
