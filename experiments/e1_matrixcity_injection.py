@@ -128,6 +128,16 @@ def eta_of(v):
     return eta
 
 
+def chi2_logsf(x: float, m: int) -> float:
+    """log P(chi2_m > x); falls back to the Wilson-Hilferty normal approximation, whose log tail
+    stays finite, when scipy's exact log tail underflows to -inf."""
+    lp = float(chi2.logsf(x, m))
+    if np.isfinite(lp):
+        return lp
+    z = ((x / m) ** (1.0 / 3.0) - (1.0 - 2.0 / (9.0 * m))) / np.sqrt(2.0 / (9.0 * m))
+    return float(norm.logsf(z))
+
+
 class Gate:
     def __init__(self, views, geo, cfg, B=1, whiten=True, temperature=True, prior=None):
         self.v, self.cfg, self.B, self.whiten, self.temperature = views, cfg, B, whiten, temperature
@@ -259,7 +269,7 @@ class Gate:
                 g2 = float(np.median(others)) if others else 1.0
             else:
                 g2 = 1.0
-            lpE = float(chi2.logsf(s["T"] / g2, s["m"]))
+            lpE = chi2_logsf(s["T"] / g2, s["m"])
             lpS = float(np.log(s["nR"] * 2) + norm.logsf(s["zmax"] / np.sqrt(g2)))
             lp = min(0.0, np.log(2.0) + min(lpE, lpS))
             out[j] = float(np.exp(lp))
