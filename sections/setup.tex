@@ -57,13 +57,17 @@ help. Thresholds match the pre-registered configuration files.
         and powerful as the FisherRF-style and Bayes' Rays-style uncertainties; dropping the scene
         temperature or the shared distance bias raises the clean false-alarm rate; a fold-wise opacity
         warm-up changes the false-alarm rate and the power by less than 2 points, so freezing opacity is
-        safe. \emph{Falsified} if any ablation is within its margin, or the fold-wise warm-up changes
-        them by more.
+        safe. The outer loop detects at least 10 points more faulty views than a single pass when two or
+        more faulty views share a region, with the clean false-alarm rate still in its band; dropping
+        all rejected views per round excludes more clean views; readmission changes the results by
+        less than 2 points. \emph{Falsified} if any ablation is within its margin, if the fold-wise
+        warm-up changes the results by more, or if the loop does not beat the single pass by 10 points.
 \end{description}
 H1 is a go/no-go and runs first; H2 predicts a blind spot rather than a success; H3 and H4 are the
 claims that would justify the method; H5 tests the stated approximation; H6 tests the design choices.
 
 \paragraph{Breakdown scenarios} Reported as honest negatives: errors repeated in all views
 (textureless walls, H2); low overlap, where pixels are untestable; faulty views that supply most of a
-region; a misspecified noise shape or a per-view heterogeneity above the calibrated $\omega$, which the
+region; masking and swamping across rounds of the outer loop, and loops that reach
+the round cap; a misspecified noise shape or a per-view heterogeneity above the calibrated $\omega$, which the
 scene temperature cannot fix; and faults or misfits beyond the linearised fusion.

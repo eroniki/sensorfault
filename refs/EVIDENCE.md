@@ -8,6 +8,7 @@ evidence logs (removed in the clean-up; see git history). Re-check all entries b
 |---|---|
 | mp_minka_ep | https://export.arxiv.org/api/query?search_query=ti:... -> arXiv 1301.2294 / sole author Thomas P. Minka; arXiv comment: "Appears in Proceedings of the Seventeenth Conference on Uncertainty in Artificial Intelligence (UAI2001)"; pages not recorded (checked 2026-11-14). |
 | mp_davison_gbp | arXiv 1910.14139 (arXiv API record) / Andrew J. Davison, Joseph Ortiz; first version 2019-10-30; no journal reference on arXiv (checked 2026-11-14). |
+| stat_dempster_em | https://api.crossref.org/works/10.1111/j.2517-6161.1977.tb01600.x / JRSS B 39(1):1-22, 1977; Dempster, Laird, Rubin (record; checked 2026-11-14). |
 | cal_guo_temperature | https://proceedings.mlr.press/v70/guo17a.html / ICML 2017, PMLR 70:1321-1330; Guo, Pleiss, Sun, Weinberger (page metadata; checked 2026-11-14). |
 | data_eth3d | Thomas Schops and Johannes L. Schonberger and Silvano Galliani and Torsten Sattl / A Multi-view Stereo Benchmark with High-Resolution Images and Multi-ca / 2017 IEEE Conference on Computer Vision and Patter / 2017 / pp=2538-2547 / https://api.crossref.org/works/10.1109/cvpr.2017.272 |
 | data_scannetpp | Chandan Yeshwanth and Yueh-Cheng Liu and Matthias Nießner and Angela Dai / ScanNet++: A High-Fidelity Dataset of 3D Indoor Scenes / 2023 IEEE/CVF International Conference on Computer / 2023 / pp=12-22 / https://api.crossref.org/works/10.1109/iccv51070.2023.00008 |

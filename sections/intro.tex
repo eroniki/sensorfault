@@ -35,7 +35,8 @@ only through the depth model.
 \paragraph{What is and is not new}
 The test is classical (Baarda's data snooping, Teunissen's DIA procedure \cite{stat_teunissen_dia} and
 GNSS solution separation \cite{flt_raim_joerger}), and removing a view by subtraction is the cavity step of
-expectation propagation \cite{mp_minka_ep}, used here once and without moment matching; surfels with confidence-weighted fusion are
+expectation propagation \cite{mp_minka_ep}, used here once per round and without moment matching; the
+outer loop of rounds is iterative data snooping and hard EM \cite{stat_dempster_em}; surfels with confidence-weighted fusion are
 point-based fusion \cite{fus_keller_surfels}; per-view alignment of monocular depth is standard
 \cite{rec_monosdf}. What is new, to our knowledge, is a per-Gaussian uncertainty that the splatting
 rasteriser renders into depth variance, used with exact leave-view-out to test whole views at a stated

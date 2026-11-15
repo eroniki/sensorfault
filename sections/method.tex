@@ -108,8 +108,8 @@ solution-separation statistic \cite{flt_raim_joerger}. The shared bias $\beta$ i
 fit over all views, and its leave-view-out value is again a subtraction of view $j$'s normal equations.
 
 \paragraph{A message-passing reading}
-Train, freeze, fuse, test (Algorithm~\ref{alg:gate}) can be read as message passing among views. In the
-fuse step the views share information: each view sends the surfels it renders an information-form
+Within each round, train, freeze, fuse, test (Algorithm~\ref{alg:gate}) can be read as message passing
+among views. In the fuse step the views share information: each view sends the surfels it renders an information-form
 message, its alpha-weighted $\Lambda_k^{(i)}=\sum_u J^{\top}R^{-1}J$ and the matching vector
 $\boldsymbol\eta_k^{(i)}$ of \eqref{eq:info}, and a surfel's belief is the product of its prior and the
 messages it receives. Leaving view $j$ out by subtraction, \eqref{eq:loo}, is the cavity step of
@@ -163,44 +163,91 @@ $\boldsymbol\phi=\delta\,\mathbf{g}_{\mathcal{R}}$ the matched statistic is $\ma
 $\kappa^{2}=\mathbf{g}_{\mathcal{R}}^{\top}M\mathbf{g}_{\mathcal{R}}$, so the minimum detectable bias at missed-detection
 probability $\beta_{\mathrm{md}}$ is $(z_\alpha+z_{\beta_{\mathrm{md}}})/\kappa$,
 as in Baarda's reliability theory \cite{stat_teunissen_dia}. Thresholds are set for a 5\% per-view
-false alarm and calibrated on clean development views (H5). Exclusion is iterative: the most
-significant rejected view is excluded, by the same subtraction and Newton step, and the remaining views
-are re-tested against the cleaner reference until none is rejected, with the family-wise false-alarm
-rate held by a Holm (step-down Bonferroni) schedule or by clean-run permutation. A scene-level alarm
-is also raised if more than half of the views are excluded. Algorithm~\ref{alg:gate} summarises
-training and the gate.
+false alarm and calibrated on clean development views (H5). A view is kept, flagged, or reported
+untestable; flagged views are handled by the outer loop below.
+
+\subsection{The Outer Loop}
+\label{sec:method:loop}
+A single pass of training, freezing, fusing and testing leaves the geometry shaped by every view,
+including the faulty ones. We therefore repeat it in rounds (Algorithm~\ref{alg:gate}). Each round
+trains on the active views, with opacity unfrozen again and densification and pruning back on,
+warm-started from the previous round; then it freezes opacity, fuses, and tests every active view
+against its cavity. The views the gate flags are dropped, and the next round trains without them.
+The loop stops when a round flags no view, when the round cap $R_{\max}$ is reached, or when more
+than half of the views are excluded (scene-level alarm). Gradients run only inside the train step; the
+fuse and test steps are not differentiated, so fusion need not be differentiable.
+
+\paragraph{False-alarm control across rounds}
+A fixed $\alpha$ per round would let the false-alarm rate grow with the number of rounds. Instead the
+Holm step-down schedule runs over a family that counts every test the loop may perform: each of the
+$N$ views once in each of up to $R_{\max}$ rounds, $M=N R_{\max}$ tests, re-tests of the same view in later
+rounds included. The $(k{+}1)$-th rejection overall uses the threshold $\alpha/(M-k)$; within a round the
+p-values are sorted and compared step-down, continuing the global count $k$, and the first failure
+ends the round's rejections. Because $M$ is fixed before the loop starts, the union bound holds over
+all rounds; the step-down relaxation is Holm's, which is exact for a fixed set of p-values, whereas
+here the p-values change as the surface is retrained, so the level of the whole loop is calibrated by
+clean-run permutation, as the single-pass threshold is.
+
+\paragraph{Defaults and risks}
+By default a round drops only the most significant rejected view, there is no readmission, and
+$R_{\max}=10$. Dropping one view at a time guards against \emph{swamping}, in which a clean view looks
+faulty only because a faulty view still shapes the surface; it is resolved when the next round
+retrains without the faulty view. Retraining also resolves \emph{masking}, in which a faulty view
+passes while other faulty views in the same region support it, as long as the faulty views are a
+minority there. Without readmission the loop is monotone and terminates; a swamped clean view that was
+dropped is not recovered, which the one-view-per-round default makes rare. Readmission, dropping all
+rejected views per round, down-weighting instead of dropping, and a single pass (loop off) are
+ablations (H6). If the cap is reached while views are still being flagged, an alarm is raised. The
+loop also removes a risk of the single pass: a surfel that a faulty view caused to be pruned during
+the warm-up can return once that view is caught, because the next round re-densifies without it.
+
+\paragraph{Known ideas}
+The loop is Baarda-style iterative data snooping \cite{stat_teunissen_dia}, which tests, removes the
+most significant observation and re-adjusts, and it is hard expectation--maximisation
+\cite{stat_dempster_em}: the gate is the E-step that sets each view's fault indicator, and training is
+the M-step that refits the geometry given those indicators. Within each round the message-passing
+reading of Section~\ref{sec:method:fusion} applies unchanged. None of this is claimed as a contribution.
 
 \begin{algorithm}[t]
-\caption{Train, freeze, fuse, test}
+\caption{Train, freeze, fuse, test (outer loop)}
 \label{alg:gate}
 \begin{algorithmic}[1]
-\REQUIRE cached depth maps $\{\hat d_i\}$; poses; offline noise shape $\sigma(\cdot),\ell,\nu_{\mathrm{nug}}$
-\STATE \textbf{warm-up:} fit $\boldsymbol\mu,\mathbf{R},\mathbf{s},\alpha$ on depth; $(a_i,b_i)$ closed form; $\beta$ by least squares; densify only with $\ge2$ supporting views; prune
-\STATE \textbf{freeze} opacity; stop densification and pruning
-\STATE fit $\boldsymbol\mu,\mathbf{R},\mathbf{s}$ and poses to convergence; colour on the frozen geometry
-\STATE \textbf{fuse:} accumulate $\Lambda_k$ at the MAP \hfill \eqref{eq:info}
-\REPEAT
-  \FOR{each remaining view $j$}
-    \STATE backward pass of $j$: $\Lambda^{(j)}$, $\nabla\mathcal{L}_j$; Newton leave-out \hfill \eqref{eq:loo}
+\REQUIRE cached depth maps $\{\hat d_i\}$; poses; offline noise shape $\sigma(\cdot),\ell,\nu_{\mathrm{nug}}$; $\alpha$; $R_{\max}$
+\STATE active views $\mathcal{A}\gets$ all $N$ views; rejections $k\gets0$; family $M\gets NR_{\max}$
+\FOR{round $r=1,\dots,R_{\max}$}
+  \STATE \textbf{train:} on $\mathcal{A}$, warm-started; $\boldsymbol\mu,\mathbf{R},\mathbf{s},\alpha$ on depth (opacity unfrozen); $(a_i,b_i)$ closed form; $\beta$ by least squares; densify only with $\ge2$ supporting views; prune
+  \STATE \textbf{freeze} opacity; stop densification and pruning; fit $\boldsymbol\mu,\mathbf{R},\mathbf{s}$ and poses to convergence; colour on the frozen geometry
+  \STATE \textbf{fuse:} accumulate $\Lambda_k$ from the views in $\mathcal{A}$ at the MAP \hfill \eqref{eq:info}
+  \FOR{each view $j\in\mathcal{A}$ \textbf{(test)}}
+    \STATE backward pass of $j$: $\Lambda^{(j)}$, $\nabla\mathcal{L}_j$; cavity by Newton leave-out \hfill \eqref{eq:loo}
     \STATE drop surfels by the support rules; render $\hat D_{-j},V_{-j}$ \hfill \eqref{eq:var}
-    \STATE $\hat\gamma_{-j}$; mark untestable pixels; align; whiten \hfill \eqref{eq:res}
-    \STATE energy and region-scan statistics
+    \STATE $\hat\gamma_{-j}$; mark untestable pixels; align; whiten; p-value $p_j$ \hfill \eqref{eq:res}
   \ENDFOR
-  \STATE exclude the most significant rejected view (Holm)
-\UNTIL{no view is rejected}
-\STATE refit the surfels without the excluded views
+  \STATE Holm step-down on the sorted $p_j$ with thresholds $\alpha/(M-k),\alpha/(M-k-1),\dots$
+  \IF{no view is rejected}
+    \STATE \textbf{stop}
+  \ENDIF
+  \STATE drop the most significant rejected view from $\mathcal{A}$; $k\gets k+1$
+  \IF{more than $N/2$ views are excluded}
+    \STATE scene-level alarm; \textbf{stop}
+  \ENDIF
+\ENDFOR
+\STATE alarm if $R_{\max}$ was reached with a rejection; the last fit on $\mathcal{A}$ is the output
 \end{algorithmic}
 \end{algorithm}
 
 \paragraph{Cost}
-Training is depth-supervised splatting with a warm-up. The test of a view costs one backward pass, one
-render and one solve on the nine geometric coordinates of each surfel it touches, so it is linear in the number of views and pixels
-and needs no correspondence search; the depth maps are computed once and cached.
+Each round costs one training run, warm-started from the previous round, plus the tests. The test of a
+view costs one backward pass, one render and one solve on the nine geometric coordinates of each surfel
+it touches, so it is linear in the number of views and pixels and needs no correspondence search; the
+depth maps are computed once and cached. With one view dropped per round, the number of rounds is the
+number of excluded views plus one, capped at $R_{\max}$.
 
 \paragraph{Approximation}
 Each surfel has its own block. Cross-surfel correlations (pixels shared by overlapping surfels), the
 correlation of depth error within a view and the shared pose error of a view are ignored, so the
 rendered variance is overconfident. This stays a stated limitation; H5 measures it, and deflating each
 view's information by $n_{\mathrm{eff}}/n$ or inflating the variance by a jackknife are ablations.
-Opacity frozen after the warm-up has a residual risk: a surfel that view $j$ caused to be pruned during
-the warm-up cannot be restored by any leave-out; a fold-wise warm-up is the ablation that measures it.
+Within a round, opacity frozen after the warm-up has a residual risk: a surfel that a not-yet-caught view
+caused to be pruned cannot be restored by any leave-out. The outer loop removes this risk for views it
+catches; a fold-wise warm-up is the ablation that measures what remains.

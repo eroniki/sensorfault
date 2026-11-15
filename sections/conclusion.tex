@@ -23,11 +23,14 @@ scene's; such a view keeps an elevated false-alarm rate and is indistinguishable
 so the guarantee is a scene-average false-alarm rate. (3)~If the depth model repeats the same error
 across views, as H2 tests for textureless walls, the other views agree with the fault and the gate
 cannot see it. (4)~Pixels that no other view sees are untestable, so low overlap lowers availability.
-(5)~Several faulty views supporting the same region can make the leave-view-out surface follow the
-fault, and the iterative exclusion locks onto the wrong consensus if they are a majority. (6)~The
-leave-out is a Newton step at the MAP, exact only for the linear model; opacity is frozen and not
-re-estimated without the tested view, and a surfel that the tested view caused to be pruned during the
-warm-up cannot be restored. (7)~Whole-view affine errors are absorbed by the alignment and are neither
+(5)~If faulty views are a majority in a region, the leave-view-out surface follows the fault and the
+outer loop locks onto the wrong consensus; masking among a minority of faulty views and swamping of
+clean views are reduced, not excluded, by dropping one view per round, and a dropped clean view is not
+readmitted by default. (6)~The leave-out is a Newton step at the MAP, exact only for the linear model,
+and opacity is not re-estimated without the tested view; within a round, a surfel pruned because of a
+not-yet-caught view cannot be restored, although the next round re-densifies once that view is caught.
+The Holm schedule over rounds is exact only for fixed p-values, so the loop's level rests on
+clean-run calibration. (7)~Whole-view affine errors are absorbed by the alignment and are neither
 detected nor harmful; the depth bias is modelled only as a shared distance term. (8)~Colour refines the
 poses but never the map geometry, so appearance cues are not used for detection. (9)~Pose faults are
 out of scope. (10)~The noise shape is calibrated on a few static scenes for one default model.

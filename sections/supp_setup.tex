@@ -35,6 +35,13 @@ only. The opacity is then frozen, densification and pruning stop, and the geomet
 to convergence while the colours train on the frozen geometry. The Laplace information \eqref{eq:info}
 is accumulated at the MAP, and each view is tested by Algorithm~\ref{alg:gate}.
 
+\runin{Outer loop.} Rounds of train, freeze, fuse, test as in Algorithm~\ref{alg:gate}. Each round warm-starts
+from the previous fit, unfreezes opacity and re-enables densification and pruning, and trains only on
+the active views. Defaults: one view dropped per round, no readmission, $R_{\max}=10$, Holm step-down over
+$M=NR_{\max}$ tests. Ablations: loop off ($R_{\max}=1$), $R_{\max}=3$, dropping all rejected views per
+round, down-weighting a flagged view to a tenth instead of dropping it, and readmission (a dropped view
+re-tested each round and readmitted once if not rejected).
+
 \runin{Parameters.} The support threshold $\lambda_{\min}$, the opacity share $\rho=\tfrac12$, the
 opacity threshold $\tau_W$, the prior $\Lambda_0$, the warm-up length, the candidate regions of the scan
 (appearance segments), the temperature range for the scene-level alarm and the 5\% per-view false alarm
@@ -61,7 +68,7 @@ also turned into view scores. \emph{Bounds:} no gate, and an oracle gate that dr
 views. \emph{Gate ablations:} a joint surface (no leave-view-out); keeping surfels that only the tested
 view supports; constant-$\sigma$ residuals; information deflated by $n_{\mathrm{eff}}/n$; jackknife
 inflation of the rendered variance; no scene temperature; no shared distance bias; a fold-wise opacity
-warm-up ($K=5$ warm-ups, each without one fold); a FisherRF-style
+warm-up ($K=5$ warm-ups, each without one fold); the outer-loop ablations above; a FisherRF-style
 diagonal Fisher \cite{unc_fisherrf} and a Bayes' Rays-style uncertainty \cite{unc_bayesrays} in place
 of the rendered blocks; and energy or region scan alone.
 

@@ -115,3 +115,17 @@ the energy minimum detectable bias. The matched region scan only scales $z$ by $
 $N_{\mathcal{R}}=100$ regions its family false-alarm rate stays below 0.16 up to $r=1.10$. Hence $\omega$ is
 measured first (H1), the region scan leads if $\omega\gtrsim0.05$, and the energy threshold uses
 $n_{\mathrm{eff}}$, not the pixel count. The code reproduces the false-alarm rates and thresholds above.
+
+\subsection{Holm Step-Down Across Rounds}
+The loop may run at most $M=NR_{\max}$ view tests: every view in every round, including re-tests of a
+view that was tested before and, in the readmission ablation, tests of dropped views. Fixing $M$ before
+the loop starts and rejecting the $(k{+}1)$-th view overall only when its p-value is at most
+$\alpha/(M-k)$ gives, by the union bound over the at most $M$ tests of clean views, a family-wise
+false-alarm rate of at most $\alpha$ for the Bonferroni part of the schedule. The step-down relaxation
+from $\alpha/M$ to $\alpha/(M-k)$ is Holm's argument, which assumes a fixed set of p-values; between rounds
+the surface is retrained and the p-values change, so the overall level is checked by clean-run
+permutation of the whole loop. With $N=30$ and $R_{\max}=10$, $M=300$, and the first rejection needs
+$p\le1.7\times10^{-4}$ at $\alpha=0.05$. The code checks the counting, the step-down within a round,
+masking (a faulty view revealed only after another is dropped), swamping (a clean view flagged only while a
+faulty view is active, excluded by the all-rejected policy but not by the default), readmission, and a
+family-wise false-alarm rate of at most $\alpha$ under a null simulation.
