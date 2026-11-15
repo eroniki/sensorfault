@@ -1,0 +1,22 @@
+scenario,variant,outcome_1,outcome_2
+"Clean, nominal noise",temperature on,per-view FA (single test) 7.5%,loop: 0/20 seeds with an exclusion
+"Clean, nominal noise",temperature off,per-view FA 2.8%,loop: 0/20
+"Clean, noise 1.3x",temperature on,per-view FA 7.7%,loop: 0/20
+"Clean, noise 1.3x",temperature off,per-view FA 100.0%,loop: 20/20
+One faulty view (160 scenes),"gate vs aligned RMS, matched 5% FA",gate 160/160,aligned RMS 157/160
+One faulty view (160 scenes),"loop, Holm",detected 160/160,scenes with a clean exclusion 2/160
+"3 neighbouring faulty frames, noise 1.0x","B=3, loop",detected 93.3%,clean excluded 0.0%
+"3 neighbouring faulty frames, noise 1.0x","B=1, loop",detected 93.3%,clean excluded 0.0%
+"3 neighbouring faulty frames, noise 1.0x","B=3, single pass",detected 96.7%,clean excluded 8.3%
+"3 neighbouring faulty frames, noise 1.0x","B=1, single pass",detected 93.3%,clean excluded 7.3%
+"3 neighbouring faulty frames, noise 1.0x","B=3, loop, no temperature",detected 93.3%,clean excluded 0.0%
+"3 neighbouring faulty frames, noise 1.0x","B=3, loop, unwhitened",detected 93.3%,clean excluded 1.3%
+"3 neighbouring faulty frames, noise 1.3x","B=3, loop",detected 93.3%,clean excluded 0.0%
+"3 neighbouring faulty frames, noise 1.3x","B=1, loop",detected 93.3%,clean excluded 0.0%
+"3 neighbouring faulty frames, noise 1.3x","B=3, single pass",detected 93.3%,clean excluded 6.1%
+"3 neighbouring faulty frames, noise 1.3x","B=1, single pass",detected 93.3%,clean excluded 4.9%
+"3 neighbouring faulty frames, noise 1.3x","B=3, loop, no temperature",detected 93.3%,clean excluded 4.0%
+"3 neighbouring faulty frames, noise 1.3x","B=3, loop, unwhitened",detected 93.3%,clean excluded 1.4%
+Runtime,stage clean (4 threads),49.1 min,8.7 s per gate pass (340 passes)
+Runtime,stage grid (2 threads),55.4 min,6.9 s per gate pass (482 passes)
+Runtime,stage repeated (2 threads),47.0 min,6.2 s per gate pass (455 passes)
