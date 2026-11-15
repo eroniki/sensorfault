@@ -14,7 +14,7 @@ A diffusion model that samples an **affine-invariant** per-view depth posterior 
 
 1. Test statistic uses **unguided** samples; **guided** sampling is the product.
 2. Target is **affine-invariant depth**; no camera embedding (reason in 3.1).
-3. **ScanNet++ stays in.** The author applies personally as an Independent Researcher (non-commercial, own time and resources). Application text is drafted in `docs/scannetpp-application-draft.md`; **nothing submitted by me**. Clause 7 and the eligibility rule are quoted verbatim in `docs/licences.md`; the open points are listed in section 11.
+3. **ScanNet++ is dropped entirely; no application.** Its role (a large labelled real-image pool plus a second benchmark) is filled by BlendedMVG, Hypersim and TartanAir alongside ETH3D (section 8).
 4. **Backbone: SD 2.x was retried and is still unreachable (HTTP 401), so SDXL with LoRA (or an 8-bit optimiser) on the TITAN RTX is the first backbone.** Its OpenRAIL++-M obligations for derivatives are in section 7 and `docs/licences.md`.
 5. **ETH3D: use with citation, no redistribution.**
 
@@ -88,10 +88,16 @@ Synthetic Gaussian world, 16x16 grid, M = 10 samples, 200 clean and 80 trials pe
 
 ## 8. Datasets (details in `docs/licences.md`)
 
-- **ETH3D (decided: use with citation, no redistribution):** 13 training scenes with public ground truth (DSLR, 14-76 images each, laser scans and rendered depth maps), 12 test scenes without GT (used as unlabelled/transductive RGB). No licence text on the site. 13 scenes means leave-one-scene-out evaluation. Keep data and derived GT files out of git and any release.
-- **ScanNet++ (in, pending the author's application):** 1006 scenes (856 train / 50 val; test scenes have no GT); laser-scan and iPhone-LiDAR depth. Terms: non-commercial only, no sharing of the data (clause 4), so derived per-scene pseudo-labels and depth renders must not be released either; GDPR deletion duty; access can be terminated. Until access is granted the plan must work without it (fallbacks below). **Not used before the token arrives.**
-- **Fallback / complementary pool:** BlendedMVG/BlendedMVS (CC BY 4.0, 113 + 389 scenes, depth rendered from meshes, metric scale unconfirmed), Hypersim (CC BY-SA 3.0, 461 scenes, synthetic), TartanAir (CC BY 4.0, 30 environments), Replica (research terms, 18 scenes), DTU (no licence text, 124 scenes, object-scale). Matterport3D, Waymo, KITTI, ARKitScenes, 7-Scenes are non-commercial or institutional and not planned.
-- Labelled pool for stage 1: BlendedMVG + Hypersim (+ TartanAir) now; add ScanNet++ if approved. Evaluation: ETH3D (primary), DTU, and ScanNet++ validation scenes if approved. Unlabelled pool: any posed RGB.
+Which datasets, and why (replacing ScanNet++, whose role was a large labelled pool with real images plus a second benchmark):
+
+| Dataset | Licence | Scale | Role | Why picked |
+|---|---|---|---|---|
+| **ETH3D** | none stated; **use with citation, no redistribution** (author decision) | 13 scenes with public GT (DSLR, 14-76 images each, laser scans + rendered depth maps); 12 test scenes without GT | **Primary evaluation**, leave-one-scene-out; the 12 test scenes' images as unlabelled/transductive RGB | The only real laser-GT multi-view set in the shortlist; also the dataset for the sensorfault paper and for Depth Pro's distortion question |
+| **BlendedMVG / BlendedMVS** | CC BY 4.0 | 113 + 389 = 502 scenes, ~110k training images; GT depth rendered from textured meshes | **Main labelled pool and the unlabelled pool** (labels withheld for a chosen scene fraction rho); held-out scenes for large-n calibration | Closest to ScanNet++'s role: real-photo-based, posed multi-view, many scenes (ETH3D's 13 are too few to calibrate coverage), and CC BY 4.0 so derived data and weights can be shared with attribution. Metric scale is not stated, which does not matter for an affine-invariant target. Caveats: mesh-rendered depth is not laser quality (holes, smoothing); the blended images are composites of renders and photos [UNVERIFIED, check before use]; domain gap to ETH3D |
+| **Hypersim** | CC BY-SA 3.0 | 461 scenes, 74,619 released images, dense exact indoor GT, synthetic | **Stage 1 supervised pool** (mixed with BlendedMVG) | Indoor, perfect depth, and it is Marigold's own training set, so our stage 1 is directly comparable to the baseline. Caveats: ShareAlike may reach released derived data or weights (legal check before any release; no effect on a preprint and code); `depth_meters` is Euclidean ray distance and must be converted to planar z-depth |
+| **TartanAir** | CC BY 4.0 | 30 simulated environments, indoor and outdoor, exact poses | **Controlled semi-supervision study** | Ground truth is complete everywhere, so labels can be hidden at any fraction rho while the true error of the render-and-compare loop stays measurable; also lighting/weather stress cases for the fault study |
+
+Not picked: Replica (18 scenes, small), DTU (object-scale, no licence text), Matterport3D, Waymo, KITTI, ARKitScenes, 7-Scenes (non-commercial or institutional terms). Split rule: scene-wise; ETH3D scenes never enter training; BlendedMVG, Hypersim and TartanAir scenes reserved for validation and held-out evaluation are fixed before any training. Limitation to state: real indoor laser ground truth exists only in ETH3D, so evidence on real indoor scenes is thin and BlendedMVG/Hypersim/TartanAir carry the scale of the study. No data is downloaded yet; manifests and hashes only go in git.
 
 ## 9. Prior art and where we differ (details in `docs/prior-art.md`)
 
@@ -121,14 +127,14 @@ Cheapest cuts: SD 3.5 or a smaller backbone, fewer rho values, M = 5, 10-step sa
 
 ## 11. Open items needing the author
 
-1. **ScanNet++ application** (drafted, not submitted by me): eligibility ("established researchers with a publicly verifiable research profile"; an unaffiliated applicant is not listed), the institutional-email request on the registration form, and **clause 7** (applies to a researcher "employed by a for-profit, commercial entity" regardless of whose time is used; signing represents authority to bind the employer). I recommend the written question to TUM in the draft before signing. Until the token arrives, no ScanNet++ results are planned.
+1. Verify the BlendedMVG details marked [UNVERIFIED] (what the blended images are, depth units, camera conventions) from its README/paper before relying on it; check Hypersim's ShareAlike reach before any release of derived data or weights.
 2. SD 2.x authenticated check (optional comparison arm only).
 3. Choice of covariance estimator and the alignment-bias correction (4.1), on real samples.
 4. Whether a released model would be shared at all (SDXL derivative terms apply only then).
 
 ## 12. Status and next steps
 
-Done (no compute beyond the CPU toy): prior art read (`docs/prior-art.md`, incl. AffineGS); licences and ScanNet++ terms quoted (`docs/licences.md`, `docs/scannetpp-application-draft.md`); leave-view-out interface and leak test (`src/dcal/surface.py`, `tests/test_no_leak.py`: a poisoned-view check, a perturb-invariance check, a sensitivity check and a mutation test that catches a leaky fit); statistic and toy (`src/dcal/stat.py`, `toy.py`, `scripts/toy_power.py`). 11 tests pass.
+Done (no compute beyond the CPU toy): prior art read (`docs/prior-art.md`, incl. AffineGS); licences recorded (`docs/licences.md`); leave-view-out interface and leak test (`src/dcal/surface.py`, `tests/test_no_leak.py`: a poisoned-view check, a perturb-invariance check, a sensitivity check and a mutation test that catches a leaky fit); statistic and toy (`src/dcal/stat.py`, `toy.py`, `scripts/toy_power.py`). 11 tests pass.
 Next: (1) author decisions in section 11; (2) swap the toy surface for the real 2DGS surface behind the same `fit_surface/render` interface and re-run `check_leave_out`; (3) ETH3D data interface (GT reprojection, view masks, manifests/hashes only); (4) stage 0 on the TITAN RTX; (5) a toy with a miscalibrated posterior, to stress the empirical-null approach and the minority-fault collapse point.
 
 Python/PyTorch, diffusers, gsplat, 2DGS (the CPU toy needs only numpy/scipy). No latency targets.
