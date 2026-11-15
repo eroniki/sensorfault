@@ -140,3 +140,23 @@ def test_holm_count_under_leave_n_out():
     assert gl.holm_family_size(121, 10, "block", 5) == 250
     with pytest.raises(ValueError):
         gl.holm_family_size(10, 1, "strip")
+
+
+def test_log_p_ranks_views_whose_p_values_underflow():
+    # the faulty view v1 and a swamped clean neighbour v3 both have p = 0.0 in floating point;
+    # log p ranks v1 first, so the default policy drops v1 and v3 recovers next round
+    def test(state, views):
+        p, lp = {}, {}
+        for v in views:
+            if v == "v1":
+                p[v], lp[v] = 0.0, -5000.0
+            elif v == "v3":
+                p[v], lp[v] = (0.0, -800.0) if "v1" in state else (0.5, np.log(0.5))
+            else:
+                p[v], lp[v] = 0.5, np.log(0.5)
+        return p, lp
+
+    res = gl.run_gate_loop(["v3"] + [v for v in VIEWS if v != "v3"], _train, test, round_cap=5)
+    assert res.excluded == ["v1"]
+    rej = gl.holm_round_rejections({"a": 0.0, "b": 0.0}, 0.05, 10, 0, {"a": -10.0, "b": -99.0})
+    assert rej == ["b", "a"]

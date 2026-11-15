@@ -54,13 +54,20 @@ def holm_threshold(alpha: float, family: int, k_rejected: int) -> float:
 
 
 def holm_round_rejections(
-    pvals: Mapping[str, float], alpha: float, family: int, k_rejected: int
+    pvals: Mapping[str, float],
+    alpha: float,
+    family: int,
+    k_rejected: int,
+    logp: Mapping[str, float] | None = None,
 ) -> list[str]:
     """Step-down Holm within one round, continuing the global rejection count ``k_rejected``.
 
-    Returns the rejected views, most significant first."""
+    Returns the rejected views, most significant first. Views are ordered by ``logp`` when given
+    (log p-values do not underflow, so they also order views whose p-values are all 0.0), else by p.
+    """
     out = []
-    for i, (v, p) in enumerate(sorted(pvals.items(), key=lambda kv: kv[1])):
+    key = (lambda kv: logp[kv[0]]) if logp is not None else (lambda kv: kv[1])
+    for i, (v, p) in enumerate(sorted(pvals.items(), key=key)):
         if p <= holm_threshold(alpha, family, k_rejected + i):
             out.append(v)
         else:
@@ -95,7 +102,8 @@ def run_gate_loop(
 
     ``train(weights)`` fits the surfels on the views with weight > 0 (weights scale a view's depth
     loss) and returns a state; ``test(state, views)`` returns a p-value per tested view from the
-    cavity test. ``policy`` is "one_per_round" (default) or "all_rejected"; ``exclusion`` is "drop"
+    cavity test, or a pair (p-values, log p-values) so that views whose p-values underflow to 0 are
+    still ranked correctly (the most significant view is dropped first). ``policy`` is "one_per_round" (default) or "all_rejected"; ``exclusion`` is "drop"
     (weight 0, default) or "downweight" (weight ``downweight``). With ``round_cap=1`` the loop is
     off (single pass). With ``readmission``, excluded views are re-tested each round and readmitted
     (weight 1) if their test is not rejected; each view is readmitted at most once.
@@ -118,7 +126,8 @@ def run_gate_loop(
         state = train(dict(weights))
         active = [v for v in views if v not in excluded]
         to_test = list(views) if readmission else active
-        pvals = dict(test(state, to_test))
+        res = test(state, to_test)
+        pvals, logp = (dict(res[0]), dict(res[1])) if isinstance(res, tuple) else (dict(res), None)
         tests_run += len(to_test)
         changed = False
         if readmission:
@@ -130,7 +139,7 @@ def run_gate_loop(
                     readmitted.append(v)
                     weights[v] = 1.0
                     changed = True
-        rej = holm_round_rejections({v: pvals[v] for v in active}, alpha, family, k)
+        rej = holm_round_rejections({v: pvals[v] for v in active}, alpha, family, k, logp)
         if policy == "one_per_round":
             rej = rej[:1]
         for v in rej:

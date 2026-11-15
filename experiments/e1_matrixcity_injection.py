@@ -248,20 +248,24 @@ class Gate:
         tested = list(active) if views_to_test is None else views_to_test
         S = {j: self.stats(j, active) for j in tested}
         ratio = {j: s["T"] / chi2.median(s["m"]) for j, s in S.items() if s is not None}
-        out = {}
+        out, logp = {}, {}
         for j, s in S.items():
             if s is None:
                 out[j] = 1.0  # untestable
+                logp[j] = 0.0
                 continue
             if self.temperature:
                 others = [r for i, r in ratio.items() if i != j]
                 g2 = float(np.median(others)) if others else 1.0
             else:
                 g2 = 1.0
-            pE = float(chi2.sf(s["T"] / g2, s["m"]))
-            pS = float(min(1.0, s["nR"] * 2 * norm.sf(s["zmax"] / np.sqrt(g2))))
-            out[j] = min(1.0, 2 * min(pE, pS))
+            lpE = float(chi2.logsf(s["T"] / g2, s["m"]))
+            lpS = float(np.log(s["nR"] * 2) + norm.logsf(s["zmax"] / np.sqrt(g2)))
+            lp = min(0.0, np.log(2.0) + min(lpE, lpS))
+            out[j] = float(np.exp(lp))
+            logp[j] = lp
         self.last = S
+        self.logp = logp
         return out
 
 
@@ -319,7 +323,8 @@ def run_loop(gate, n_views, round_cap):
         return [i for i, wt in weights.items() if wt > 0]
 
     def test(state, views):
-        return gate.pvalues(state, views)
+        p = gate.pvalues(state, views)
+        return p, gate.logp
 
     # loop off (single pass): every Holm-rejected view is excluded at once; loop on: one per round
     policy = "all_rejected" if round_cap == 1 else "one_per_round"

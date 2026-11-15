@@ -72,7 +72,17 @@ def main(path: str) -> None:
     # single-view grid
     G = R["single_view_grid"]
     if not G:
-        G = [{"delta": 0, "area": 0, "gate_detect_matched": False, "rms_detect_matched": False, "loop_detect": False, "loop_false": 0, "clean_flag_matched": 0.0}]
+        G = [
+            {
+                "delta": 0,
+                "area": 0,
+                "gate_detect_matched": False,
+                "rms_detect_matched": False,
+                "loop_detect": False,
+                "loop_false": 0,
+                "clean_flag_matched": 0.0,
+            }
+        ]
     deltas = sorted({g["delta"] for g in G})
     areas = sorted({g["area"] for g in G})
     lines += [
