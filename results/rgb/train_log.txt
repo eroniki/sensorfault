@@ -1,0 +1,32 @@
+{"train_views": 185, "test_views": 19, "W": 960, "H": 540, "init_gaussians": 81152, "iters": 30000, "scene_scale": 213.70863338223137, "gpu": "NVIDIA GeForce RTX 2070", "torch": "2.4.1+cu124"}
+iter 0: loss 0.2238, psnr(train view) 16.56, gaussians 81152, GPU 45 C, CPU 54 C, 1 s
+iter 1000: loss 0.0680, psnr(train view) 26.68, gaussians 172576, GPU 64 C, CPU 54 C, 22 s
+iter 2000: loss 0.0705, psnr(train view) 25.85, gaussians 513881, GPU 65 C, CPU 50 C, 50 s
+iter 3000: loss 0.0863, psnr(train view) 23.48, gaussians 951484, GPU 65 C, CPU 55 C, 90 s
+iter 4000: loss 0.0405, psnr(train view) 28.69, gaussians 1392185, GPU 65 C, CPU 54 C, 146 s
+iter 5000: loss 0.0325, psnr(train view) 30.05, gaussians 1515441, GPU 65 C, CPU 54 C, 213 s
+iter 6000: loss 0.0177, psnr(train view) 34.64, gaussians 1506446, GPU 65 C, CPU 54 C, 280 s
+iter 7000: loss 0.0481, psnr(train view) 27.47, gaussians 1529767, GPU 65 C, CPU 54 C, 347 s
+iter 8000: loss 0.0323, psnr(train view) 30.35, gaussians 1516257, GPU 65 C, CPU 55 C, 415 s
+iter 9000: loss 0.0302, psnr(train view) 30.68, gaussians 1501696, GPU 65 C, CPU 56 C, 482 s
+iter 10000: loss 0.0321, psnr(train view) 30.25, gaussians 1519276, GPU 64 C, CPU 54 C, 549 s
+iter 11000: loss 0.0694, psnr(train view) 28.46, gaussians 1522282, GPU 65 C, CPU 54 C, 618 s
+iter 12000: loss 0.0288, psnr(train view) 32.60, gaussians 1522372, GPU 65 C, CPU 53 C, 685 s
+iter 13000: loss 0.0465, psnr(train view) 30.41, gaussians 1499869, GPU 64 C, CPU 54 C, 753 s
+iter 14000: loss 0.0256, psnr(train view) 34.81, gaussians 1510914, GPU 64 C, CPU 54 C, 820 s
+iter 15000: loss 0.0399, psnr(train view) 31.10, gaussians 1522199, GPU 65 C, CPU 55 C, 887 s
+iter 16000: loss 0.0329, psnr(train view) 31.81, gaussians 1506388, GPU 65 C, CPU 55 C, 954 s
+iter 17000: loss 0.0326, psnr(train view) 32.42, gaussians 1516846, GPU 64 C, CPU 54 C, 1021 s
+iter 18000: loss 0.0294, psnr(train view) 34.71, gaussians 1503319, GPU 65 C, CPU 54 C, 1087 s
+iter 19000: loss 0.0207, psnr(train view) 35.44, gaussians 1515631, GPU 65 C, CPU 55 C, 1154 s
+iter 20000: loss 0.0342, psnr(train view) 32.67, gaussians 1503737, GPU 64 C, CPU 54 C, 1221 s
+iter 21000: loss 0.0339, psnr(train view) 31.08, gaussians 1511970, GPU 65 C, CPU 55 C, 1287 s
+iter 22000: loss 0.0381, psnr(train view) 31.42, gaussians 1501813, GPU 65 C, CPU 54 C, 1354 s
+iter 23000: loss 0.0322, psnr(train view) 32.96, gaussians 1515310, GPU 65 C, CPU 56 C, 1420 s
+iter 24000: loss 0.0427, psnr(train view) 32.57, gaussians 1515310, GPU 65 C, CPU 54 C, 1486 s
+iter 25000: loss 0.0354, psnr(train view) 34.54, gaussians 1515310, GPU 65 C, CPU 54 C, 1552 s
+iter 26000: loss 0.0260, psnr(train view) 35.11, gaussians 1515310, GPU 65 C, CPU 54 C, 1618 s
+iter 27000: loss 0.0430, psnr(train view) 31.33, gaussians 1515310, GPU 65 C, CPU 55 C, 1684 s
+iter 28000: loss 0.0387, psnr(train view) 34.99, gaussians 1515310, GPU 65 C, CPU 54 C, 1751 s
+iter 29000: loss 0.0309, psnr(train view) 33.64, gaussians 1515310, GPU 65 C, CPU 54 C, 1817 s
+{"iterations_done": 30000, "stopped_by_temperature_guard": false, "train_wallclock_s": 1884.0, "paused_s": 0.0, "max_gpu_temp_c": 66.0, "peak_gpu_mem_gb": 3.23, "max_cpu_temp_c": 56.6, "final_gaussians": 1515310, "figure_train_views": {"88": {"psnr": 35.67030715942383, "ssim": 0.9659753441810608}, "59": {"psnr": 32.142215728759766, "ssim": 0.9549805521965027}, "58": {"psnr": 31.01341438293457, "ssim": 0.9277454018592834}}, "resolution": [960, 540], "sh_degree": 3, "test_psnr": 23.122534500925166, "test_ssim": 0.7775000145560816}
