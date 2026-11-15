@@ -1,0 +1,10 @@
+\documentclass[border=3pt]{standalone}
+\input{preamble}
+\newlength{\figw}\setlength{\figw}{16cm}
+\begin{document}
+\begin{tikzpicture}
+\begin{axis}[amb,width=0.3\figw,height=0.2\figw]
+\addplot[oracle, error bars/.cd, y dir=both, y explicit] table[x=kappa, y=oracle, y error=oracle_se, col sep=comma]{\tikzdir/data/fig3_square.csv};
+\end{axis}
+\end{tikzpicture}
+\end{document}

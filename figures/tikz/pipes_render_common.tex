@@ -1,0 +1,30 @@
+% ETH3D pipes render panel for one case (\pxcase = view2|view6|view10|guard_poisoned|guard_leaky), images from img/, numbers from data/pipes_render_macros.tex.
+% Input RGB | rendered RGB | rendered depth | ground-truth depth (valid pixels, grey = none) | shared depth colourbar | |error| map | error colourbar.
+\input{\tikzdir/data/pipes_render_macros.tex}
+\newcommand{\pxg}[1]{\csname Px@\pxcase @#1\endcsname}
+\newlength{\pxw}\setlength{\pxw}{0.150\figw}
+\newlength{\pxstep}\newlength{\pxstepb}\newlength{\pxh}\setlength{\pxh}{0.09987\figw}   % pxw * 518/778
+\newcommand{\pximg}[3]{\node[inner sep=0pt, draw=black, line width=0.4pt, anchor=north west] (#1) at (#2) {\includegraphics[width=\pxw]{\tikzdir/img/\pxcase _#3.png}};}
+\newcommand{\pxcbar}[5]{% #1 anchor node, #2 colormap, #3 min, #4 max, #5 label
+  \begin{axis}[hide axis, scale only axis, width=0pt, height=0pt, at={($(#1.east)+(0.28cm,0)$)}, anchor=west, colormap name=#2,
+    point meta min=#3, point meta max=#4, colorbar, colorbar style={width=0.18cm, height=\pxh, ylabel={#5}, ylabel style={font=\figfont\tiny, yshift=-2pt}, scaled y ticks=false,
+    yticklabel style={/pgf/number format/fixed}, tick label style={font=\figfont\tiny}, tick align=outside, tick style={line width=0.4pt}, at={(0,0.5)}, anchor=west}]
+    \addplot[draw=none] coordinates {(0,0)};
+  \end{axis}}
+\begin{tikzpicture}
+\pgfmathsetlength{\pxstep}{\pxw+0.3cm}
+\pximg{a}{0,0}{in}
+\pximg{b}{\pxstep,0}{rgb}
+\pximg{c}{2*\pxstep,0}{depth}
+\pximg{d}{3*\pxstep,0}{gt}
+\pxcbar{d}{viridisa}{\pxg{dmin}}{\pxg{dmax}}{Depth [m]}
+\pgfmathsetlength{\pxstepb}{4*\pxstep+1.35cm}
+\pximg{e}{\pxstepb,0}{err}
+\pxcbar{e}{magmaa}{0}{\pxg{errmax}}{Absolute error [m]}
+\tikzset{pxtitle/.style={font=\figfont\tiny, align=center, anchor=south, text width=\pxw+0.25cm}}
+\node[pxtitle] at ($(a.north)+(0,0.1cm)$) {Input RGB\\(view \pxg{view})};
+\node[pxtitle] at ($(b.north)+(0,0.1cm)$) {Rendered RGB\\PSNR \pxg{psnr}\,dB};
+\node[pxtitle] at ($(c.north)+(0,0.1cm)$) {Rendered depth\\covers \pxg{alphapct}\,\% of pixels};
+\node[pxtitle] at ($(d.north)+(0,0.1cm)$) {Laser ground-truth depth\\\pxg{validpct}\,\% valid, grey = none};
+\node[pxtitle, text width=5.2cm] at ($(e.north)+(0,0.1cm)$) {$|$Rendered $-$ GT$|$ at valid GT pixels\\median \pxg{medpct}\,\%, p90 \pxg{p90pct}\,\%\\covers \pxg{covpct}\,\% of the valid GT};
+\end{tikzpicture}

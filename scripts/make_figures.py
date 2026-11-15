@@ -388,7 +388,31 @@ def summary(pipes, guards, toy, mdf_res, miscal, area):
             L.append(f"| `{name}.png` | {d}, same panel layout | REAL ETH3D pipes |")
     if not (FIG / "renders" / "pipes_view2.png").exists():
         L += ["", "The ETH3D pipes render panels (held-out views and guard cases) are **not made yet**: no 2DGS parameters were saved by the earlier runs, so they cannot be rendered without re-running the fits."]
-    L += [""]
+    L += ["", "## TikZ / PGFPlots versions (`figures/tikz/`)", "",
+          "The six figures and the render panels were redone as PGFPlots/TikZ from the saved data: sources `figures/tikz/*_body.tex`, shared style `preamble.tex`, "
+          "data `figures/tikz/data/*.csv` and `*_macros.tex` (made by `scripts/export_tikz_data.py` and `scripts/export_render_images.py`), render images "
+          "`figures/tikz/img/`, built PDFs and PNG previews in `figures/tikz/build/` (`figures/tikz/build.sh`). The matplotlib PNG/PDF versions above are kept for comparison.", "",
+          "| TikZ figure (`figures/tikz/build/`) | Corresponds to | Data |", "|---|---|---|",
+          "| `fig1` | fig1, 2DGS before/after on ETH3D pipes | real ETH3D |",
+          "| `fig2` | fig2, leave-out guards | synthetic + real |",
+          "| `fig3`, `fig4`, `fig5`, `fig6` | fig3-fig6, toy statistic | synthetic toy, 1 seed |",
+          "| `toy_square`, `toy_warp`, `toy_edge` | toy residual-map panels (matrix plots with shared colourbars; T and threshold printed from the data) | synthetic toy, seed 7 |",
+          "| `pipes_view2`, `pipes_view6`, `pipes_view10`, `pipes_guard_poisoned`, `pipes_guard_leaky` | ETH3D render panels (images inside TikZ frames, shared depth and error colourbars) | real ETH3D |", "",
+          "In the manuscript (`eroniki/depthcal-gs-manuscript`) the PGFPlots sources of fig3, fig4, fig6 and the two toy residual-map figures (`toy_square`, `toy_warp`) are included directly "
+          "(`figures/tikz/sync_paper.sh` copies them); the ETH3D render panels are not in the paper because they use ground-truth depth as a stand-in for model predictions.", "",
+          "### Style sources", "",
+          "Figure style (fonts, colours, line weights, axis and legend layout) was taken from your papers:", "",
+          "1. M. Ambarkutuk and P. E. Plassmann, *Modeling and analysis of dispersive propagation of structural waves for vibro-localization*, Sensors 24(23):7744, 2024 "
+          "(doi 10.3390/s24237744). **Read in full** from your local copy (`~/Desktop/sensors-24-07744.pdf`); figures 5-8 inspected visually.",
+          "2. M. Ambarkutuk, S. Alajlouni, P. A. Tarazaga and P. E. Plassmann, *A multi-sensor stochastic energy-based vibro-localization technique with byzantine sensor elimination*, "
+          "Sensors 23(23):9309, 2023 (doi 10.3390/s23239309). **Only the text and figure captions were read** (Europe PMC full-text XML): the PDF and figure images could not be fetched "
+          "(mdpi.com returned 403, PMC and Europe PMC PDF endpoints sit behind a bot check). Its captions state that proposed and baseline PDFs/CDFs are drawn in blue and brown "
+          "and that the occupants are red and black; I used that colour pairing, but I could not see its figure layout. If you drop the PDF in `~/Desktop`, I can check it against this style.", "",
+          "What was taken: boxed axes with outward ticks on the left and bottom; DejaVu Sans text (the matplotlib default of the 2024 figures) with sans-serif maths; thin lines with small markers; "
+          "red for the proposed (here: fitted scale and shift with the true covariance), black (dashed) for the baseline/bound, blue and brown for the further pair, plus green; "
+          "axis labels as \"Quantity [unit]\"; a framed legend with a light border; `(a)`, `(b)`, `(c)` panel labels below each panel; viridis for depth maps; red x / black + markers; "
+          "bold best values in tables (not used here). Differences from the papers: the figures here are vector PGFPlots, not matplotlib bitmaps, and legends are shared above the panels where five "
+          "series would not fit inside a small panel.", ""]
     (FIG / "summary.md").write_text("\n".join(L) + "\n")
 
 
