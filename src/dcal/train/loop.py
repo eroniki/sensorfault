@@ -229,6 +229,8 @@ def train(cfg: dict, workdir: str, resume: str = "auto", max_steps: int | None =
             logf.flush()
             print(json.dumps(rec), flush=True)
             unet.train()
+            if device == "cuda":
+                torch.cuda.empty_cache()          # validation sampling (fp32 VAE decode, DDIM) leaves a large allocator cache: give it back to the shared GPU
         extra["wall_s"] = wall0 + (time.time() - run_t0)          # total training wall time across resumes
         due = (stop_at is not None and step == stop_at) or (time.time() - last_ckpt_t) / 60 >= cfg.get("ckpt_every_min", 60) or (cfg.get("ckpt_every_steps") and step % cfg["ckpt_every_steps"] == 0)
         if due or stop["flag"] or step == total:
