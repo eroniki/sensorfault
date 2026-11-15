@@ -1,7 +1,7 @@
-# biasfield-gs-manuscript
+# depthcal-gs-manuscript
 
 Draft skeleton of *Calibrated Multi-View-Consistent Depth Sampling with a Diffusion Model* in the Elsevier `elsarticle`
-template, single-column preprint layout. Companion code and plan: `eroniki/biasfield-gs` (`PLAN.md`).
+template, single-column preprint layout. Companion code and plan: `eroniki/depthcal-gs` (`PLAN.md`).
 
 **Status: skeleton.** Section structure follows the plan; no experiment has been run. Every result table and figure is a
 placeholder marked `TODO` in red.
