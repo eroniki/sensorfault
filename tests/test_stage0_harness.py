@@ -29,3 +29,17 @@ def test_one_training_step_runs_and_moves_the_loss_inputs():
                          capture_output=True, text=True, timeout=300)
     assert out.returncode == 0, out.stderr[-800:]
     assert '"params_trainable"' in out.stdout
+
+
+def test_base_fp16_flag_runs_and_halves_the_frozen_weights():
+    import subprocess
+    out = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "scripts" / "stage0_sizing.py"), "--tiny",
+                          "--res", "128", "--batch", "2", "--steps", "3", "--rank", "4", "--ckpt", "--base-fp16"],
+                         capture_output=True, text=True, timeout=300)
+    assert out.returncode == 0, out.stderr[-800:]
+    assert '"base_fp16": true' in out.stdout
+    unet = build(TINY, rank=4, ckpt=False, base_fp16=True)
+    frozen = [p for n, p in unet.named_parameters() if not p.requires_grad]
+    assert frozen and all(p.dtype == torch.float16 for p in frozen)
+    trainable = [p for p in unet.parameters() if p.requires_grad]
+    assert all(p.dtype == torch.float32 for p in trainable)

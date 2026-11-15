@@ -37,11 +37,15 @@ def widen_conv_in(unet: UNet2DConditionModel) -> None:
     unet.register_to_config(in_channels=old.in_channels * 2)
 
 
-def build(cfg: dict, rank: int, ckpt: bool):
+def build(cfg: dict, rank: int, ckpt: bool, base_fp16: bool = False):
     unet = UNet2DConditionModel(**{k: v for k, v in cfg.items() if not k.startswith("_")})
     widen_conv_in(unet)
     for p in unet.parameters():
         p.requires_grad_(False)
+    if base_fp16:       # frozen base weights stored in fp16 (what PLAN section 7 assumes); conv_in stays fp32 and is trained, LoRA is added in fp32
+        for n, p in unet.named_parameters():
+            if not n.startswith("conv_in"):
+                p.data = p.data.half()
     unet = get_peft_model(unet, LoraConfig(r=rank, lora_alpha=rank, target_modules=["to_q", "to_k", "to_v", "to_out.0"]))
     for p in unet.base_model.model.conv_in.parameters():      # the widened input conv is trained in full
         p.requires_grad_(True)
@@ -60,10 +64,11 @@ def main():
     ap.add_argument("--steps", type=int, default=5)
     ap.add_argument("--ckpt", action="store_true", help="gradient checkpointing")
     ap.add_argument("--fp32", action="store_true")
+    ap.add_argument("--base-fp16", action="store_true", help="store the frozen base weights in fp16")
     a = ap.parse_args()
     cfg = TINY if a.tiny else json.load(open(a.config))
     dev = "cuda"
-    unet = build(cfg, a.rank, a.ckpt).to(dev)
+    unet = build(cfg, a.rank, a.ckpt, a.base_fp16).to(dev)
     sched = DDPMScheduler(num_train_timesteps=1000, prediction_type="v_prediction", beta_schedule="scaled_linear")
     params = [p for p in unet.parameters() if p.requires_grad]
     n_tr, n_all = sum(p.numel() for p in params), sum(p.numel() for p in unet.parameters())
@@ -97,7 +102,7 @@ def main():
         if not torch.isfinite(loss):
             raise SystemExit("non-finite loss")
     print(json.dumps({"params_total": n_all, "params_trainable": n_tr, "res": a.res, "batch": a.batch, "rank": a.rank,
-                      "ckpt": a.ckpt, "fp16": not a.fp32, "peak_mem_GB": round(torch.cuda.max_memory_allocated() / 1e9, 3),
+                      "ckpt": a.ckpt, "fp16": not a.fp32, "base_fp16": a.base_fp16, "peak_mem_GB": round(torch.cuda.max_memory_allocated() / 1e9, 3),
                       "ms_per_step_median": round(1000 * sorted(times)[len(times) // 2], 1), "loss_last": float(loss)}))
 
 
