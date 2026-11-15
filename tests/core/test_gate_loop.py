@@ -128,3 +128,15 @@ def test_family_wise_false_alarm_under_the_null_is_at_most_alpha():
 def test_bad_policy_rejected():
     with pytest.raises(ValueError):
         gl.run_gate_loop(VIEWS, _train, _null_test, policy="x")
+
+
+def test_holm_count_under_leave_n_out():
+    # per-view tests: the block only changes the cavity, the family does not depend on its size
+    assert (
+        gl.holm_family_size(120, 10, "view", 1) == gl.holm_family_size(120, 10, "view", 9) == 1200
+    )
+    # block-level tests (alternative): one test per block per round
+    assert gl.holm_family_size(120, 10, "block", 5) == 240
+    assert gl.holm_family_size(121, 10, "block", 5) == 250
+    with pytest.raises(ValueError):
+        gl.holm_family_size(10, 1, "strip")

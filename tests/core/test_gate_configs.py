@@ -80,7 +80,10 @@ def test_no_sub_noise_claims_and_faults_are_regional():
     assert g["no_sub_noise_claims"] is True
     assert min(g["injected_regional"]["magnitude_sigma"]) >= 2
     assert max(g["injected_regional"]["area_fraction"]) < 1
-    assert {"reflective_or_glass", "textureless_wall"} <= set(g["natural_failures"]["kinds"])
+    assert {"specular_glass_water", "textureless_roof_road_wall"} <= set(
+        g["natural_failures"]["kinds"]
+    )
+    assert "repeated_within_block_of_neighbouring_frames" in g["injected_regional"]["across_views"]
     assert "repeated_same_error_across_views" in g["injected_regional"]["across_views"]
     assert g["controls"]["whole_view_affine"]["absorbed"] is True
     for name in ALL:
@@ -120,14 +123,15 @@ def test_required_baselines_present():
         assert b in ids
     h4 = load_config(CFG / "h4_reconstruction_with_and_without_gate.yaml")
     assert {"no_gate", "gate", "spotless_splats", "robustnerf_loss"} <= set(h4["baselines"])
-    assert h4["hypothesis"]["levels"]["dataset"] == ["eth3d", "scannetpp"]
+    assert h4["hypothesis"]["levels"]["dataset"] == ["usegeo", "matrixcity", "eth3d"]
     h6 = load_config(CFG / "h6_gate_design_ablations.yaml")
     assert {"gate_fisherrf_diag", "gate_bayesrays", "gate_keep_unsupported"} <= set(h6["baselines"])
 
 
 def test_h2_tests_repetition_in_textureless_regions():
     h2 = load_config(CFG / "h2_cross_view_repetition.yaml")
-    assert "textureless_wall" in h2["hypothesis"]["levels"]["appearance_class"]
+    assert "textureless_roof_road_wall" in h2["hypothesis"]["levels"]["appearance_class"]
+    assert h2["hypothesis"]["levels"]["frame_separation"][0] == 1
     assert h2["metrics"]["textureless_min"] == 0.5
 
 
@@ -152,7 +156,9 @@ def test_single_free_noise_variable_and_shared_distance_bias():
 
 def test_poses_use_rule_b_and_pose_faults_stay_out_of_scope():
     p = load_config(CFG / "base.yaml")["poses"]
-    assert "photometric" in p["source"] and "excludes its own depth" in p["tested_pose"]
+    assert p["input"].startswith("posed images") and "B-spline" in p["trajectory"]
+    assert "no feature correspondences" in p["refinement"] and "Sigma_q" in p["tested_pose"]
+    assert p["ablation"] == "perturbed starting poses"
     assert p["pose_faults"] == "out of scope in this paper"
 
 
@@ -174,3 +180,23 @@ def test_outer_loop_block_and_its_ablations():
         3,
         10,
     ]
+
+
+def test_aerial_setting_datasets_and_leave_block_out():
+    b = load_config(CFG / "base.yaml")
+    ds = b["setting"]["datasets"]
+    assert ds["main_real"] == "usegeo" and ds["synthetic"] == "matrixcity"
+    assert ds["sanity_check"] == "eth3d" and "scannetpp" in ds["dropped"]
+    for d in ("usegeo", "h3d", "matrixcity", "eth3d", "considered"):
+        assert (CFG / "datasets" / f"{d}.yaml").exists()
+    assert not (CFG / "datasets" / "scannetpp.yaml").exists()
+    usegeo = yaml.safe_load((CFG / "datasets" / "usegeo.yaml").read_text())
+    assert usegeo["licence"].startswith("CC BY-NC-SA 4.0")
+    blk = b["leave_block_out"]
+    assert blk["sweep"] == [1, 3, 5, 9] and blk["ablation"].startswith("B = 1")
+    assert "M = n_views * round_cap" in blk["holm_family"]
+    ids = baseline_ids()
+    assert ids["gate_block_1"] == "view_gate" and ids["gate_perturbed_poses"] == "view_gate"
+    h6 = load_config(CFG / "h6_gate_design_ablations.yaml")
+    assert h6["hypothesis"]["levels"]["block_size_B"] == [1, 3, 5, 9]
+    assert (CFG.parent / b["poses"]["theory_module"]).exists()

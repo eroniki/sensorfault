@@ -33,9 +33,19 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 
-def holm_family_size(n_views: int, round_cap: int) -> int:
-    """Number of tests counted across rounds: every view in every round (M = N * R_max)."""
-    return n_views * round_cap
+def holm_family_size(
+    n_views: int, round_cap: int, test_unit: str = "view", block_size: int = 1
+) -> int:
+    """Number of tests counted across rounds.
+
+    With per-view tests (the default, also under leave-N-out, where the block only changes the
+    cavity) every view is tested in every round: M = N * R_max, independent of the block size.
+    With block-level tests (an alternative) each of ceil(N / block_size) blocks is tested per round."""
+    if test_unit == "view":
+        return n_views * round_cap
+    if test_unit == "block":
+        return -(-n_views // block_size) * round_cap
+    raise ValueError(test_unit)
 
 
 def holm_threshold(alpha: float, family: int, k_rejected: int) -> float:

@@ -1,6 +1,6 @@
 # sensorfault
 
-Research scaffold for **view-level fault rejection in depth-supervised Gaussian splatting** (design v3.1; reference design `docs/design-3dgs-bayes.md`). One
+Research scaffold for **view-level fault rejection in depth-supervised Gaussian splatting** (design v3.3; reference design `docs/design-3dgs-bayes.md`; main setting aerial survey imagery: UseGeo, MatrixCity, ETH3D as a sanity check). One
 metric depth model is applied to each image; 2DGS-style surfels are fitted by depth supervision and rendered with gsplat;
 colour is a separate appearance block that may refine poses but never updates map geometry. Each surfel keeps its shape
 for rendering plus a separate 10x10 uncertainty (opacity frozen after a warm-up) whose normal-offset and tilt block
@@ -53,11 +53,11 @@ Optional extras: `pip install -e ".[tsdf]"` (Open3D), `".[gs]"` (torch, gsplat),
 | Hypothesis | Claim (short) | Config |
 |---|---|---|
 | H1 | Residuals first (go/no-go): fit sigma, ell, nu, tails of Depth Pro on ETH3D; characterise natural regional failures and their harm | `configs/h1_residual_measurement.yaml` |
-| H2 | The depth model repeats its error across views in textureless regions (gate blind there) but not on reflections | `configs/h2_cross_view_repetition.yaml` |
+| H2 | The depth model repeats its error across neighbouring views (textureless more than specular), decaying with frame separation; sets the block size | `configs/h2_cross_view_repetition.yaml` |
 | H3 | At 5% false alarm the gate beats the best cheap/robust baseline by >=15 points on reflective-region failures | `configs/h3_detection_vs_cheap_baselines.yaml` |
-| H4 | Depth-supervised splatting with the gate improves AbsRel and F-score on ETH3D and ScanNet++ | `configs/h4_reconstruction_with_and_without_gate.yaml` |
+| H4 | Depth-supervised splatting with the gate improves AbsRel and F-score on UseGeo, MatrixCity (injected faults) and ETH3D | `configs/h4_reconstruction_with_and_without_gate.yaml` |
 | H5 | Independent blocks are overconfident; with the scene temperature and omega-calibrated threshold, false alarm stays in [0.5, 1.5] alpha | `configs/h5_rendered_uncertainty_calibration.yaml` |
-| H6 | Ablations: leave-view-out, no spawning, whitening, temperature, shared bias, fold-wise opacity warm-up, rendered 10x10 vs FisherRF-style and Bayes' Rays-style | `configs/h6_gate_design_ablations.yaml` |
+| H6 | Ablations: leave-view-out, no spawning, whitening, temperature, shared bias, fold-wise opacity warm-up, rendered 10x10 vs FisherRF-style and Bayes' Rays-style, outer loop, leave-block-out sweep, perturbed poses | `configs/h6_gate_design_ablations.yaml` |
 
 Breakdown scenarios: `configs/breakdown_*.yaml`; ablations: `configs/ablations_gate.yaml`. All are
 `preregistered_draft` and flagged `implemented: false`. The manuscript is in the private repo

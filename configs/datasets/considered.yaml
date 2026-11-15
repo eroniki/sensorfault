@@ -1,0 +1,11 @@
+# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
+fallback:
+  isprs_vaihingen: crewed nadir frames with exterior orientation and airborne LiDAR; research use only,
+    no redistribution; 16 GB
+not_used:
+  isprs_eurosdr_dortmund: oblique/UAV images with GNSS/INS and laser scans; 125-350 GB oblique blocks;
+    scan type not stated
+  urbanscene3d: mostly synthetic; LiDAR scenes and poses not stated; 1.43 TB; non-commercial
+  mill19: no geometric reference (rendering check only)
+  scannetpp: 'dropped: indoor; aerial sets cover specular and textureless failures'
+  beyond_a_single_light: varying illumination aerial set; future-work (lighting) only

@@ -289,3 +289,42 @@ def test_shared_distance_bias_and_its_leave_view_out():
     assert gu.distance_bias_fit(hs, gs, exclude=2) == pytest.approx(
         gu.distance_bias_fit(hs[keep], gs[keep])
     )
+
+
+def test_block_for_view_stays_in_the_strip_and_keeps_its_size():
+    order = [f"a{i}" for i in range(6)] + [f"b{i}" for i in range(3)]
+    strip = {v: v[0] for v in order}
+    assert gu.block_for_view(order, strip, "a0", 3) == ["a0", "a1", "a2"]  # shifted at the start
+    assert gu.block_for_view(order, strip, "a3", 3) == ["a2", "a3", "a4"]  # centred
+    assert gu.block_for_view(order, strip, "a5", 3) == ["a3", "a4", "a5"]  # shifted at the end
+    assert gu.block_for_view(order, strip, "a3", 4) == ["a2", "a3", "a4", "a5"]
+    assert gu.block_for_view(order, strip, "b1", 5) == ["b0", "b1", "b2"]  # never crosses strips
+    assert gu.block_for_view(order, strip, "a2", 1) == ["a2"]  # N = 1 is single-view leave-out
+
+
+def test_leave_block_out_equals_refit_without_the_block_and_sequential_subtraction():
+    rng = np.random.default_rng(9)
+    theta = np.zeros((len(MUS), gu.DIM))
+    theta[:, :3] = rng.normal(0, 0.003, (len(MUS), 3))
+    ys = [_measure(v, theta, 1.0, 0.0, 0.01, rng) for v in VIEWS1]
+    infos = {i: _info(v, y, 1.0, 0.0, 0.01) for i, (v, y) in enumerate(zip(VIEWS1, ys))}
+    prior = np.eye(gu.DIM) * 1e-2
+    L, eta = gu.fuse(prior, list(infos.values()))
+    mean, _ = gu.posterior(L, eta)
+    block = [1, 2, 3]
+    LB, eB = gu.block_information(infos, block)
+    grad = np.zeros((len(MUS), gu.DIM))
+    grad[:, gu.GEO] = -(eB[:, gu.GEO] - np.einsum("kij,kj->ki", LB[:, gu.GEO, gu.GEO], mean))
+    m_blk, cov_blk = gu.leave_block_out_newton(mean, L, LB, grad)
+    Lr, er = gu.fuse(prior, [infos[i] for i in infos if i not in block])
+    m_ref, cov_ref = gu.posterior(Lr, er)
+    assert np.allclose(m_blk, m_ref, atol=1e-8) and np.allclose(cov_blk, cov_ref)
+    # the block's message is the sum of its views' messages
+    Ls = L.copy()
+    for i in block:
+        Ls = Ls - infos[i][0]
+    assert np.allclose(Ls, L - LB)
+    # a weaker cavity: less information on the observed offset than leaving one view out
+    k = 40
+    g = gu.subblock_map(RS[k])[0]
+    assert g @ (L - LB)[k] @ g < g @ (L - infos[2][0])[k] @ g

@@ -1,4 +1,7 @@
-# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
-# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
-{dataset: ETH3D, role: primary_real_and_residual_measurement, ref: data_eth3d, ground_truth: laser scan
-    depth + calibrated poses, licence: TODO(verify)}
+# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
+dataset: ETH3D
+role: sanity_check
+ref: data_eth3d
+ground_truth: laser scan depth + calibrated poses
+licence: TODO(verify)
+poses: registered poses used as given

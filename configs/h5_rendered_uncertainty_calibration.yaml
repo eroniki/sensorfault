@@ -1,4 +1,4 @@
-# Design v3.2: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
 # Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 extends: base.yaml

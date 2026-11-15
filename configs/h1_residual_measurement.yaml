@@ -1,4 +1,4 @@
-# Design v3.2: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
 # Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 extends: base.yaml
@@ -7,17 +7,19 @@ status: preregistered_draft
 design: v3_rendered_uncertainty_gate
 hypothesis:
   id: H1
-  prediction: 'Run FIRST, on ETH3D dev with Depth Pro: fit sigma(.), ell, nu, tails, the shared distance-bias
-    coefficient beta, the scene temperature range and the per-view heterogeneity omega of the aligned
-    residuals; characterise natural regional failures (area fraction, magnitude, appearance class) and
-    their harm. Go if at least 10% of views carry a regional failure covering >=2% of pixels at >3 sigma
-    after alignment, and keeping those views lowers the fused-surface F-score by >=2 points.'
+  prediction: 'Run FIRST, on UseGeo and ETH3D dev with Depth Pro (nadir views from altitude and near-ground
+    views separately): fit sigma(.), ell, nu, tails, the shared distance-bias coefficient beta, the scene
+    temperature range and the per-view heterogeneity omega of the aligned residuals; characterise natural
+    regional failures (area fraction, magnitude, appearance class) and their harm. Go if at least 10%
+    of views carry a regional failure covering >=2% of pixels at >3 sigma after alignment, and keeping
+    those views lowers the fused-surface F-score by >=2 points.'
   falsification_criterion: 'Falsified (no-go: pivot to an analysis paper) if fewer than 5% of views carry
     such failures or their harm is below 1 F-score point.'
   independent_variables: [scene, appearance_class]
   controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
   levels:
-    appearance_class: [reflective_or_glass, textureless_wall, other]
+    appearance_class: [specular_glass_water, textureless_roof_road_wall, other]
+    view_regime: [nadir_from_altitude, near_ground]
 baselines: [no_gate, oracle_gate]
 metrics:
   primary: [fitted_sigma_ell_nu, tail_index, failure_area_fraction, failure_magnitude_sigma, failure_harm,

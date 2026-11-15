@@ -301,3 +301,37 @@ def distance_bias_fit(
         H -= float(h[exclude])
         Gs -= float(g[exclude])
     return Gs / H
+
+
+# ---------------------------------------------------------------------------------------------
+# Leave-N-out: a block of neighbouring frames (design v3.3)
+# ---------------------------------------------------------------------------------------------
+
+
+def block_for_view(order: list, strip: dict, j, n_block: int) -> list:
+    """The block left out when view ``j`` is tested: ``n_block`` neighbouring frames of the same
+    flight strip (or image sequence), centred on ``j`` and shifted inwards at the strip ends; the
+    whole strip if it is shorter than ``n_block``. ``order`` lists the views in acquisition order
+    and ``strip`` maps a view to its strip id. ``n_block = 1`` is single-view leave-out."""
+    same = [v for v in order if strip[v] == strip[j]]
+    if n_block >= len(same):
+        return same
+    i = same.index(j)
+    lo = min(max(i - (n_block - 1) // 2, 0), len(same) - n_block)
+    return same[lo : lo + n_block]
+
+
+def block_information(infos: dict, block: list) -> tuple[np.ndarray, np.ndarray]:
+    """Summed information (Lambda_B, eta_B) of the views in a block; ``infos`` maps view ->
+    (Lambda_i, eta_i). Messages add, so the block's message is the sum of its views' messages."""
+    L = sum(infos[v][0] for v in block)
+    eta = sum(infos[v][1] for v in block)
+    return L, eta
+
+
+def leave_block_out_newton(
+    mean: np.ndarray, L: np.ndarray, L_block: np.ndarray, grad_block: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Cavity without a whole block: subtract the block's summed information and take one Newton
+    step with the block's summed gradient (exact for the linear-Gaussian model)."""
+    return leave_view_out_newton(mean, L, L_block, grad_block)

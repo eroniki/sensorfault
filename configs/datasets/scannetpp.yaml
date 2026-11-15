@@ -1,4 +1,0 @@
-# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
-# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
-{dataset: ScanNet++, role: secondary_real, ref: data_scannetpp, access: requires accepting dataset terms,
-  licence: TODO(verify), note: reflective and transparent surfaces}

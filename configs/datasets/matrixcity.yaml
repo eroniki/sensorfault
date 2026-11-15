@@ -1,0 +1,7 @@
+# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
+dataset: MatrixCity
+role: synthetic
+ref: data_matrixcity
+content: synthetic city, aerial and street views, exact depth, normals and poses
+use: controlled fault injection with exact truth
+licence: CC BY-NC 4.0 (project page, checked 2026-11-14)

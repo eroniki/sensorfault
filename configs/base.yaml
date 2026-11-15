@@ -1,4 +1,4 @@
-# Design v3.2: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
 # Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 # Shared defaults. Experiment configs `extends: base.yaml`.
@@ -8,16 +8,20 @@ status: preregistered_draft
 seeds:
   master: [101, 102, 103, 104, 105]
 scenes:
-  source: eth3d
   split_rule: dev scenes for ALL threshold tuning and the residual measurement; test scenes only after
     git tag prereg-v1
-  dev: [courtyard, electro, kicker]
-  test: [delivery_area, facade, office, pipes, relief, terrace]
-secondary_dataset: {source: scannetpp, scenes: TODO after accepting the dataset terms}
-poses: {source: 'dataset initialisation refined by feature matches and photometric refinement (colour
-    allowed, batch over all frames)', tested_pose: 'rule (B): the tested view''s pose excludes its own
-    depth term (pose graph only), so its depth cannot absorb a fault', pose_faults: out of scope in this
-    paper}
+  dev: [usegeo_set_1, eth3d_courtyard]
+  test: [usegeo_set_2, usegeo_set_3, eth3d_delivery_area, eth3d_facade, eth3d_terrace]
+  synthetic: matrixcity aerial blocks (fault injection; split TODO)
+  note: TODO(verify) UseGeo set naming and ETH3D scene names/licence
+poses: {input: 'posed images (exterior orientation, GNSS/IMU, or registered poses)', trajectory: 'uniform
+    cubic B-spline in time; positions by the standard basis, rotations by the cumulative form on SO(3)',
+  fit: control points to GNSS/IMU or dataset poses with a second-difference smoothness prior, refinement: 'differentiable
+    pose-graph optimisation: GNSS/IMU prior + smoothness + render-and-compare depth terms (optionally
+    photometric render-and-compare); no feature correspondences', tested_pose: the tested view's render-and-compare
+    term is subtracted from the control-point information before its pose is used; Sigma_q = b(t_j) Sigma_ctrl
+    b(t_j)^T enters Sigma_r, knot_spacing_s: TODO fix on dev (about 1 s), ablation: perturbed starting
+    poses, eth3d: registered poses used as given, pose_faults: out of scope in this paper, theory_module: src/sensorfault/eval/trajectory_spline.py}
 depth_model:
   default: depth_pro
   file: depth_models/depth_models.yaml
@@ -31,7 +35,8 @@ surface:
   fit: depth-supervised splatting of all views at dataset poses
 appearance: {block: separate (colour / SH per surfel), updates_map_geometry: false, updates_opacity: false,
   refines_poses: true, colour_reaches_map_geometry: only through the depth model, implementation: photometric
-    gradients stopped at surfel geometry and opacity; they may reach the poses, gate_inputs: depth only}
+    gradients stopped at surfel geometry and opacity; photometric render-and-compare may refine the spline
+    control points, gate_inputs: depth only}
 uncertainty:
   state: [d_mu_x, d_mu_y, d_mu_z, d_phi_1, d_phi_2, d_phi_3, d_log_s_1, d_log_s_2, d_log_s_3, d_logit_alpha]
   dim: 10
@@ -95,13 +100,15 @@ metrics:
   measurement: [fitted_sigma_ell_nu, tail_index, failure_area_fraction, failure_magnitude_sigma, failure_harm]
   detection: [detection_power_at_fa_0.05, false_alarm_rate, untestable_rate, availability, elimination_curve_auc]
   reconstruction: [heldout_laser_depth_absrel, surface_accuracy, surface_completeness, fscore]
-  repetition: [cross_view_error_correlation_textureless, cross_view_error_correlation_reflective, cross_view_error_correlation_textured]
+  repetition: [cross_view_error_correlation_textureless, cross_view_error_correlation_reflective, cross_view_error_correlation_textured,
+    cross_view_error_correlation_vs_frame_separation]
   calibration: [mean_T_over_dof_raw, mean_T_over_dof_temperature_scaled, false_alarm_vs_alpha, gamma_hat_per_scene,
     omega]
   cost: [runtime_s_per_stage, gpu_mem_gb_per_stage]
 stats: {bootstrap: scene_level, bootstrap_n: 10000, paired_test: wilcoxon_signed_rank, alpha: 0.05}
 implemented: {configs: true, detection_theory: true, gaussian_uncertainty_theory: true, residual_measurement: false,
-  splatting_pipeline: false, view_gate: false, temperature_and_heterogeneity_theory: true, gate_loop_logic: true}
+  splatting_pipeline: false, view_gate: false, temperature_and_heterogeneity_theory: true, gate_loop_logic: true,
+  trajectory_spline_theory: true, leave_block_out_theory: true}
 output_dir: outputs
 outer_loop:
   enabled: true
@@ -120,3 +127,27 @@ outer_loop:
     within each round; known ideas, not a contribution
   differentiability: gradients only inside the train step; fusion and test are not differentiated
   theory_module: src/sensorfault/eval/gate_loop.py
+setting:
+  main: aerial survey imagery (UAV nadir, flight strips, GNSS/IMU or exterior orientation)
+  datasets:
+    main_real: usegeo
+    second_real: 'h3d (pending: raw images and orientations unconfirmed)'
+    synthetic: matrixcity
+    sanity_check: eth3d
+    fallback_real: isprs_vaihingen
+    dropped: [scannetpp]
+  domain_note: monocular depth models are trained mostly near the ground; nadir views from survey altitude
+    are a different failure regime (measured in H1)
+leave_block_out:
+  block: B neighbouring frames of the same flight strip, centred on the tested view, shifted inwards at
+    strip ends, never across strips
+  block_size_B: chosen on dev from the sweep
+  sweep: [1, 3, 5, 9]
+  ablation: B = 1 (single-view leave-out)
+  subtraction: 'exact: subtract the block''s summed information, one Newton step with its summed gradient'
+  tested: only the centre view is tested against its block cavity; tests are per view
+  holm_family: unchanged, M = n_views * round_cap (block-level testing would be ceil(N/B) * round_cap;
+    not used)
+  outer_loop: a rejected view is dropped alone; its neighbours are re-tested next round
+  cost: 'weaker cavity: larger rendered variance, higher MDB, more untestable pixels'
+  motivation: 'H2: neighbouring frames repeat the same error'

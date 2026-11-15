@@ -1,4 +1,4 @@
-# Design v3.2: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
 # Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 baselines:
@@ -14,7 +14,7 @@ baselines:
   family: gate
   fuser: view_gate
   params: {uncertainty: rendered_10x10_opacity_frozen, leave_view_out: subtraction, spawn: none, statistic: combined_region_scan_energy,
-    noise: scene_temperature, shared_bias: distance}
+    noise: scene_temperature, shared_bias: distance, leave_block_out_B: chosen_from_sweep}
 - id: gate_joint
   family: ablation
   fuser: view_gate
@@ -71,3 +71,11 @@ baselines:
   family: ablation
   fuser: view_gate
   params: {outer_loop_readmission: true}
+- id: gate_block_1
+  family: ablation
+  fuser: view_gate
+  params: {leave_block_out_B: 1}
+- id: gate_perturbed_poses
+  family: ablation
+  fuser: view_gate
+  params: {poses: perturbed_start}
