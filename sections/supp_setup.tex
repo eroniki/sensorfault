@@ -8,19 +8,27 @@ surface that does not come from photogrammetry, since a photogrammetric referenc
 errors under test.
 
 \runin{UseGeo (main real set).} UAV nadir images from about 80~m, about 2~cm ground sampling distance,
-829 images in three sets of eight strips each (80\% forward and 60\% side overlap), exterior orientation and
-interior parameters per image, UAV LiDAR at about 50~points/m$^2$ and per-image LiDAR depth maps
-\cite{data_usegeo}. Licence CC BY-NC-SA 4.0; direct download. The LiDAR, not the also provided
-photogrammetric point cloud, is the reference.
+829 images in three sets of eight strips each (224, 328 and 277 images; 80\% forward and 60\% side
+overlap), exterior orientation and interior parameters per image, UAV LiDAR at about 50~points/m$^2$ and
+per-image LiDAR depth maps \cite{data_usegeo}. Licence CC BY-NC-SA 4.0, as stated in the README of its
+GitHub repository (the repository holds no separate licence file); download links per set, size not
+stated. The LiDAR, not the also provided photogrammetric point cloud, is the reference.
 
-\runin{H3D (second real set, pending).} UAV oblique imagery at 1.5--3~cm and UAV LiDAR at about
-800~points/m$^2$, in several epochs \cite{data_h3d}. Registration is required; whether the raw images and
-their orientations are released, and under what licence, could not be confirmed on the official page.
-\TODO{Ask the maintainers before relying on H3D.}
+\runin{H3D (second real set, pending).} UAV LiDAR at about 800~points/m$^2$ and textured meshes, in several
+epochs, with oblique imagery at 1.5--3~cm used for the meshes \cite{data_h3d}. The download link is given
+only after registration, the data are provided as is, and the pages state no licence and do not say
+that the images or their orientations are released. \TODO{Ask the maintainers before relying on H3D;
+treated as non-commercial research use.}
 
-\runin{MatrixCity (synthetic).} A synthetic city rendered in a game engine, with aerial and street views,
-exact depth, normals and poses \cite{data_matrixcity}; licence CC BY-NC 4.0. It is used for controlled
-fault injection with exact truth, and for strips with known geometry.
+\runin{MatrixCity (synthetic).} A synthetic city rendered in a game engine, with aerial and street views
+\cite{data_matrixcity}. The Hugging Face dataset card states CC BY-NC 4.0; the files include rendered depth,
+normals and poses (\texttt{transforms.json}). It is used for controlled fault injection and the pose check
+with exact truth. One aerial test block alone is about 15.8~GB.
+
+\runin{UrbanScene3D (optional, one scene at most).} Real and synthetic drone scenes, some with LiDAR
+\cite{data_urbanscene3d}, under custom non-commercial terms that also forbid disseminating the data or
+altered versions; 1.43~TB in total. At most one real scene is used, for comparability with large-scene
+splatting work. \TODO{Choose a scene whose LiDAR and poses are confirmed.}
 
 \runin{ETH3D (sanity check).} Multi-view images with laser-scan ground truth and registered poses
 \cite{data_eth3d}, used as given. \TODO{Fix the scene subset and check the licence.}
@@ -28,10 +36,10 @@ fault injection with exact truth, and for strips with known geometry.
 \runin{Considered and not used.} ISPRS Vaihingen (crewed nadir frames with exterior orientation and
 airborne LiDAR; research use only, no redistribution, 16~GB) is the fallback real set. The ISPRS/EuroSDR
 Dortmund benchmark has oblique and UAV images with GNSS/INS and laser scans, but its oblique blocks are
-125--350~GB and the scan type is not stated. UrbanScene3D is mostly synthetic, does not state which real
-scenes have LiDAR or poses, and is 1.43~TB. Mill-19 has no geometric reference and could serve only as a
-rendering check. ScanNet++ was dropped: it is indoor, and the aerial sets above cover the specular and
-textureless failures that motivated it.
+125--350~GB and the scan type is not stated. Mill-19 has no geometric reference and could serve only as a
+rendering check. ScanNet++ was dropped: it is indoor, and the aerial sets cover the specular and
+textureless failures that motivated it. All datasets are licensed for non-commercial use only, and no
+large download is made without the author's approval.
 
 \subsection{Depth Model}
 Depth Pro \cite{est_depthpro} is the default: it predicts metric depth without intrinsics, one map per
@@ -77,6 +85,21 @@ re-tested each round and readmitted once if not rejected).
 opacity threshold $\tau_W$, the prior $\Lambda_0$, the warm-up length, the candidate regions of the scan
 (appearance segments), the temperature range for the scene-level alarm and the 5\% per-view false alarm
 are fixed on development scenes. \TODO{Fix them; report GPU model, wall-clock and memory on the 8~GB card.}
+
+\runin{Pose perturbation check (H7).} After the gate has run on a scene, the poses of chosen views are
+perturbed: isolated clean views, a block of consecutive clean views, and the flagged view. Each
+perturbation is a rotation of a known angle about a random axis, from $0.05^{\circ}$ to $2^{\circ}$, and a
+translation of a known length in a random direction, from 1 to 50 ground sampling distances. (a)~The
+gate is run before any refinement, with each perturbed view's own depth excluded from its pose as
+always; (b)~the spline, pose-graph and render-and-compare refinement is run, and the pose error to the
+reference (exact on MatrixCity, the given exterior orientation on UseGeo) is measured as an angle and a
+distance. Detection rate and recovery error are reported against perturbation size.
+
+\subsection{Depth-Model Altitude Comparison}
+Depth Pro, Metric3D v2 and UniDepthV2 are run as released on nadir views from survey altitude and on
+near-ground views (ETH3D, and low oblique frames where available). For each, the fraction of views with a
+regional failure, the failure area, its magnitude after alignment and the fitted noise level are
+compared between the two regimes (H1, Table~\ref{tab:altitude}).
 
 \subsection{Faults}
 \runin{Natural.} A view region is a natural failure if its aligned error against the laser depth

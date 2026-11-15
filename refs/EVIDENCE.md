@@ -46,3 +46,4 @@ evidence logs (removed in the clean-up; see git history). Re-check all entries b
 | traj_sommer_bspline | https://api.crossref.org/works/10.1109/CVPR42600.2020.01116 / CVPR 2020, pp. 11145-11153; Sommer, Usenko, Schubert, Demmel, Cremers (record; checked 2026-11-14). |
 | fus_curless | https://doi.org/10.1145/237170.237269 / SIGGRAPH 1996, pp. 303-312 (carried over from the earlier evidence log). |
 | fus_kinectfusion | https://doi.org/10.1109/ISMAR.2011.6092378 / ISMAR 2011, pp. 127-136 (carried over from the earlier evidence log). |
+| data_urbanscene3d | https://api.crossref.org/works (search) -> 10.1007/978-3-031-20074-8_6 ; arXiv 2107.04286 / ECCV 2022, LNCS, pp. 93-109; six authors (record; checked 2026-11-15). Terms: non-commercial, no dissemination (vcc.tech/UrbanScene3D). |

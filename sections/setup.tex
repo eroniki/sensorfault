@@ -12,12 +12,16 @@ strips, with exterior orientation per image and UAV LiDAR with per-image LiDAR d
 reference. H3D \cite{data_h3d} (UAV oblique imagery and dense UAV LiDAR) is a second real set if its raw
 images and orientations can be obtained. MatrixCity \cite{data_matrixcity}, a synthetic city with exact
 rendered depth and poses for aerial views, is used for controlled fault injection with exact truth.
-ETH3D \cite{data_eth3d}, with laser-scan depth and registered poses, is a small sanity check.
+ETH3D \cite{data_eth3d}, with laser-scan depth and registered poses, is a small sanity check. At most
+one scene of UrbanScene3D \cite{data_urbanscene3d} may be added for comparability with large-scene
+splatting work. All sets are licensed for non-commercial use only.
 Residuals are measured on development scenes of UseGeo and ETH3D. Poses are the given exterior
 orientation or registration, refined as a trajectory spline (Section~\ref{sec:method:poses});
 perturbed starting poses are an ablation. Licences are listed in Supplement~\ref{sup:setup}.
-\emph{Depth model.} Depth Pro \cite{est_depthpro}, one prediction per image; Metric3D v2 and
-UniDepthV2, which output a confidence, supply the confidence baseline. \emph{Reconstruction.}
+\emph{Depth models.} Only off-the-shelf models with released weights are used; no unreleased or in-house
+model. Depth Pro \cite{est_depthpro} gives one prediction per image; Metric3D v2 and UniDepthV2, which
+output a confidence, supply the confidence baseline, and all three enter the altitude comparison, which
+contrasts nadir views from survey altitude with near-ground views. \emph{Reconstruction.}
 Depth-supervised splatting of 2DGS surfels with gsplat, with the appearance block of
 Section~\ref{sec:method:setting}, run with and without the gate. \emph{Faults.} Natural failures
 labelled against the LiDAR or laser depth on connected regions, classed as specular (glass, water),
@@ -75,9 +79,18 @@ help. Thresholds match the pre-registered configuration files.
         by less than 5 points. \emph{Falsified} if any ablation is within its margin, if the fold-wise
         warm-up changes the results by more, if the loop does not beat the single pass by 10 points,
         or if the chosen block does not beat $B=1$ by 10 points.
+  \item[H7] \emph{(pose perturbation check).} After the gate has run, the poses of chosen views (isolated
+        views, a block, and the flagged view) are perturbed by known rotations
+        ($0.05$--$2^{\circ}$) and translations (1--50 ground sampling distances). (a)~Before refinement, with
+        their own depth excluded from the tested pose, the gate flags at least 80\% of the views
+        perturbed by at least $0.5^{\circ}$ or 10 ground sampling distances. (b)~Spline, pose-graph and
+        render-and-compare refinement removes at least 80\% of the perturbation up to $1^{\circ}$ and 25
+        ground sampling distances. Recovery error is reported against perturbation size, including where
+        it fails. \emph{Falsified} if either rate is below 80\% in its range.
 \end{description}
 H1 is a go/no-go and runs first; H2 predicts a blind spot rather than a success; H3 and H4 are the
-claims that would justify the method; H5 tests the stated approximation; H6 tests the design choices.
+claims that would justify the method; H5 tests the stated approximation; H6 tests the design choices; H7 is a controlled check of the
+pose refinement and of the gate on pose errors.
 
 \paragraph{Breakdown scenarios} Reported as honest negatives: errors repeated in all views
 (textureless surfaces, H2), including across a whole block; low overlap, where pixels are untestable; faulty views that supply most of a

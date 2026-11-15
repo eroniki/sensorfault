@@ -34,7 +34,7 @@ The Holm schedule over rounds is exact only for fixed p-values, so the loop's le
 clean-run calibration. (7)~Whole-view affine errors are absorbed by the alignment and are neither
 detected nor harmful; the depth bias is modelled only as a shared distance term. (8)~Colour may refine the
 poses but never the map geometry, so appearance cues are not used for detection. (9)~Pose faults are
-out of scope; poses are refined, not estimated from scratch, and the spline assumes a smooth,
+not a target of the gate, only of the controlled check in H7; poses are refined, not estimated from scratch, and the spline assumes a smooth,
 continuously recorded flight. (10)~The noise shape is calibrated on a few static scenes for one default
 model, and nadir aerial imagery lies outside the depth model's main training distribution, which H1
 measures rather than assumes away.

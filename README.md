@@ -1,7 +1,8 @@
 # sensorfault-manuscript
 
 Draft v0 of *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface* (aerial survey
-setting; UseGeo, MatrixCity, ETH3D as a sanity check), in the
+setting; UseGeo, MatrixCity, ETH3D as a sanity check; off-the-shelf depth models only; all datasets non-commercial,
+see the data statement), in the
 Elsevier `elsarticle` template, single-column preprint layout (preprint first; no pay-to-publish venue). Companion code
 and plan: `eroniki/sensorfault`; reference design: `docs/design-3dgs-bayes.md` in that repo.
 
@@ -21,7 +22,7 @@ flagged views (one per round by default), with a Holm step-down schedule across 
 latexmk -pdf main.tex        # output: build/main.pdf (TeX Live; uses ./latexmkrc)
 ```
 Class `elsarticle` with option `preprint,12pt` and bibliography style `elsarticle-num`, both from TeX Live.
-`draft_v0.pdf` is the last committed build: main text pp. 1-16, declarations and references from p. 17, then the
+`draft_v0.pdf` is the last committed build: main text pp. 1-18, declarations and references from p. 19, then the
 Supplementary Material (S1-S4) in the same PDF.
 
 ## Outline

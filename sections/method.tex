@@ -15,7 +15,8 @@ and roofs, are a different failure regime, which H1 measures. The surface is a s
 expected depth, alpha weights and accumulated opacity. Colour is a separate appearance block: the
 photometric loss updates the colours and may refine the poses, but its gradients are stopped at the
 surfel geometry and opacity, so colour reaches the map geometry only through the depth model, and
-reflectance cannot corrupt the geometry. The gate uses depth only. Pose faults are out of scope.
+reflectance cannot corrupt the geometry. The gate uses depth only. Pose faults are not a target of the gate; a controlled pose perturbation
+check is reported (H7).
 
 The nominal measurement of pixel $u$ in view $i$ is
 \begin{equation}
@@ -51,8 +52,9 @@ the control-point information before the pose is used in the test, so a pose fit
 depth cannot absorb its fault. The remaining uncertainty of that pose,
 $\Sigma_q=\mathbf{b}(t_j)\,\Sigma_{\mathrm{ctrl}}\,\mathbf{b}(t_j)^{\top}$ with $\mathbf{b}(t_j)$ the spline's
 basis row at the view's time stamp, enters the test through $J_q\Sigma_qJ_q^{\top}$
-(Section~\ref{sec:method:gate}). Perturbed starting poses are an ablation. On ETH3D the registered poses
-are used as given.
+(Section~\ref{sec:method:gate}). Perturbed starting poses are an ablation, and a controlled check (H7) perturbs the poses of chosen
+views by known amounts after the gate has run, to measure whether the gate flags them and whether the
+refinement pulls them back. On ETH3D the registered poses are used as given.
 
 \subsection{Surfels with an Uncertainty That Renders}
 \label{sec:method:surfels}
