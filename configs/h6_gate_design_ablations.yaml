@@ -1,4 +1,4 @@
-# Design v3.1: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.2: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
 # Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 extends: base.yaml
@@ -13,19 +13,27 @@ hypothesis:
     the rendered 9x9 uncertainty is at least as calibrated and powerful as FisherRF-style diagonal Fisher
     and Bayes-Rays-style uncertainty. Dropping the scene temperature or the shared distance bias raises
     the clean false-alarm rate; fold-wise warm-up of the opacity changes the false-alarm rate and the
-    MDB by less than 2 points (frozen opacity is safe).'
+    MDB by less than 2 points (frozen opacity is safe). The outer loop (default: one view per round, no
+    readmission, round cap 10) detects at least 10 points more faulty views than a single pass when two
+    or more faulty views share a region (masking), without raising the clean false-alarm rate above its
+    band; dropping all rejected views per round excludes more clean views (swamping); readmission changes
+    the result by less than 2 points.'
   falsification_criterion: Falsified if any ablation is within its margin of the full gate.
   independent_variables: [variant]
   controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
   levels:
     variant: [gate, gate_joint, gate_keep_unsupported, gate_unwhitened, gate_fisherrf_diag, gate_bayesrays,
-      gate_no_temperature, gate_no_shared_bias, gate_foldwise_warmup]
+      gate_no_temperature, gate_no_shared_bias, gate_foldwise_warmup, gate_single_pass, gate_drop_all_rejected,
+      gate_downweight, gate_readmit]
+    round_cap: [1, 3, 10]
 baselines: [gate, gate_joint, gate_keep_unsupported, gate_unwhitened, gate_fisherrf_diag, gate_bayesrays,
-  gate_no_temperature, gate_no_shared_bias, gate_foldwise_warmup]
+  gate_no_temperature, gate_no_shared_bias, gate_foldwise_warmup, gate_single_pass, gate_drop_all_rejected,
+  gate_downweight, gate_readmit]
 metrics:
   primary: [detection_power_at_fa_0.05, false_alarm_rate]
   joint_loss_points: 10
   keep_unsupported_loss_points: 20
   unwhitened_loss_points: 5
+  loop_gain_points: 10
 implemented: false
 ablations: ablations_gate.yaml

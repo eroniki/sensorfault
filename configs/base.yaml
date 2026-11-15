@@ -1,4 +1,4 @@
-# Design v3.1: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.2: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
 # Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 # Shared defaults. Experiment configs `extends: base.yaml`.
@@ -89,8 +89,8 @@ integrity:
   statistics: [energy_whitened (threshold absorbs omega; n_eff dof), region_scan_matched]
   alarms: [untestable_view, scene_level_if_more_than_half_rejected]
   theory_module: src/sensorfault/eval/detection_theory.py
-  iterative_exclusion: exclude the most significant rejected view, re-test the rest; family-wise false
-    alarm by Holm step-down or clean-run permutation
+  iterative_exclusion: 'outer loop (see outer_loop): one Holm-rejected view dropped per round, retrain,
+    re-test'
 metrics:
   measurement: [fitted_sigma_ell_nu, tail_index, failure_area_fraction, failure_magnitude_sigma, failure_harm]
   detection: [detection_power_at_fa_0.05, false_alarm_rate, untestable_rate, availability, elimination_curve_auc]
@@ -101,5 +101,22 @@ metrics:
   cost: [runtime_s_per_stage, gpu_mem_gb_per_stage]
 stats: {bootstrap: scene_level, bootstrap_n: 10000, paired_test: wilcoxon_signed_rank, alpha: 0.05}
 implemented: {configs: true, detection_theory: true, gaussian_uncertainty_theory: true, residual_measurement: false,
-  splatting_pipeline: false, view_gate: false, temperature_and_heterogeneity_theory: true}
+  splatting_pipeline: false, view_gate: false, temperature_and_heterogeneity_theory: true, gate_loop_logic: true}
 output_dir: outputs
+outer_loop:
+  enabled: true
+  round: train (opacity unfrozen, densify/prune on, warm-started from the previous round) -> freeze ->
+    fuse -> test
+  round_cap: 10
+  policy: one_per_round (drop only the most significant Holm-rejected view per round; protects against
+    swamping)
+  exclusion: drop (weight 0); downweight is an ablation
+  readmission: false
+  stopping: no view rejected in a round, round cap reached, or scene-level alarm (> half excluded)
+  false_alarm_control: {procedure: Holm step-down across rounds, family_size: 'M = n_views * round_cap
+      (every view in every round, re-tests and readmission tests included)', threshold: (k+1)-th rejection
+      overall at alpha / (M - k), calibration: clean-run permutation of the whole loop}
+  framing: Baarda-style iterative data snooping and hard EM (gate = E-step, train = M-step); EP cavity
+    within each round; known ideas, not a contribution
+  differentiability: gradients only inside the train step; fusion and test are not differentiated
+  theory_module: src/sensorfault/eval/gate_loop.py

@@ -28,6 +28,7 @@ BREAK = [
     "faulty_views_dominate_region",
     "misspecified_measurement_model",
     "linearisation_limit",
+    "loop_masking_swamping",
 ]
 ALL = HYP + [f"breakdown_{b}" for b in BREAK] + ["ablations_gate"]
 
@@ -153,3 +154,23 @@ def test_poses_use_rule_b_and_pose_faults_stay_out_of_scope():
     p = load_config(CFG / "base.yaml")["poses"]
     assert "photometric" in p["source"] and "excludes its own depth" in p["tested_pose"]
     assert p["pose_faults"] == "out of scope in this paper"
+
+
+def test_outer_loop_block_and_its_ablations():
+    from sensorfault.eval import gate_loop as gl
+
+    lp = load_config(CFG / "base.yaml")["outer_loop"]
+    assert lp["enabled"] is True and lp["round_cap"] == 10 and lp["readmission"] is False
+    assert lp["policy"].startswith("one_per_round") and lp["exclusion"].startswith("drop")
+    assert "M = n_views * round_cap" in lp["false_alarm_control"]["family_size"]
+    assert "train step" in lp["differentiability"]
+    assert gl.holm_family_size(30, lp["round_cap"]) == 300
+    ids = baseline_ids()
+    for b in ("gate_single_pass", "gate_drop_all_rejected", "gate_downweight", "gate_readmit"):
+        assert ids[b] == "view_gate"
+    h6 = load_config(CFG / "h6_gate_design_ablations.yaml")
+    assert "gate_single_pass" in h6["baselines"] and h6["hypothesis"]["levels"]["round_cap"] == [
+        1,
+        3,
+        10,
+    ]

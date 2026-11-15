@@ -23,7 +23,8 @@ _STUBS: dict[str, str] = {
         "variance and the whitened depth residuals are tested. Params: uncertainty in {rendered_9x9, "
         "constant_sigma, fisherrf_style_diagonal_fisher, bayes_rays_style_perturbation_field}, "
         "leave_view_out in {subtraction, none_joint}, spawn in {none, keep_view_j_only_surfels}, "
-        "information_deflation, overconfidence (jackknife_inflation), noise, shared_bias, opacity_warmup, statistic. Theory: src/sensorfault/eval/gaussian_uncertainty.py and "
+        "information_deflation, overconfidence (jackknife_inflation), noise, shared_bias, opacity_warmup, statistic, "
+        "outer_loop (round_cap, policy, exclusion, readmission; see src/sensorfault/eval/gate_loop.py). Theory: src/sensorfault/eval/gaussian_uncertainty.py and "
         "src/sensorfault/eval/detection_theory.py."
     ),
     "aligned_rms_view_test": (
