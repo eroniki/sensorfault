@@ -1,10 +1,14 @@
-# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
 dataset: Hessigheim 3D (H3D)
 role: second_real (pending)
 ref: data_h3d
 platform: UAV oblique imagery 1.5-3 cm; several epochs
 reference: UAV LiDAR about 800 pts/m2
 poses: UNVERIFIED (raw images and orientations not confirmed as released)
-licence: not stated on the benchmark page
+licence: not stated on the benchmark pages; data provided "as is"; download link only after registration
+  (checked 2026-11-15); treat as non-commercial research use until confirmed
 access: registration
 todo: ask the maintainers before relying on it
+contents_on_pages: UAV LiDAR point clouds (about 800 pts/m2) and textured meshes, several epochs; images
+  and poses not stated as released
+non_commercial: true

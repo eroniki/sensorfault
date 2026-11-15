@@ -1,7 +1,11 @@
-# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
 dataset: MatrixCity
 role: synthetic
 ref: data_matrixcity
 content: synthetic city, aerial and street views, exact depth, normals and poses
 use: controlled fault injection with exact truth
-licence: CC BY-NC 4.0 (project page, checked 2026-11-14)
+licence: 'CC BY-NC 4.0 (Hugging Face dataset card BoDai/MatrixCity: license cc-by-nc-4.0; not gated; checked
+  2026-11-15)'
+contents_confirmed: aerial and street tars, transforms.json poses, depth tars (91 files), normal tars
+size_note: one aerial test block tar about 15.8 GB
+non_commercial: true

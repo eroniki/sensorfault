@@ -1,11 +1,21 @@
-# Design v3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
-# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
 default:
   id: depth_pro
   ref: est_depthpro
   output: metric
   confidence_output: no (fit sigma(.) on dev)
-  checks_before_use: [weights licence TODO, GPU memory on 8 GB TODO]
+  checks_before_use:
+  - weights licence TODO
+  - GPU memory on 8 GB TODO
 confidence_models:
-- {id: metric3d_v2, ref: est_metric3dv2, confidence_output: 'yes (ViT models, per public README 2026-11-14)'}
-- {id: unidepth_v2, ref: est_unidepth, confidence_output: yes (per public README 2026-11-14)}
+- id: metric3d_v2
+  ref: est_metric3dv2
+  confidence_output: yes (ViT models, per public README 2026-11-14)
+- id: unidepth_v2
+  ref: est_unidepth
+  confidence_output: yes (per public README 2026-11-14)
+policy: off-the-shelf released weights only; no unreleased or in-house model
+altitude_comparison:
+- depth_pro
+- metric3d_v2
+- unidepth_v2

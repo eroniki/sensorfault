@@ -89,3 +89,34 @@ def test_cumulative_rotation_spline_is_constant_and_interpolates_constant_rate_y
     for t in (0.3, 1.7, 3.5):
         R = ts.eval_rotation(yaw, t, -1.0, 1.0)
         assert ts.log_so3(R)[2] == pytest.approx(step * (t + 2.0), abs=1e-9)
+
+
+def test_known_pose_perturbation_and_its_error():
+    rng = np.random.default_rng(3)
+    R = so3_exp(np.array([0.2, -0.1, 1.0]))
+    t = np.array([10.0, 20.0, 80.0])
+    for rot, tr in ((0.1, 0.05), (1.0, 0.5), (5.0, 2.0)):
+        R2, t2 = ts.perturb_pose(R, t, rot, tr, rng)
+        ang, dist = ts.pose_error(R2, t2, R, t)
+        assert ang == pytest.approx(rot, rel=1e-6) and dist == pytest.approx(tr, rel=1e-9)
+    assert ts.pose_error(R, t, R, t) == (pytest.approx(0.0, abs=1e-9), 0.0)
+
+
+def test_spline_refit_pulls_a_perturbed_frame_back():
+    # (b) of the pose check, position part: one frame's prior is perturbed by a known offset; the
+    # smoothness prior plus the other frames (standing in for render-and-compare) pull it back
+    rng = np.random.default_rng(4)
+    times = np.linspace(0, 27.5, 276)
+    truth = _lawnmower(times)
+    n_ctrl, t0, dt = 31, -1.0, 1.0
+    obs = truth + rng.normal(0, 0.02, truth.shape)
+    rows = []
+    for size in (0.25, 0.5, 1.0, 2.0):
+        o = obs.copy()
+        o[100] += size * np.array([1.0, 0.0, 0.0])
+        ctrl, _ = ts.fit_positions(times, o, 0.02, n_ctrl, t0, dt, smooth=1e-3)
+        after = float(np.linalg.norm(ts.eval_position(ctrl, times[100], t0, dt) - truth[100]))
+        rows.append((size, after))
+    curve = ts.recovery_curve([r[0] for r in rows], [r[0] for r in rows], [r[1] for r in rows])
+    assert all(r["recovered"] > 0.8 for r in curve)
+    assert curve[-1]["after"] > curve[0]["after"]  # residual error grows with the perturbation

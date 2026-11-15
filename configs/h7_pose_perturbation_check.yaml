@@ -1,0 +1,26 @@
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
+extends: base.yaml
+id: h7_pose_perturbation_check
+status: preregistered_draft
+design: v3_rendered_uncertainty_gate
+hypothesis:
+  id: H7
+  prediction: After the gate has run, poses of chosen views are perturbed by known rotations and translations.
+    (a) Before refinement, the gate flags at least 80% of views perturbed by >= 0.5 deg or >= 10 GSD,
+    with its own depth excluded from the tested pose. (b) Spline + PGO + render-and-compare refinement
+    reduces the pose error by at least 80% for perturbations up to 1 deg and 25 GSD; recovery error is
+    reported against perturbation size, including where it fails.
+  falsification_criterion: Falsified if (a) detection is below 80% at 0.5 deg / 10 GSD, or (b) refinement
+    removes less than 80% of the perturbation up to 1 deg / 25 GSD.
+  independent_variables: [rotation_deg, translation_gsd_multiples, perturbed_views]
+  controlled_variables: [depth_maps, surfel_fit, fault_seeds, scene_set]
+  levels:
+    rotation_deg: [0.05, 0.1, 0.25, 0.5, 1.0, 2.0]
+    translation_gsd_multiples: [1, 2, 5, 10, 25, 50]
+    perturbed_views: [isolated, block, gate_flagged]
+    dataset: [matrixcity, usegeo]
+baselines: [gate, gate_perturbed_poses]
+metrics:
+  primary: [detection_rate_before_refinement, pose_error_after_refinement_deg, pose_error_after_refinement_gsd,
+    fraction_recovered]
+implemented: false

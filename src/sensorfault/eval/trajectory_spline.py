@@ -102,3 +102,39 @@ def eval_rotation(Rctrl: list, t: float, t0: float, dt: float) -> np.ndarray:
     for m in range(1, 4):
         R = R @ so3_exp(cb[m] * log_so3(Rctrl[i + m - 1].T @ Rctrl[i + m]))
     return R
+
+
+# ---------------------------------------------------------------------------------------------
+# Pose perturbation check (design v3.4): known perturbations, detection and recovery error
+# ---------------------------------------------------------------------------------------------
+
+
+def perturb_pose(
+    R: np.ndarray, t: np.ndarray, rot_deg: float, trans_m: float, rng: np.random.Generator
+) -> tuple[np.ndarray, np.ndarray]:
+    """Apply a known perturbation: a rotation of exactly ``rot_deg`` about a random axis
+    (right-multiplied, body frame) and a translation of exactly ``trans_m`` in a random direction."""
+    axis = rng.normal(size=3)
+    axis /= np.linalg.norm(axis)
+    d = rng.normal(size=3)
+    d /= np.linalg.norm(d)
+    return R @ so3_exp(np.deg2rad(rot_deg) * axis), t + trans_m * d
+
+
+def pose_error(
+    R_est: np.ndarray, t_est: np.ndarray, R_true: np.ndarray, t_true: np.ndarray
+) -> tuple[float, float]:
+    """Recovery error: rotation angle (degrees) of R_true^T R_est and translation distance."""
+    ang = float(np.rad2deg(np.linalg.norm(log_so3(R_true.T @ R_est))))
+    return ang, float(np.linalg.norm(t_est - t_true))
+
+
+def recovery_curve(sizes: list, errors_before: list, errors_after: list) -> list[dict]:
+    """Rows of the report: perturbation size, error before and after refinement, and the
+    fraction of the perturbation removed (1 = fully recovered)."""
+    rows = []
+    for s, b, a in zip(sizes, errors_before, errors_after):
+        rows.append(
+            {"size": s, "before": b, "after": a, "recovered": 1.0 - a / b if b > 0 else 1.0}
+        )
+    return rows

@@ -1,4 +1,4 @@
-# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
 dataset: UseGeo
 role: main_real
 ref: data_usegeo
@@ -6,5 +6,11 @@ platform: UAV nadir, about 80 m, about 2 cm GSD, 8 strips per set, 80/60 overlap
 images: 829 in three sets (224/328/277)
 poses: exterior orientation and interior parameters per image
 reference: UAV LiDAR about 50 pts/m2; per-image LiDAR depth maps (use LiDAR, not the MVS cloud)
-licence: CC BY-NC-SA 4.0 (github.com/3DOM-FBK/usegeo, checked 2026-11-14)
+licence: CC BY-NC-SA 4.0 (stated in the README "License" section of github.com/3DOM-FBK/usegeo; the repo
+  has no LICENSE file; checked 2026-11-15)
 access: direct download (size not stated)
+sets:
+- 'set 1: 8 strips, 224 images, GSD 1.7 cm'
+- 'set 2: 8 strips, 328 images, 1.8 cm'
+- 'set 3: 8 strips, 277 images, 1.9 cm'
+non_commercial: true

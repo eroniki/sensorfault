@@ -1,0 +1,10 @@
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
+dataset: UrbanScene3D
+role: optional_real (at most one scene)
+ref: data_urbanscene3d
+terms: non-commercial use only; provided "AS IS"; no dissemination of the dataset or altered variations;
+  all rights not explicitly granted reserved (vcc.tech/UrbanScene3D, checked 2026-11-15)
+size: 1.43 TB in total; per-scene sizes listed on the page
+use: one scene at most, for comparability with large-scene splatting work; which real scenes carry LiDAR
+  and poses to be confirmed before choosing
+non_commercial: true

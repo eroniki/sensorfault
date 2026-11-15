@@ -21,6 +21,7 @@ HYP = [
     "h4_reconstruction_with_and_without_gate",
     "h5_rendered_uncertainty_calibration",
     "h6_gate_design_ablations",
+    "h7_pose_perturbation_check",
 ]
 BREAK = [
     "common_mode_repetition",
@@ -68,7 +69,7 @@ def test_baseline_files_use_registered_names_and_cover_all_stubs():
 
 def test_hypothesis_ids_and_residual_measurement_first():
     assert [load_config(CFG / f"{n}.yaml")["hypothesis"]["id"] for n in HYP] == [
-        f"H{i}" for i in range(1, 7)
+        f"H{i}" for i in range(1, 8)
     ]
     h1 = load_config(CFG / "h1_residual_measurement.yaml")
     assert h1["first_task"] is True
@@ -154,12 +155,12 @@ def test_single_free_noise_variable_and_shared_distance_bias():
     assert "omega" in mm["calibration"]["fit"] and "beta" in mm["calibration"]["fit"]
 
 
-def test_poses_use_rule_b_and_pose_faults_stay_out_of_scope():
+def test_poses_use_rule_b_and_pose_faults_are_only_a_check():
     p = load_config(CFG / "base.yaml")["poses"]
     assert p["input"].startswith("posed images") and "B-spline" in p["trajectory"]
     assert "no feature correspondences" in p["refinement"] and "Sigma_q" in p["tested_pose"]
     assert p["ablation"] == "perturbed starting poses"
-    assert p["pose_faults"] == "out of scope in this paper"
+    assert p["pose_faults"].startswith("not a target of the gate")
 
 
 def test_outer_loop_block_and_its_ablations():
@@ -200,3 +201,21 @@ def test_aerial_setting_datasets_and_leave_block_out():
     h6 = load_config(CFG / "h6_gate_design_ablations.yaml")
     assert h6["hypothesis"]["levels"]["block_size_B"] == [1, 3, 5, 9]
     assert (CFG.parent / b["poses"]["theory_module"]).exists()
+
+
+def test_off_the_shelf_depth_models_and_pose_check():
+    b = load_config(CFG / "base.yaml")
+    assert b["depth_model"]["off_the_shelf_only"] is True
+    assert "no unreleased or in-house" in b["depth_model"]["policy"]
+    assert set(b["depth_model"]["altitude_comparison"]["models"]) >= {"depth_pro", "metric3d_v2"}
+    pc = b["pose_check"]
+    assert set(pc["checks"]) == {"a", "b"} and "recovery error" in pc["report"]
+    h7 = load_config(CFG / "h7_pose_perturbation_check.yaml")
+    assert h7["hypothesis"]["id"] == "H7" and "rotation_deg" in h7["hypothesis"]["levels"]
+    assert b["downloads"]["policy"].startswith("no large download")
+
+
+def test_all_datasets_are_recorded_as_non_commercial():
+    for d in ("usegeo", "matrixcity", "h3d", "urbanscene3d"):
+        y = yaml.safe_load((CFG / "datasets" / f"{d}.yaml").read_text())
+        assert y["non_commercial"] is True, d

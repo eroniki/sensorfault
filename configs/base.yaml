@@ -1,4 +1,4 @@
-# Design v3.3: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
 # Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
 # Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
 # Shared defaults. Experiment configs `extends: base.yaml`.
@@ -21,12 +21,20 @@ poses: {input: 'posed images (exterior orientation, GNSS/IMU, or registered pose
     photometric render-and-compare); no feature correspondences', tested_pose: the tested view's render-and-compare
     term is subtracted from the control-point information before its pose is used; Sigma_q = b(t_j) Sigma_ctrl
     b(t_j)^T enters Sigma_r, knot_spacing_s: TODO fix on dev (about 1 s), ablation: perturbed starting
-    poses, eth3d: registered poses used as given, pose_faults: out of scope in this paper, theory_module: src/sensorfault/eval/trajectory_spline.py}
+    poses, eth3d: registered poses used as given, pose_faults: not a target of the gate; a controlled
+    perturbation check is reported (H7), theory_module: src/sensorfault/eval/trajectory_spline.py}
 depth_model:
   default: depth_pro
   file: depth_models/depth_models.yaml
   one_model_per_image: true
   confidence_models_for_baseline: [metric3d_v2, unidepth_v2]
+  off_the_shelf_only: true
+  policy: released, publicly available weights only; no unreleased or in-house depth model in this paper
+  altitude_comparison:
+    models: [depth_pro, metric3d_v2, unidepth_v2]
+    compares: nadir views from survey altitude vs near-ground views (failure rate, area, magnitude after
+      alignment)
+    reported_in: results (H1)
 surface:
   representation: 2dgs_surfels
   renderer: gsplat
@@ -108,7 +116,7 @@ metrics:
 stats: {bootstrap: scene_level, bootstrap_n: 10000, paired_test: wilcoxon_signed_rank, alpha: 0.05}
 implemented: {configs: true, detection_theory: true, gaussian_uncertainty_theory: true, residual_measurement: false,
   splatting_pipeline: false, view_gate: false, temperature_and_heterogeneity_theory: true, gate_loop_logic: true,
-  trajectory_spline_theory: true, leave_block_out_theory: true}
+  trajectory_spline_theory: true, leave_block_out_theory: true, pose_check_helpers: true}
 output_dir: outputs
 outer_loop:
   enabled: true
@@ -136,6 +144,8 @@ setting:
     sanity_check: eth3d
     fallback_real: isprs_vaihingen
     dropped: [scannetpp]
+    optional_real: urbanscene3d (at most one scene; for comparability with large-scene splatting work)
+    all_non_commercial: true
   domain_note: monocular depth models are trained mostly near the ground; nadir views from survey altitude
     are a different failure regime (measured in H1)
 leave_block_out:
@@ -151,3 +161,20 @@ leave_block_out:
   outer_loop: a rejected view is dropped alone; its neighbours are re-tested next round
   cost: 'weaker cavity: larger rendered variance, higher MDB, more untestable pixels'
   motivation: 'H2: neighbouring frames repeat the same error'
+downloads:
+  policy: no large download without the author's explicit approval
+  largest_units: {matrixcity: one aerial test block tar about 15.8 GB (HF BoDai/MatrixCity), urbanscene3d: 1.43
+      TB in total; at most one scene, usegeo: three sets via eostore links; size not stated, h3d: link
+      after registration; size not stated}
+pose_check:
+  when: after the gate has run (and identified faulty views)
+  perturb: poses of chosen views by known rotations and translations
+  views: [isolated clean views, a block of consecutive clean views, the gate-flagged view]
+  rotation_deg: [0.05, 0.1, 0.25, 0.5, 1.0, 2.0]
+  translation_gsd_multiples: [1, 2, 5, 10, 25, 50]
+  checks: {a: does the gate flag the perturbed view before refinement (its own depth excluded from its
+      pose), b: does spline + PGO + render-and-compare refinement pull it back}
+  report: detection rate and recovery error (rotation deg, translation in GSD) vs perturbation size
+  truth: MatrixCity exact poses; UseGeo exterior orientation as reference
+  note: pose faults are not a target of the gate; this is a controlled check
+  helpers: src/sensorfault/eval/trajectory_spline.py (perturb_pose, pose_error, recovery_curve)
