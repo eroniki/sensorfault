@@ -3,7 +3,7 @@
 #   export SDXL_DIR=... BLENDEDMVS_ROOT=... HYPERSIM_ROOT=... HYPERSIM_SPLIT_CSV=...  STAGE1_WORK=runs/stage1
 #   scripts/stage1_run.sh            start or resume
 # Stop cleanly (checkpoint, then exit): kill -TERM $(cat $STAGE1_WORK/pid)
-# One heavy job at a time: refuses to start with less than 16 GB free on the GPU (mapgend or another run is using it); FORCE=1 overrides.
+# One heavy job at a time: refuses to start with less than 16 GB free on the GPU (another process or another run is using it); FORCE=1 overrides.
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 : "${SDXL_DIR:?}"; : "${STAGE1_WORK:?}"
