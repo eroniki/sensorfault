@@ -22,7 +22,7 @@ flagged views (one per round by default), with a Holm step-down schedule across 
 latexmk -pdf main.tex        # output: build/main.pdf (TeX Live; uses ./latexmkrc)
 ```
 Class `elsarticle` with option `preprint,12pt` and bibliography style `elsarticle-num`, both from TeX Live.
-`draft_v0.pdf` is the last committed build: main text pp. 1-18, declarations and references from p. 19, then the
+`draft_v0.pdf` is the last committed build: main text pp. 1-19, declarations and references from p. 20, then the
 Supplementary Material (S1-S4) in the same PDF.
 
 ## Outline

@@ -1,6 +1,6 @@
 \section{Planned Tables and Figures}
 \label{sup:results}
-\textcolor{red}{\textbf{No experiment has been run. Every table and figure below is a placeholder.}}
+\textcolor{red}{\textbf{Apart from the E1 rows marked in Table~\ref{tab:h6}, every table and figure below is a placeholder.}}
 
 \todofig{repetition}{Cross-view correlation of aligned depth errors at the same reference surface point, by appearance class (textureless, specular, textured) and by frame separation along the strip, with the thresholds of H2 and the chosen block size $B$.}
 
@@ -47,30 +47,34 @@ Oracle gate            & \todocell & \todocell & \todocell & \todocell \\
 \todofig{calibration}{Histogram of $T_j/m_j$ on fault-free views, raw and with the leave-view-out scene temperature, the fitted $\hat\gamma$ per scene and the per-view heterogeneity $\omega$, and the false-alarm rate against $\alpha$ on test scenes, with and without deflation by $n_{\mathrm{eff}}/n$ or jackknife inflation (H5).}
 
 \begin{table}[h]
-\caption{\textbf{[TODO]} Gate ablations at matched false alarm: false-alarm rate and power (H6).}
+\caption{\textbf{[TODO for the remaining rows]} Gate ablations: false-alarm rate and power (H6). Rows
+with numbers are from E1 only: MatrixCity block~3, exact depth, three neighbouring frames carrying the
+same $8\sigma$ error, noise $1.3\times$ the calibrated level, 10 seeds. FA is the share of clean views
+excluded and power the share of faulty views excluded; not at matched false alarm. All other rows
+remain placeholders.}
 \label{tab:h6}
 \centering\small
 \begin{tabular}{lcc}
 \toprule
 Variant & FA (\%) & Power (\%) \\
 \midrule
-Full gate                         & \todocell & \todocell \\
+Full gate                         & 0.0 & 93.3 \\
 Joint surface                     & \todocell & \todocell \\
 Keep tested-view-only surfels     & \todocell & \todocell \\
-Unwhitened (constant $\sigma$)    & \todocell & \todocell \\
+Unwhitened (constant $\sigma$)    & 1.4 & 93.3 \\
 Deflated by $n_{\mathrm{eff}}/n$  & \todocell & \todocell \\
 FisherRF-style diagonal Fisher    & \todocell & \todocell \\
 Bayes' Rays-style uncertainty     & \todocell & \todocell \\
 Jackknife inflation               & \todocell & \todocell \\
-No scene temperature              & \todocell & \todocell \\
+No scene temperature              & 4.0 & 93.3 \\
 No shared distance bias           & \todocell & \todocell \\
 Fold-wise opacity warm-up         & \todocell & \todocell \\
 Colour updates geometry (A9)      & \todocell & \todocell \\
-Loop off (single pass)            & \todocell & \todocell \\
+Loop off (single pass)            & 6.1 & 93.3 \\
 Drop all rejected per round       & \todocell & \todocell \\
 Down-weight instead of drop       & \todocell & \todocell \\
 Readmission                       & \todocell & \todocell \\
-Single-view leave-out ($B=1$)     & \todocell & \todocell \\
+Single-view leave-out ($B=1$)     & 0.0 & 93.3 \\
 Perturbed starting poses          & \todocell & \todocell \\
 \bottomrule
 \end{tabular}
