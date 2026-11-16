@@ -55,3 +55,19 @@ Status: **smoke run passed on the TITAN (2026-11-15); the first full-run segment
 | tmux session / pid file | tmux session `depthcal-stage1`. **The `pid` file holds the bash subshell (2244456), not Python (2244457)**, so `kill -TERM $(cat pid)` would not stop training cleanly; stop this run early with `kill -TERM 2244457` (checkpoint, then exit) |
 | Resume after a go-ahead | the same environment (`SDXL_DIR`, `STAGE1_WORK` = the workdir, `CONFIG` = the launch copy, `PY="python -s"`) and **no `TRAIN_ARGS`**: `scripts/stage1_run.sh` resumes from `ckpt_0002000.pt` to step 10,000 |
 | Notes (disk, throughput, incidents) | SDXL from Hugging Face, anonymous (a stale stored token had caused a 401). BlendedMVS from the GitHub release at about 50-100 kB/s per connection, so 16 parallel connections; the fetch script had fetched only the last split part (fixed in aa8acb3). Hypersim from Apple's CDN; validation scenes had been missing (fixed in fe4dc37). Training allocates 8.9 GB (9.7 GB on the device); after the first validation the process kept 18.2 GB on the device (allocator cache from validation sampling, peak allocation 16.4 GB), so `torch.cuda.empty_cache()` after `evaluate()` would free about 9 GB for other GPU users. One heavy job at a time on the shared GPU. A CPU-only render of the denoising sequence from `ckpt_0001500.pt` (16 threads, about 20 min) slowed training by about 6% while it ran |
+
+## First look at the checkpoints on held-out ETH3D `pipes` (2026-11-16; three views of one scene, a sanity check and not a result)
+
+`scripts/stage1_sample.py` (LoRA + conv_in from the extracted trainable weights, 5 DDIM samples per image, scale/shift fitted to the sparse laser depth, AbsRel in real depth units; the untrained base gives AbsRel 0.38 / delta1 0.35 on view 6). Figures: `figures/peek/` (step 1,000) and `figures/peek_step2000/`.
+
+| checkpoint, sampler | view 2 AbsRel | view 6 | view 10 | mean |
+|---|---|---|---|---|
+| step 1,000, 10 DDIM steps | 0.065 | 0.108 | 0.133 | 0.102 |
+| step 2,000, 1 step | 0.052 | 0.119 | 0.144 | 0.105 |
+| step 2,000, 4 steps | 0.049 | 0.125 | 0.147 | 0.107 |
+| step 2,000, 10 steps | 0.049 | 0.132 | 0.148 | 0.110 |
+| step 2,000, 30 steps | 0.050 | 0.136 | 0.148 | 0.111 |
+
+- Step 2,000 is **not clearly better than step 1,000** on this scene (view 2 improves, views 6 and 10 get slightly worse); with three views the differences are within what I would call noise. Validation loss kept falling (0.3927 -> 0.3372).
+- **Fewer sampler steps score better**: the 1-step estimate (the posterior-mean-like prediction from noise) beats 10 and 30 steps on views 6 and 10, and the median of 5 samples beats a single sample (single-sample AbsRel 0.055-0.158 against 0.052-0.148 for the median). The sample spread grows with the number of steps. This matches the TITAN session's observation on two validation images (1-step x0 better than a 30-step sample). For the calibration goal this is a real tension: a calibrated covariance needs genuine diverse samples, while the mean-like prediction is the more accurate one; the sampler (zero-terminal-SNR v-prediction with trailing DDIM) and more training are the first things to examine.
+- Sample spread is highest at edges, the ceiling and the metal cabinet, where the error is also highest (visual agreement only; the correlation has not been measured).
