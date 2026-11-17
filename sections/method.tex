@@ -129,7 +129,24 @@ normalised alpha weights $w_{uk}$; with opacity frozen, the rendered depth varia
   \label{eq:var}
 \end{equation}
 with $P_k$ the inverse of $\Lambda_k$ restricted to the nine geometric coordinates; only the $3\times3$
-marginal of $(\nu,\tau_1,\tau_2)$ enters.
+marginal of $(\nu,\tau_1,\tau_2)$ enters. Figure~\ref{fig:surfel}(a) draws one surfel in section: the
+offset moves every pixel's depth alike, the tilt moves it in proportion to the lever arm, so the rendered
+band is narrowest at the centre and widens towards the rim.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_surfel.tex}
+\caption{A surfel's uncertainty, in section (schematic). (\textbf{a})~The surfel's shape (black) is used for
+rendering only; its uncertainty over the normal offset $\nu$ and tilt $\tau$ (dashed: one perturbation of
+each) is a separate block. The ray of pixel $u$ meets the surfel at $\mathbf{x}$; by \eqref{eq:jac} an
+offset shifts the depth $d_k$ by $\nu/\mathbf{n}^{\top}\mathbf{w}$ and a tilt by the lever arm times $\tau$,
+so the rendered $\pm2\sigma$ band (orange) widens away from $\boldsymbol\mu_k$. (\textbf{b})~The same
+surfel in its $(\nu,\tau)$ plane, $1\sigma$ ellipses: a view that sees one end of the surfel constrains a
+mix of offset and tilt (black dashed), the block $\mathcal{B}_j$ sees the rest (red dashed); fused, they
+give the small $P_k$ (black); without the block, the cavity $P_k^{(-j)}$ (orange) is wide along the
+direction only the block resolved.}
+\label{fig:surfel}
+\end{figure}
 
 \subsection{Bayesian Fusion on Rendering and Leave-View-Out}
 \label{sec:method:fusion}
@@ -171,7 +188,24 @@ subtraction at the MAP and run no moment-matching iterations. The loop parallels
 of vanilla 3DGS, which fits every view's rendering by gradient steps; the difference is the explicit
 exchange of information between views, which gives both the fused uncertainty and the leave-view-out
 reference. Gaussian belief propagation for spatial AI \cite{mp_davison_gbp}, which passes Gaussian
-messages on factor graphs, is the closest relative in vision.
+messages on factor graphs, is the closest relative in vision. Figure~\ref{fig:cavity} follows one
+strip through fuse, cavity and test.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_cavity.tex}
+\caption{The cavity test along one strip (schematic, side view; one roof is glass, which view $j$ reads
+too deep). (\textbf{a})~Fuse: every view sends the surfels in its footprint its information
+$\Lambda_k^{(i)}$; the fused surfels (black bars) are tight ($\pm2\sigma$ ellipses, orange). The faulty
+view $j$ also spawned a surfel under the roof (red). (\textbf{b})~Cavity: the block $\mathcal{B}_j$ of
+$B=3$ frames is subtracted. Surfels the block saw most lose support and widen; the surfel made by the
+block fails the support rule and is dropped. The cavity is then rendered into view $j$ (red dashed
+frustum). (\textbf{c})~Along one image row of view $j$, the aligned cavity render (black) with
+$\pm2\sqrt{(\Sigma_r)_{uu}}$ (orange; wider on the roof, where support is lower) against the depth of view
+$j$ (red dots), and below the standardised residual. Each pixel of the fault is within about $4\sigma$, but
+the region statistic over $\mathcal{R}$ (shaded) under the full $\Sigma_r$ is far beyond any threshold.}
+\label{fig:cavity}
+\end{figure}
 
 \subsection{The View Gate}
 \label{sec:method:gate}
@@ -263,7 +297,19 @@ cavity; the other views of the block are tested against their own blocks. The bl
 the reference, not the number of tests: the Holm family stays $M=NR_{\max}$, independent of $B$ (testing
 whole blocks instead would give $\lceil N/B\rceil R_{\max}$ tests, an alternative we do not use). In the
 outer loop, a rejected view is dropped alone, not with its block, and its neighbours are re-tested in the
-next round against a cavity that no longer contains it.
+next round against a cavity that no longer contains it. Figure~\ref{fig:scene3d} shows the block in a survey.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_scene3d.tex}
+\caption{Leave-block-out in a survey (schematic, not to scale). Three strips of frames; the block
+$\mathcal{B}_j$ of $B=3$ frames around view $j$ (red; hollow: left out with $j$) is removed, and the
+cavity is rendered into view $j$'s footprint (red outline). Surfel discs are shaded by the number of views
+that support them: outside the footprint all views, inside it the views outside the block, so only the
+adjacent strips and the strip's farther frames remain. Bars: $\pm\sigma$ of the normal offset where the
+cavity widens it. Where only the block saw the roof, no support is left and the pixels are untestable.}
+\label{fig:scene3d}
+\end{figure}
 
 The price is a weaker cavity. Removing $B$ views removes more information, so the rendered variance
 grows and the minimum detectable bias rises; pixels seen only within the block become untestable, so
