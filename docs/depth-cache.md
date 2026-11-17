@@ -47,3 +47,21 @@ which is the reader's fallback name.
 
 ## Tests
 `pytest tests/test_depthcache_cache.py` (CPU, offline, fake estimator).
+
+## Scale alignment
+
+Cached depth is raw model output. On aerial MatrixCity block 3 the metric models are off by a large global
+scale (Depth Pro ~0.01x, Metric3D v2 ~0.15x, UniDepthV2 ~0.87x), and Depth Anything V2 is relative inverse depth.
+`sensorfault.depthcache.align` fits this per view against reference depth that is valid at some pixels
+(SfM points, LiDAR, exact synthetic depth):
+
+```python
+from sensorfault.depthcache import load_depth_aligned
+res, al = load_depth_aligned(root, "matrixcity", "block3", "depth_pro", "0000", ref_depth)
+```
+
+- Metric models: one scale, the median of ref/pred (robust to outliers).
+- DAv2 (`relative_inverse_depth`): affine fit `1/ref = a*raw + b`, trimmed least squares.
+- Returns a metric `DepthResult` plus an `Alignment` (parameters, pixels used, median relative residual).
+  Gate on `n_used` and the residual before trusting a view. The cache on disk is never modified.
+- Open question: where the reference comes from for real sets (UseGeo/ETH3D) is not decided here.
