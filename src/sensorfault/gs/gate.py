@@ -99,7 +99,7 @@ class ViewGateTest:
         min_region_pixels: int = 8,
         fit_affine: bool = True,
         gamma: float = 1.0,
-        heterogeneity_omega: float = 0.0,
+        heterogeneity_omega: float | str = "estimate",
         n_eff_fraction: float = 1.0,
         blocks: Mapping[str, Sequence[str]] | None = None,
         active: Sequence[str] | None = None,
@@ -117,6 +117,11 @@ class ViewGateTest:
         self.deflation = p.pop("information_deflation", 1.0)
         self.overconfidence = p.pop("overconfidence", None)
         self.noise = p.pop("noise", "scene_temperature")
+        # scale of the region-scan z-scores: fitted from the other views ("empirical", default; one more
+        # scene-level scale, no per-view parameters) or tied to the energy temperature ("energy")
+        self.scan_noise = p.pop("scan_noise", "empirical")
+        if self.scan_noise not in ("empirical", "energy"):
+            raise ValueError(f"scan_noise={self.scan_noise!r}")
         self.shared_bias = p.pop("shared_bias", "distance")
         self.statistic = p.pop("statistic", "combined_region_scan_energy")
         for key in ("uncertainty", "leave_view_out", "spawn", "overconfidence", "noise"):
@@ -144,7 +149,9 @@ class ViewGateTest:
         self.min_region_pixels = min_region_pixels
         self.fit_affine = fit_affine
         self.gamma = gamma
-        self.omega = heterogeneity_omega
+        if not (heterogeneity_omega == "estimate" or isinstance(heterogeneity_omega, (int, float))):
+            raise ValueError(f"heterogeneity_omega={heterogeneity_omega!r}")
+        self.omega = heterogeneity_omega  # float, or "estimate": log-scale spread of T/dof over the other views
         self.n_eff_fraction = n_eff_fraction
         self.blocks = {k: list(v) for k, v in (blocks or {}).items()}
         self.active = None if active is None else list(active)
@@ -344,7 +351,26 @@ class ViewGateTest:
                     g2 = 1.0
             else:
                 g2 = self.gamma**2
-            lp_e, lp_s = self._log_p(T, dof, scan, g2)
+            g2_scan = g2
+            if self.scan_noise == "empirical" and self.noise == "scene_temperature":
+                pool = [np.abs(base[v][2]) for v in fused_ids if v not in excl and len(base[v][2])]
+                if pool:  # robust scale of the other views' region z-scores (MAD), floored at the nominal 1
+                    z = np.concatenate(pool)
+                    g2_scan = max((float(np.median(z)) / 0.6745) ** 2, 1e-12)
+            om = self.omega
+            if om == "estimate":
+                lr = [
+                    0.5 * math.log(max(base[v][0], 1e-300) / (base[v][1] * g2))
+                    for v in fused_ids
+                    if v not in excl and base[v][1] > 0 and base[v][0] > 0
+                ]
+                # robust (MAD) spread of the per-view level; needs >= 3 other views
+                om = (
+                    1.4826 * float(np.median(np.abs(np.asarray(lr) - np.median(lr))))
+                    if len(lr) >= 3
+                    else 0.0
+                )
+            lp_e, lp_s = self._log_p(T, dof, scan, g2, g2_scan, om)
             parts = {
                 "combined_region_scan_energy": [lp_e, lp_s],
                 "energy": [lp_e],
@@ -355,6 +381,8 @@ class ViewGateTest:
             diag[j] = {
                 "beta": beta_j,
                 "gamma2": g2,
+                "gamma2_scan": g2_scan,
+                "omega": om,
                 "T": T,
                 "dof": dof,
                 "logp_energy": lp_e,
@@ -365,24 +393,34 @@ class ViewGateTest:
         self.last = diag
         return pvals, logps
 
-    def _log_p(self, T: float, dof: int, scan: np.ndarray, g2: float) -> tuple[float, float]:
+    def _log_p(
+        self,
+        T: float,
+        dof: int,
+        scan: np.ndarray,
+        g2: float,
+        g2_scan: float | None = None,
+        omega: float | None = None,
+    ) -> tuple[float, float]:
+        g2s = g2 if g2_scan is None else g2_scan
         frac = self.n_eff_fraction
         m = dof * frac
         if dof <= 0 or m < 1e-9:
             lp_e = 0.0
         else:
             te = T * frac / g2
-            if self.omega > 0:
+            om = self.omega if omega is None else omega
+            if isinstance(om, (int, float)) and om > 0:
                 x, wq = np.polynomial.hermite_e.hermegauss(40)
                 wq = wq / wq.sum()
-                r2 = np.exp(2.0 * self.omega * x)
+                r2 = np.exp(2.0 * om * x)
                 lp_e = float(logsumexp(np.log(wq) + _chi2_logsf(te / r2, m)))
             else:
                 lp_e = float(_chi2_logsf(te, m))
         if len(scan):
             lp_s = float(
                 math.log(2.0)
-                + norm.logsf(np.max(np.abs(scan)) / math.sqrt(g2))
+                + norm.logsf(np.max(np.abs(scan)) / math.sqrt(g2s))
                 + math.log(len(scan))
             )
         else:

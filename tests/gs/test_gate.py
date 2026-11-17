@@ -242,8 +242,17 @@ def test_ablation_switches_run():
 
 def test_jackknife_inflation_is_less_significant():
     sc = {"bias_view": "v2", "bias": 0.03}
-    (_, lp0), _ = run(4, scene=sc, views=["v2"])
-    (_, lp1), _ = run(4, params={"overconfidence": "jackknife_inflation"}, scene=sc, views=["v2"])
+    # isolate the inflation: fixed omega and the energy-tied scan scale (the data-driven scales
+    # re-normalise the other views and can mask the effect of a single ablation)
+    base = {"scan_noise": "energy"}
+    (_, lp0), _ = run(4, params=base, scene=sc, views=["v2"], heterogeneity_omega=0.0)
+    (_, lp1), _ = run(
+        4,
+        params={**base, "overconfidence": "jackknife_inflation"},
+        scene=sc,
+        views=["v2"],
+        heterogeneity_omega=0.0,
+    )
     assert lp1["v2"] >= lp0["v2"] - 1e-9
 
 
@@ -290,3 +299,12 @@ def test_energy_matches_whitened_energy_helper():
     assert np.isclose(T, T_ref, rtol=1e-6, atol=1e-8)
     assert dof == dof_ref or dof == dof_ref + 1  # plane scene: D nearly constant, rank 1 vs 2
     assert gate.last["v1"]["dof"] == dof
+
+
+def test_scan_noise_and_omega_options_validate_and_run():
+    with pytest.raises(ValueError):
+        run(0, params={"scan_noise": "bogus"})
+    with pytest.raises(ValueError):
+        run(0, heterogeneity_omega="bogus")
+    (p, lp), g = run(0, views=["v1"])  # defaults: empirical scan scale, estimated omega
+    assert lp["v1"] <= 0.0 and "gamma2_scan" in g.last["v1"] and g.last["v1"]["omega"] >= 0.0
