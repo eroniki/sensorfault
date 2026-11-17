@@ -37,31 +37,57 @@ def write_csv(p: Path, header, rows):
 
 
 def grid(fig: Path) -> str:
+    """Grouped bars in the style of the clean-scene figure: detection by magnitude, one bar per area."""
     rows = read_csv(fig / "e1_grid_detection.csv")
     areas = sorted({float(r["area"]) for r in rows})
     deltas = sorted({int(float(r["delta"])) for r in rows})
+    val = {
+        (m, int(float(r["delta"])), float(r["area"])): float(r[m])
+        for r in rows
+        for m in ("gate", "rms")
+    }
+    out = []
+    for i, d in enumerate(deltas):
+        row = [i, d]
+        for m in ("gate", "rms"):
+            for a in areas:
+                v = val[(m, d, a)]
+                row += [f"{v:g}", "" if v >= 99.5 else f"{v:.0f}"]
+        out.append(row)
+    head = ["x", "delta"] + [
+        f"{m}{k}{s}" for m in ("gate", "rms") for k in range(len(areas)) for s in ("", "lab")
+    ]
+    write_csv(fig / "e1_grid_bars.csv", head, out)
+    shades = ["sfgrey!45", "sfgrey", "black!65", "black"]
     panels = []
-    for col, sub in (("gate", "a"), ("rms", "b")):
-        panels.append(
-            rf"""\nextgroupplot[xlabel={{Area fraction [--]}}, ylabel={{Magnitude [$\sigma$]}},
-  title={{\sfsub{{{sub}}}~{"Gate" if col == "gate" else "Aligned RMS"}}}]
-\addplot[matrix plot*, point meta=explicit, mesh/cols={len(areas)},
-  nodes near coords={{\pgfmathprintnumber[fixed,precision=0]{{\pgfplotspointmeta}}}},
-  every node near coord/.append style={{font=\sffamily\sansmath\tiny, anchor=center,
-    color=black}}] table[x=ai, y=di, meta={col}, col sep=comma] {{\efigdir/e1_grid_detection.csv}};"""
+    for sub, m, name in (("a", "gate", "Gate (this paper)"), ("b", "rms", "Aligned RMS")):
+        plots = ("\\addlegendimage{empty legend}\n" if sub == "b" else "") + "\n".join(
+            rf"\addplot[fill={c}, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y={m}{k}, meta={m}{k}lab, col sep=comma] {{\efigdir/e1_grid_bars.csv}};"
+            for k, c in enumerate(shades)
         )
+        leg = (
+            r"\legend{Fault area (share of the view):, "
+            + ", ".join(f"{100 * a:g}\\%" for a in areas)
+            + "}"
+            if sub == "b"
+            else ""
+        )
+        yax = ", ylabel={Detected [\\%]}" if sub == "a" else ", yticklabels={}"
+        panels.append(
+            rf"""\nextgroupplot[title={{\sfsub{{{sub}}} {name}}}{yax}]
+{plots}
+{leg}"""
+        )
+    xtl = ",".join(f"${d}\\sigma$" for d in deltas)
     return rf"""% E1, one faulty view: detection [%] at matched 5% per-view false alarm (10 seeds per cell)
 \begin{{tikzpicture}}
-\begin{{groupplot}}[sfaxis, group style={{group size=2 by 1, horizontal sep=1.5cm}}, width=4.3cm, height=4.0cm,
-  scale only axis, enlargelimits=false, point meta min=50, point meta max=100,
-  xtick={{0,...,{len(areas) - 1}}}, xticklabels={{{",".join(f"{a:g}" for a in areas)}}},
-  ytick={{0,...,{len(deltas) - 1}}}, yticklabels={{{",".join(str(d) for d in deltas)}}}]
+\begin{{groupplot}}[sfaxis, sfbar, /pgf/bar width=5.5pt, group style={{group size=2 by 1, horizontal sep=0.35cm}},
+  width=5.6cm, height=3.0cm, scale only axis, ymin=0, ymax=118, ytick={{0,25,50,75,100}}, xmin=-0.55, xmax={len(deltas) - 0.45},
+  xtick={{0,...,{len(deltas) - 1}}}, xticklabels={{{xtl}}}, xlabel={{Fault magnitude}},
+  every node near coord/.append style={{font=\sffamily\sansmath\tiny, anchor=south, inner sep=1pt}},
+  legend style={{at={{(-0.03,-0.36)}}, anchor=north, legend columns=5}}]
 {chr(10).join(panels)}
 \end{{groupplot}}
-\begin{{axis}}[sfcolorbar=4.3cm, at={{($(group c2r1.south east)+(0,-1.25cm)$)}}, anchor=north east,
-  point meta min=50, point meta max=100, colorbar style={{xlabel={{Detected [\%]}}}}]
-\addplot[draw=none] coordinates {{(0,0)}};
-\end{{axis}}
 \end{{tikzpicture}}
 """
 
@@ -133,31 +159,37 @@ def repeated(fig: Path) -> str:
             ]
         )
     write_csv(fig / "e1_repeated_by_noise.csv", ["x", "det_10", "det_13", "fa_10", "fa_13"], out)
-    ticks = ",".join(
-        "{"
-        + lab.replace(" / ", "\\\\").replace("B=", "$B{=}$").replace("no temp.", "no temp.")
-        + "}"
-        for lab in labs
-    )
+    names = {
+        "B=3 / loop": r"$B{=}3$, loop (the gate)",
+        "B=1 / loop": r"$B{=}1$, loop",
+        "B=3 / single pass": r"$B{=}3$, single pass",
+        "B=1 / single pass": r"$B{=}1$, single pass",
+        "B=3 / loop / no temp.": r"$B{=}3$, loop, no temperature",
+        "B=3 / loop / unwhitened": r"$B{=}3$, loop, not whitened",
+    }
+    ticks = ",".join("{" + names.get(lab, lab) + "}" for lab in labs[::-1])
     panels = []
-    for sub, a, b, ylab, ymax in (
-        ("a", "det_10", "det_13", "Faulty frames excluded [\\%]", 112),
-        ("b", "fa_10", "fa_13", "Clean views excluded [\\%]", 10.5),
+    for sub, a, b, title, xmax in (
+        ("a", "det_10", "det_13", "Faulty frames excluded [\\%]", 122),
+        ("b", "fa_10", "fa_13", "Clean views excluded [\\%]", 12.2),
     ):
+        yax = rf", yticklabels={{{ticks}}}" if sub == "a" else ", yticklabels={}"
+        leg = r"\legend{Nominal noise, Noise $1.3\times$}" if sub == "b" else ""
         panels.append(
-            rf"""\nextgroupplot[ylabel={{{ylab}}}, ymax={ymax}, title={{\sfsub{{{sub}}}}}]
-\addplot[sfbarblack] table[x=x, y={a}, col sep=comma] {{\efigdir/e1_repeated_by_noise.csv}};
-\addplot[sfbarred] table[x=x, y={b}, col sep=comma] {{\efigdir/e1_repeated_by_noise.csv}};"""
-            + (r"\legend{Nominal noise, Noise $1.3\times$}" if sub == "b" else "")
+            rf"""\nextgroupplot[title={{\sfsub{{{sub}}} {title}}}, xmax={xmax}{yax}]
+\addplot[sfbarblack, bar shift=2.6pt] table[y expr={len(labs) - 1}-\thisrow{{x}}, x={a}, col sep=comma] {{\efigdir/e1_repeated_by_noise.csv}};
+\addplot[sfbargrey, bar shift=-2.6pt] table[y expr={len(labs) - 1}-\thisrow{{x}}, x={b}, col sep=comma] {{\efigdir/e1_repeated_by_noise.csv}};
+{leg}"""
         )
     return rf"""% E1, the same 8-sigma error on three neighbouring frames (10 seeds per bar)
 \begin{{tikzpicture}}
-\begin{{groupplot}}[sfaxis, sfbar, /pgf/bar width=6pt, group style={{group size=1 by 2, vertical sep=2.1cm}},
-  width=10.4cm, height=2.6cm, scale only axis, ymin=0, xmin=-0.5, xmax={len(labs) - 0.5},
-  xtick={{0,...,{len(labs) - 1}}}, xticklabels={{{ticks}}}, xticklabel style={{align=center}},
+\begin{{groupplot}}[sfaxis, xbar, every axis plot/.append style={{line width=0.4pt}}, point meta=x, /pgf/bar width=4.5pt,
+  legend image code/.code={{\draw[#1, line width=0.4pt] (0cm,-0.07cm) rectangle (0.22cm,0.09cm);}}, group style={{group size=2 by 1, horizontal sep=0.35cm}},
+  width=3.9cm, height=4.4cm, scale only axis, xmin=0, ymin=-0.6, ymax={len(labs) - 0.4},
+  ytick={{0,...,{len(labs) - 1}}}, ytick style={{draw=none}},
   nodes near coords, every node near coord/.append style={{font=\sffamily\sansmath\tiny, /pgf/number format/fixed,
-    /pgf/number format/precision=1, rotate=90, anchor=west}},
-  legend style={{at={{(0.99,0.95)}}, anchor=north east}}]
+    /pgf/number format/precision=1, anchor=west, inner sep=1.5pt}},
+  legend style={{at={{(0.97,0.03)}}, anchor=south east}}]
 {chr(10).join(panels)}
 \end{{groupplot}}
 \end{{tikzpicture}}
