@@ -57,6 +57,7 @@ scale (Depth Pro ~0.01x, Metric3D v2 ~0.15x, UniDepthV2 ~0.87x), and Depth Anyth
 
 ```python
 from sensorfault.depthcache import load_depth_aligned
+
 res, al = load_depth_aligned(root, "matrixcity", "block3", "depth_pro", "0000", ref_depth)
 ```
 
