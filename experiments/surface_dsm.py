@@ -28,18 +28,23 @@ from pathlib import Path
 import numpy as np
 
 os.environ.setdefault("OMP_NUM_THREADS", "2")
-import e1_matrixcity_injection as e1x  # noqa: E402
-from matrixcity_io import load_block, pixel_rays_world  # noqa: E402
+import e1_matrixcity_injection as e1x
+from matrixcity_io import load_block, pixel_rays_world
 
 DATA = Path("/home/eiki/data/matrixcity")
 CELL = 2.0  # DSM cell [m] for GT and the RGB 2DGS model
 CELL_E1 = 4.0  # E1 surfels are sampled at 96x54 per view (3-4 m per pixel): coarser cell
-WATER_Z = -2.0  # GT DSM below this is the flat water plane at -3.4 m (land and roads start at +0.5 m)
+# GT DSM below this is the flat water plane at -3.4 m (land and roads start at +0.5 m)
+WATER_Z = -2.0
 EXTENT = (-402.0, 402.0, -926.0, -220.0)  # x0, x1, y0, y1 [m] (block 3 surfel extent)
 MIN_VIEWS = 3
 NORMAL_FRAME = 88  # the clean view 69 of Figure S5
-VIRIDIS = np.array([(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 98), (253, 231, 37)], float)
-RDBU = np.array([(33, 102, 172), (146, 197, 222), (247, 247, 247), (244, 165, 130), (178, 24, 43)], float)
+VIRIDIS = np.array(
+    [(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 98), (253, 231, 37)], float
+)
+RDBU = np.array(
+    [(33, 102, 172), (146, 197, 222), (247, 247, 247), (244, 165, 130), (178, 24, 43)], float
+)
 
 
 def grid_shape(cell=CELL):
@@ -87,9 +92,19 @@ def stats(res: np.ndarray, mask: np.ndarray | None = None) -> dict:
     if r.size == 0:
         return {"n_cells": 0}
     q = np.percentile(r, [5, 25, 50, 75, 95])
-    return {"n_cells": int(r.size), "median_m": float(q[2]), "mean_m": float(r.mean()), "rmse_m": float(np.sqrt(np.mean(r**2))),
-            "mae_m": float(np.mean(np.abs(r))), "p05_m": float(q[0]), "p25_m": float(q[1]), "p75_m": float(q[3]),
-            "p95_m": float(q[4]), "abs_p90_m": float(np.percentile(np.abs(r), 90)), "within_1m": float(np.mean(np.abs(r) < 1.0))}
+    return {
+        "n_cells": int(r.size),
+        "median_m": float(q[2]),
+        "mean_m": float(r.mean()),
+        "rmse_m": float(np.sqrt(np.mean(r**2))),
+        "mae_m": float(np.mean(np.abs(r))),
+        "p05_m": float(q[0]),
+        "p25_m": float(q[1]),
+        "p75_m": float(q[3]),
+        "p95_m": float(q[4]),
+        "abs_p90_m": float(np.percentile(np.abs(r), 90)),
+        "within_1m": float(np.mean(np.abs(r) < 1.0)),
+    }
 
 
 def cmap(x, anchors, lo, hi):
@@ -109,7 +124,9 @@ def hillshade(z: np.ndarray, cell=CELL, az=315.0, alt=45.0) -> np.ndarray:
     return np.clip(np.sin(e) * np.cos(slope) + np.cos(e) * np.sin(slope) * np.cos(a - aspect), 0, 1)
 
 
-def save_png(path: Path, rgb: np.ndarray, nan_mask: np.ndarray | None = None, north_up=True) -> None:
+def save_png(
+    path: Path, rgb: np.ndarray, nan_mask: np.ndarray | None = None, north_up=True
+) -> None:
     from PIL import Image
 
     rgb = rgb.copy()
@@ -152,14 +169,23 @@ def e1_surfaces(log):
     fault_pts = None
     v = views[j_fault]
     ray = pixel_rays_world(K, v["R"], h, w).reshape(-1, 3)[v["pix"]]
-    fault_pts = (v["c"] + v["dbar"][:, None] * ray)[v["fault"]]  # true positions of the faulty pixels
+    fault_pts = (v["c"] + v["dbar"][:, None] * ray)[
+        v["fault"]
+    ]  # true positions of the faulty pixels
     off = depths(e1x.Gate(views, geo, cfg, B=1), list(range(n)))
     loop = e1x.run_loop(e1x.Gate(views, geo, cfg, B=1), n, cfg["round_cap"])
     excluded = [int(i) for i in loop.excluded]
     on = depths(e1x.Gate(views, geo, cfg, B=1), [i for i in range(n) if i not in excluded])
-    log(f"E1 fusion + gate loop: {time.time() - t0:.0f} s; faulty view {j_fault}, excluded {excluded}")
-    meta = {"faulty_view": j_fault, "faulty_frame": int(views[j_fault]["frame"]), "excluded_views": excluded,
-            "excluded_frames": [int(views[i]["frame"]) for i in excluded], "rounds": int(loop.rounds) if hasattr(loop, "rounds") else None}
+    log(
+        f"E1 fusion + gate loop: {time.time() - t0:.0f} s; faulty view {j_fault}, excluded {excluded}"
+    )
+    meta = {
+        "faulty_view": j_fault,
+        "faulty_frame": int(views[j_fault]["frame"]),
+        "excluded_views": excluded,
+        "excluded_frames": [int(views[i]["frame"]) for i in excluded],
+        "rounds": int(loop.rounds) if hasattr(loop, "rounds") else None,
+    }
     return ref, off, on, fault_pts, meta
 
 
@@ -221,11 +247,18 @@ def main(out_dir: str) -> None:
     fmask[iy[ok], ix[ok]] = True
 
     res = {"rgb2dgs": rgb_z - gt_z, **{k: z - gt4_z for k, z in surf.items()}}
-    water = {"rgb2dgs": gt_z < WATER_Z, **{k: gt4_z < WATER_Z for k in surf}}
+    water = {"rgb2dgs": gt_z < WATER_Z, **dict.fromkeys(surf, gt4_z < WATER_Z)}
     summary = {
-        "cell_m": {"gt_rgb2dgs": CELL, "e1": CELL_E1}, "extent_m": list(EXTENT), "min_views": MIN_VIEWS, "water_below_m": WATER_Z,
-        "coverage": {"gt": float(np.isfinite(gt_z).mean()), "gt_4m": float(np.isfinite(gt4_z).mean()), "rgb2dgs": float(np.isfinite(rgb_z).mean()),
-                     **{k: float(np.isfinite(z).mean()) for k, z in surf.items()}},
+        "cell_m": {"gt_rgb2dgs": CELL, "e1": CELL_E1},
+        "extent_m": list(EXTENT),
+        "min_views": MIN_VIEWS,
+        "water_below_m": WATER_Z,
+        "coverage": {
+            "gt": float(np.isfinite(gt_z).mean()),
+            "gt_4m": float(np.isfinite(gt4_z).mean()),
+            "rgb2dgs": float(np.isfinite(rgb_z).mean()),
+            **{k: float(np.isfinite(z).mean()) for k, z in surf.items()},
+        },
         "water_share_of_gt": float(np.mean(gt_z[np.isfinite(gt_z)] < WATER_Z)),
         "residual_all": {k: stats(r) for k, r in res.items()},
         "residual_land": {k: stats(r, ~water[k]) for k, r in res.items()},
@@ -249,19 +282,36 @@ def main(out_dir: str) -> None:
     def angstats(a):
         share = float(np.mean(np.isfinite(a)))
         a = a[np.isfinite(a)]
-        return {"median": float(np.nanmedian(a)), "mean": float(np.nanmean(a)), "p90": float(np.nanpercentile(a, 90)),
-                "within_10deg": float(np.mean(a < 10)), "share_of_pixels": share}
+        return {
+            "median": float(np.nanmedian(a)),
+            "mean": float(np.nanmean(a)),
+            "p90": float(np.nanpercentile(a, 90)),
+            "within_10deg": float(np.mean(a < 10)),
+            "share_of_pixels": share,
+        }
 
-    summary["normal_angle_deg"] = {"all": angstats(ang), "land": angstats(np.where(land_px, ang, np.nan)),
-                                   "water": angstats(np.where(~land_px, ang, np.nan))}
+    summary["normal_angle_deg"] = {
+        "all": angstats(ang),
+        "land": angstats(np.where(land_px, ang, np.nan)),
+        "water": angstats(np.where(~land_px, ang, np.nan)),
+    }
 
     # images (north up), height colour with hillshade; residuals on a diverging scale
     zlo, zhi = summary["height_range_m"]
     rmax = 5.0
     gmax = 5.0
-    for tag, z, cell in (("gt", gt_z, CELL), ("gt_4m", gt4_z, CELL_E1), ("rgb2dgs", rgb_z, CELL), *((k, z, CELL_E1) for k, z in surf.items())):
+    for tag, z, cell in (
+        ("gt", gt_z, CELL),
+        ("gt_4m", gt4_z, CELL_E1),
+        ("rgb2dgs", rgb_z, CELL),
+        *((k, z, CELL_E1) for k, z in surf.items()),
+    ):
         shade = hillshade(z, cell)[..., None]
-        save_png(out / f"dsm_{tag}.png", cmap(z, VIRIDIS, zlo, zhi) * (0.45 + 0.55 * shade), ~np.isfinite(z))
+        save_png(
+            out / f"dsm_{tag}.png",
+            cmap(z, VIRIDIS, zlo, zhi) * (0.45 + 0.55 * shade),
+            ~np.isfinite(z),
+        )
     for tag, r in res.items():
         save_png(out / f"res_{tag}.png", cmap(r, RDBU, -rmax, rmax), ~np.isfinite(r))
     gdiff = surf["e1_on"] - surf["e1_off"]
@@ -269,15 +319,52 @@ def main(out_dir: str) -> None:
     # fault-region outline as a CSV polygon set (cell centres of the boundary) for the TikZ overlay
     yy, xx = np.nonzero(fmask)
     with (out / "fault_cells.csv").open("w") as f:
-        f.write("x,y\n" + "\n".join(f"{EXTENT[0] + (i + 0.5) * CELL_E1:.1f},{EXTENT[2] + (j + 0.5) * CELL_E1:.1f}" for j, i in zip(yy, xx)) + "\n")
+        f.write(
+            "x,y\n"
+            + "\n".join(
+                f"{EXTENT[0] + (i + 0.5) * CELL_E1:.1f},{EXTENT[2] + (j + 0.5) * CELL_E1:.1f}"
+                for j, i in zip(yy, xx)
+            )
+            + "\n"
+        )
     save_png(out / "normals_gt.png", np.nan_to_num((ng * 0.5 + 0.5) * 255), None, north_up=False)
-    save_png(out / "normals_rgb2dgs.png", np.nan_to_num((nr * 0.5 + 0.5) * 255), ~np.all(np.isfinite(nr), -1), north_up=False)
-    save_png(out / "normals_angle.png", cmap(np.minimum(ang, 45), VIRIDIS, 0, 45), ~np.isfinite(ang), north_up=False)
-    summary["scales"] = {"height_m": [zlo, zhi], "residual_m": rmax, "gate_diff_m": gmax, "normal_angle_deg": 45}
+    save_png(
+        out / "normals_rgb2dgs.png",
+        np.nan_to_num((nr * 0.5 + 0.5) * 255),
+        ~np.all(np.isfinite(nr), -1),
+        north_up=False,
+    )
+    save_png(
+        out / "normals_angle.png",
+        cmap(np.minimum(ang, 45), VIRIDIS, 0, 45),
+        ~np.isfinite(ang),
+        north_up=False,
+    )
+    summary["scales"] = {
+        "height_m": [zlo, zhi],
+        "residual_m": rmax,
+        "gate_diff_m": gmax,
+        "normal_angle_deg": 45,
+    }
     summary["wallclock_s"] = round(time.time() - t_start, 1)
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
-    log(json.dumps({k: summary[k] for k in ("coverage", "water_share_of_gt", "residual_fault_region", "gate_effect_fault_region",
-                                            "e1_scene", "normal_angle_deg", "wallclock_s")}, indent=1))
+    log(
+        json.dumps(
+            {
+                k: summary[k]
+                for k in (
+                    "coverage",
+                    "water_share_of_gt",
+                    "residual_fault_region",
+                    "gate_effect_fault_region",
+                    "e1_scene",
+                    "normal_angle_deg",
+                    "wallclock_s",
+                )
+            },
+            indent=1,
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -55,7 +55,11 @@ def test_experiment_configs_complete(name):
     ids = baseline_ids()
     assert c["baselines"] and set(c["baselines"]) <= set(ids), set(c["baselines"]) - set(ids)
     assert c["metrics"]
-    assert c["implemented"] is False
+    if name == "h7_pose_perturbation_check":
+        # H7 has a run (experiments/h7_pose_check.py); `implemented` names the setting it ran in.
+        assert isinstance(c["implemented"], str) and c["implemented"]
+    else:
+        assert c["implemented"] is False
 
 
 def test_baseline_files_use_registered_names_and_cover_all_stubs():
