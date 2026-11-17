@@ -30,14 +30,19 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", "4")
-import numpy as np  # noqa: E402
-from scipy.stats import chi2, norm  # noqa: E402
+import e1_matrixcity_injection as e1x
+import numpy as np
+from matrixcity_io import load_block, pixel_rays_world
+from scipy.stats import chi2, norm
 
-import e1_matrixcity_injection as e1x  # noqa: E402
-from matrixcity_io import load_block, pixel_rays_world  # noqa: E402
-from sensorfault.eval import gate_loop as gl  # noqa: E402
-from sensorfault.eval.gaussian_uncertainty import so3_exp  # noqa: E402
-from sensorfault.eval.trajectory_spline import log_so3, pose_error, position_row, second_difference  # noqa: E402
+from sensorfault.eval import gate_loop as gl
+from sensorfault.eval.gaussian_uncertainty import so3_exp
+from sensorfault.eval.trajectory_spline import (
+    log_so3,
+    pose_error,
+    position_row,
+    second_difference,
+)
 
 H7 = {
     "rot_levels_deg": [0.05, 0.1, 0.25, 0.5, 1.0, 2.0],
@@ -129,7 +134,11 @@ class Renderer:
         den = np.sum(n * ray, 1)
         d = np.sum(n * (p - c), 1) / den
         x = c + d[:, None] * ray
-        ok = (d > 1.0) & (np.linalg.norm(x - p, axis=1) < self.r) & (np.abs(den) / np.linalg.norm(ray, axis=1) > self.cos_min)
+        ok = (
+            (d > 1.0)
+            & (np.linalg.norm(x - p, axis=1) < self.r)
+            & (np.abs(den) / np.linalg.norm(ray, axis=1) > self.cos_min)
+        )
         pix, s, d = pix[ok], s[ok], d[ok]
         o = np.lexsort((d, pix))
         pix, s = pix[o], s[o]
@@ -150,10 +159,15 @@ class Renderer:
         for k in range(3):
             e = np.zeros(3)
             e[k] = er
-            J[:, k] = (self.depth(R @ so3_exp(e), c, pix, s, offset)[0] - self.depth(R @ so3_exp(-e), c, pix, s, offset)[0]) / (2 * er)
+            J[:, k] = (
+                self.depth(R @ so3_exp(e), c, pix, s, offset)[0]
+                - self.depth(R @ so3_exp(-e), c, pix, s, offset)[0]
+            ) / (2 * er)
             e = np.zeros(3)
             e[k] = et
-            J[:, 3 + k] = (self.depth(R, c + e, pix, s, offset)[0] - self.depth(R, c - e, pix, s, offset)[0]) / (2 * et)
+            J[:, 3 + k] = (
+                self.depth(R, c + e, pix, s, offset)[0] - self.depth(R, c - e, pix, s, offset)[0]
+            ) / (2 * et)
         return J
 
 
@@ -220,11 +234,19 @@ class PoseGate(e1x.Gate):
         T = float(r @ Pr)
         PG = prec(G)
         num = G.T @ Pr
-        gMg = np.einsum("nr,nr->r", G, PG) - np.einsum("ra,ab,rb->r", G.T @ PA, np.linalg.inv(AtPA), G.T @ PA)
+        gMg = np.einsum("nr,nr->r", G, PG) - np.einsum(
+            "ra,ab,rb->r", G.T @ PA, np.linalg.inv(AtPA), G.T @ PA
+        )
         valid = np.bincount(tiles, minlength=self.n_tiles) >= 10
         z = np.where(valid, num / np.sqrt(np.maximum(gMg, 1e-12)), 0.0)
-        return {"T": T, "m": len(r) - 2, "zmax": float(np.max(np.abs(z))), "nR": int(valid.sum()), "rms": 0.0,
-                "testable": float(ok.mean())}
+        return {
+            "T": T,
+            "m": len(r) - 2,
+            "zmax": float(np.max(np.abs(z))),
+            "nR": int(valid.sum()),
+            "rms": 0.0,
+            "testable": float(ok.mean()),
+        }
 
 
 def pvalues_from_stats(S):
@@ -261,7 +283,9 @@ def strip_info(B, D2):
     """Information of the control corrections from the GNSS/IMU and smoothness priors, per component."""
     sr, st = np.deg2rad(H7["gnss_sd_deg"]), H7["gnss_sd_m"]
     mr, mt = np.deg2rad(H7["smooth_sd_deg"]), H7["smooth_sd_m"]
-    ridge = 1e-4 * np.eye(B.shape[1])  # keeps short strips (fewer frames than active controls) well posed
+    ridge = 1e-4 * np.eye(
+        B.shape[1]
+    )  # keeps short strips (fewer frames than active controls) well posed
     Lr = B.T @ B / sr**2 + D2.T @ D2 / mr**2 + ridge / sr**2
     Lt = B.T @ B / st**2 + D2.T @ D2 / mt**2 + ridge / st**2
     return Lr, Lt
@@ -274,7 +298,9 @@ def sigma_q(B, D2, i):
     return np.diag([vr] * 3 + [vt] * 3)
 
 
-HUBER_K = 3.0  # robust render-and-compare: Huber weights beyond 3 sigma (wrong surfel at edges, faults)
+HUBER_K = (
+    3.0  # robust render-and-compare: Huber weights beyond 3 sigma (wrong surfel at edges, faults)
+)
 
 
 def huber_cost(z):
@@ -344,7 +370,12 @@ def refine_strip(rend, frames, poses_in, yimgs, offset, base_sid, perturbed, dro
     om_b = B @ np.linalg.solve(Lr, B.T @ om / sr**2)
     c_b = B @ np.linalg.solve(Lt, B.T @ cin / st**2)
     base = [(Rref @ so3_exp(om_b[i]), c_b[i]) for i in range(n)]
-    dprior = np.stack([np.r_[log_so3(base[i][0].T @ poses_in[i][0]), poses_in[i][1] - base[i][1]] for i in range(n)])
+    dprior = np.stack(
+        [
+            np.r_[log_so3(base[i][0].T @ poses_in[i][0]), poses_in[i][1] - base[i][1]]
+            for i in range(n)
+        ]
+    )
 
     def pose(i, xi):
         R0, c0 = base[i]
@@ -355,8 +386,12 @@ def refine_strip(rend, frames, poses_in, yimgs, offset, base_sid, perturbed, dro
 
     def total(C):
         xi = B @ C
-        prior = 0.5 * sum((xi[i] - dprior[i]) @ Wpi[i] @ (xi[i] - dprior[i]) for i in range(n)) + 0.5 * float(np.sum((D2 @ C) @ Ws * (D2 @ C)))
-        return prior + sum(rc_cost(rend, *pose(i, xi), yimgs[frames[i]], offset, sid_for(i, xi)) for i in range(n))
+        prior = 0.5 * sum(
+            (xi[i] - dprior[i]) @ Wpi[i] @ (xi[i] - dprior[i]) for i in range(n)
+        ) + 0.5 * float(np.sum((D2 @ C) @ Ws * (D2 @ C)))
+        return prior + sum(
+            rc_cost(rend, *pose(i, xi), yimgs[frames[i]], offset, sid_for(i, xi)) for i in range(n)
+        )
 
     C = np.zeros((nc, 6))
     cost = total(C)
@@ -408,7 +443,9 @@ def main(out_dir: str) -> None:
     delta, area, seed = 8, 0.4, 1
     rng = np.random.default_rng(2000 + 97 * seed + int(10 * delta) + int(100 * area))
     e1x.measure(views, rng)
-    j_fault = int(rng.integers(n))  # rng now sits where e1x.inject_region drew the Figure S5 fault rectangle
+    j_fault = int(
+        rng.integers(n)
+    )  # rng now sits where e1x.inject_region drew the Figure S5 fault rectangle
     excluded = [j_fault]  # the Holm loop's exclusion in this scene (results/surface: [59])
     true_pose = [(v["R"].copy(), v["c"].copy()) for v in views]
 
@@ -425,7 +462,9 @@ def main(out_dir: str) -> None:
 
     base_sid = [rend.assign(R, c) for R, c in true_pose]
     agree = np.mean([np.mean(base_sid[i][v["pix"]] == v["sid"]) for i, v in enumerate(views)])
-    log(f"renderer vs E1 assignment at the true poses: {100 * agree:.1f}% of measured pixels on the same surfel")
+    log(
+        f"renderer vs E1 assignment at the true poses: {100 * agree:.1f}% of measured pixels on the same surfel"
+    )
     # the world for H7 is the surfel-disc model itself: measured depth = render at the true pose + 1% noise,
     # so that the renderer used by the gate and the refinement is exact at the true poses (as E1's model was)
     nrng = np.random.default_rng(4242)
@@ -446,21 +485,44 @@ def main(out_dir: str) -> None:
         x = c + dbar[:, None] * ray
         dx = x - geo["mu"][s]
         den = np.sum(nn[s] * ray, 1)
-        J = np.stack([np.ones_like(den), -np.sum(t1[s] * dx, 1), -np.sum(t2[s] * dx, 1)], 1) / den[:, None]
+        J = (
+            np.stack([np.ones_like(den), -np.sum(t1[s] * dx, 1), -np.sum(t2[s] * dx, 1)], 1)
+            / den[:, None]
+        )
         sigma = cfg["sigma_rel"] * dbar
         Jw = J / sigma[:, None]
         us, inv = np.unique(s, return_inverse=True)
         L = np.zeros((len(us), 3, 3))
         np.add.at(L, inv, Jw[:, :, None] * Jw[:, None, :])
         Jq = rend.pose_jacobian(R, c, pix, s)
-        v.update(sid=s, pix=pix, dbar=dbar, J=J, sigma=sigma, y=yimgs[i][pix], us=us, inv=inv, L=L, Jq=Jq, Sq=Sq[i])
+        v.update(
+            sid=s,
+            pix=pix,
+            dbar=dbar,
+            J=J,
+            sigma=sigma,
+            y=yimgs[i][pix],
+            us=us,
+            inv=inv,
+            L=L,
+            Jq=Jq,
+            Sq=Sq[i],
+        )
 
     for i, (R, c) in enumerate(true_pose):
         set_view(i, R, c, base_sid[i])
-    e1x.inject_region(views[j_fault], geo, rng, delta, area)  # same rectangle as Figure S5, on the re-rendered view
+    e1x.inject_region(
+        views[j_fault], geo, rng, delta, area
+    )  # same rectangle as Figure S5, on the re-rendered view
     yimgs[j_fault][views[j_fault]["pix"]] = views[j_fault]["y"]
     log(f"fault re-injected in view {j_fault}: {views[j_fault]['fault'].mean():.2f} of its pixels")
-    base_state = {i: {k: views[i][k] for k in ("sid", "pix", "dbar", "J", "sigma", "y", "us", "inv", "L", "Jq", "Sq")} for i in range(n)}
+    base_state = {
+        i: {
+            k: views[i][k]
+            for k in ("sid", "pix", "dbar", "J", "sigma", "y", "us", "inv", "L", "Jq", "Sq")
+        }
+        for i in range(n)
+    }
     log(f"baseline views rendered, {time.time() - t0:.0f} s")
 
     long_strips = [k for k, fr in strips.items() if len(fr) >= 8 and k != views[j_fault]["strip"]]
@@ -482,7 +544,9 @@ def main(out_dir: str) -> None:
     S0 = {j: g0.stats(j, active) for j in range(n)}
     pv0, lp0 = pvalues_from_stats(S0)
     rej0 = gl.holm_round_rejections(pv0, cfg["alpha"], M, 0, logp=lp0)
-    log(f"baseline: Holm round rejects {sorted(rej0)} (view {j_fault} is the faulty one), {time.time() - t0:.0f} s")
+    log(
+        f"baseline: Holm round rejects {sorted(rej0)} (view {j_fault} is the faulty one), {time.time() - t0:.0f} s"
+    )
 
     rows, configs = [], []
     for sd in seeds:
@@ -527,42 +591,101 @@ def main(out_dir: str) -> None:
                     fr = strips[strip_of[grp[0]]]
                     poses_in = [inp.get(i, true_pose[i]) for i in fr]
                     flags = [i in inp for i in fr]
-                    refined = dict(zip(fr, refine_strip(rend, fr, poses_in, yimgs, offset, base_sid, flags)))
-                    refined_np = dict(zip(fr, refine_strip(rend, fr, poses_in, yimgs, offset, base_sid, flags, drop_prior=True)))
+                    refined = dict(
+                        zip(fr, refine_strip(rend, fr, poses_in, yimgs, offset, base_sid, flags))
+                    )
+                    refined_np = dict(
+                        zip(
+                            fr,
+                            refine_strip(
+                                rend, fr, poses_in, yimgs, offset, base_sid, flags, drop_prior=True
+                            ),
+                        )
+                    )
                     for i in grp:
                         Rt, ct = true_pose[i]
                         eb = pose_error(*inp[i], Rt, ct)
                         ea = pose_error(*refined[i], Rt, ct)
                         en = pose_error(*refined_np[i], Rt, ct)
-                        rows.append({
-                            "seed": sd, "sweep": sweep, "rot_deg": rot, "trans_gsd": tg, "type": typ, "view": i,
-                            "frame": int(views[i]["frame"]), "p": pv[i], "logp": lp[i], "flagged": i in rej,
-                            "rot_err_before_deg": eb[0], "trans_err_before_gsd": eb[1] / gsd,
-                            "rot_err_after_deg": ea[0], "trans_err_after_gsd": ea[1] / gsd,
-                            "trans_along_axis_frac": float(abs(tdir @ (-Rt[:, 2]))),
-                            "rot_recovered": 1 - ea[0] / eb[0] if eb[0] > 1e-9 else None,
-                            "trans_recovered": 1 - ea[1] / eb[1] if eb[1] > 1e-9 else None,
-                            "noprior_rot_err_after_deg": en[0], "noprior_trans_err_after_gsd": en[1] / gsd,
-                            "noprior_rot_recovered": 1 - en[0] / eb[0] if eb[0] > 1e-9 else None,
-                            "noprior_trans_recovered": 1 - en[1] / eb[1] if eb[1] > 1e-9 else None,
-                        })
+                        rows.append(
+                            {
+                                "seed": sd,
+                                "sweep": sweep,
+                                "rot_deg": rot,
+                                "trans_gsd": tg,
+                                "type": typ,
+                                "view": i,
+                                "frame": int(views[i]["frame"]),
+                                "p": pv[i],
+                                "logp": lp[i],
+                                "flagged": i in rej,
+                                "rot_err_before_deg": eb[0],
+                                "trans_err_before_gsd": eb[1] / gsd,
+                                "rot_err_after_deg": ea[0],
+                                "trans_err_after_gsd": ea[1] / gsd,
+                                "trans_along_axis_frac": float(abs(tdir @ (-Rt[:, 2]))),
+                                "rot_recovered": 1 - ea[0] / eb[0] if eb[0] > 1e-9 else None,
+                                "trans_recovered": 1 - ea[1] / eb[1] if eb[1] > 1e-9 else None,
+                                "noprior_rot_err_after_deg": en[0],
+                                "noprior_trans_err_after_gsd": en[1] / gsd,
+                                "noprior_rot_recovered": 1 - en[0] / eb[0]
+                                if eb[0] > 1e-9
+                                else None,
+                                "noprior_trans_recovered": 1 - en[1] / eb[1]
+                                if eb[1] > 1e-9
+                                else None,
+                            }
+                        )
                     others = [i for i in rej if i not in grp and i != j_fault]
-                    configs.append({"seed": sd, "sweep": sweep, "rot_deg": rot, "trans_gsd": tg, "type": typ, "group": grp,
-                                    "affected_views": len(affected), "unperturbed_flagged": len(others),
-                                    "faulty_view_flagged": j_fault in rej, "seconds": round(time.time() - tl, 1)})
+                    configs.append(
+                        {
+                            "seed": sd,
+                            "sweep": sweep,
+                            "rot_deg": rot,
+                            "trans_gsd": tg,
+                            "type": typ,
+                            "group": grp,
+                            "affected_views": len(affected),
+                            "unperturbed_flagged": len(others),
+                            "faulty_view_flagged": j_fault in rej,
+                            "seconds": round(time.time() - tl, 1),
+                        }
+                    )
                     for i in grp:
                         views[i].update(base_state[i])
-                done = [r for r in rows if r["seed"] == sd and r["sweep"] == sweep and r["rot_deg"] == rot and r["trans_gsd"] == tg]
+                done = [
+                    r
+                    for r in rows
+                    if r["seed"] == sd
+                    and r["sweep"] == sweep
+                    and r["rot_deg"] == rot
+                    and r["trans_gsd"] == tg
+                ]
                 cl = [r for r in done if r["type"] != "flagged"]
-                cf = [c for c in configs if c["seed"] == sd and c["sweep"] == sweep and c["rot_deg"] == rot and c["trans_gsd"] == tg]
-                log(f"seed {sd} {sweep:11s} rot {rot:5.2f} deg trans {tg:4.0f} GSD: flagged {sum(r['flagged'] for r in cl)}/{len(cl)} "
+                cf = [
+                    c
+                    for c in configs
+                    if c["seed"] == sd
+                    and c["sweep"] == sweep
+                    and c["rot_deg"] == rot
+                    and c["trans_gsd"] == tg
+                ]
+                log(
+                    f"seed {sd} {sweep:11s} rot {rot:5.2f} deg trans {tg:4.0f} GSD: flagged {sum(r['flagged'] for r in cl)}/{len(cl)} "
                     f"clean perturbed; median recovered rot {np.median([r['rot_recovered'] for r in done if r['rot_recovered'] is not None] or [np.nan]):.2f} "
                     f"trans {np.median([r['trans_recovered'] for r in done if r['trans_recovered'] is not None] or [np.nan]):.2f}; "
-                    f"unperturbed flagged {sum(c['unperturbed_flagged'] for c in cf)}; {sum(c['seconds'] for c in cf):.0f} s")
+                    f"unperturbed flagged {sum(c['unperturbed_flagged'] for c in cf)}; {sum(c['seconds'] for c in cf):.0f} s"
+                )
                 (out / "rows.json").write_text(json.dumps(rows, indent=0, default=float))
                 (out / "configs.json").write_text(json.dumps(configs, indent=0, default=float))
-    meta = {"gsd_m": gsd, "renderer_agreement": float(agree), "M": M, "excluded_before": excluded, "settings": H7,
-            "wallclock_s": round(time.time() - t0, 1)}
+    meta = {
+        "gsd_m": gsd,
+        "renderer_agreement": float(agree),
+        "M": M,
+        "excluded_before": excluded,
+        "settings": H7,
+        "wallclock_s": round(time.time() - t0, 1),
+    }
     (out / "rows.json").write_text(json.dumps(rows, indent=0, default=float))
     (out / "meta.json").write_text(json.dumps(meta, indent=1, default=float))
     log(json.dumps(meta, default=float))
