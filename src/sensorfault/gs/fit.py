@@ -18,7 +18,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 
 from sensorfault.gs.interfaces import CavityRender, SurfelState, ViewInfo
-from sensorfault.gs.reference import NumpyReferenceBackend, init_surfels
+from sensorfault.gs.reference import NumpyReferenceBackend, _frame_rays, init_surfels
 from sensorfault.types import DepthFrame
 
 
@@ -89,6 +89,37 @@ def _skew(w):
     ).reshape(-1, 3, 3)
 
 
+def _ray_plane_depth(mu, R, log_s, logit, c, Rc, rays):
+    """Torch port of ``reference._composite_chunk`` (differentiable): alpha-composited, per-pixel
+    ray-plane hit depth ``D = sum w d / sum w`` and accumulated opacity ``W``.
+
+    mu (K, 3), R (K, 3, 3) columns [t1 t2 n], log_s (K, 3), logit (K,), camera centre c (3,),
+    camera-to-world rotation Rc (3, 3), camera-frame rays (m, 3) with z = 1. Returns D (m,), W (m,)."""
+    import torch
+
+    n, t1, t2 = R[:, :, 2], R[:, :, 0], R[:, :, 1]
+    w = rays @ Rc.T
+    den = n @ w.T
+    num = ((mu - c) * n).sum(1)
+    safe = torch.where(den.abs() > 1e-9, den, torch.ones_like(den))
+    d = num[:, None] / safe
+    dx = c + d[:, :, None] * w[None] - mu[:, None, :]
+    u = (dx * t1[:, None, :]).sum(-1)
+    v = (dx * t2[:, None, :]).sum(-1)
+    sc = torch.exp(log_s)
+    g = torch.exp(-0.5 * ((u / sc[:, :1]) ** 2 + (v / sc[:, 1:2]) ** 2))
+    ok = (den.abs() > 1e-9) & (d > 1e-6)
+    g = torch.where(ok, g, torch.zeros_like(g))
+    d = torch.where(ok, d, torch.zeros_like(d))
+    a = (torch.sigmoid(logit)[:, None] * g).clamp(max=0.999)
+    order = torch.argsort(torch.where(g > 0, d, torch.full_like(d, float("inf"))), dim=0)
+    a_s, d_s = torch.gather(a, 0, order), torch.gather(d, 0, order)
+    trans = torch.cat([torch.ones_like(a_s[:1]), torch.cumprod(1.0 - a_s, 0)[:-1]], 0)
+    w_s = a_s * trans
+    W = w_s.sum(0)
+    return (w_s * d_s).sum(0) / W.clamp(min=1e-12), W
+
+
 class GsplatBackend:
     """gsplat 2DGS ``SurfelBackend``.
 
@@ -107,7 +138,15 @@ class GsplatBackend:
         stride: int = 4,
         device: str = "cuda",
         chunk: int = 2048,
+        depth_mode: str = "ray_plane",
+        px_stride: int = 2,
     ):
+        if depth_mode not in ("ray_plane", "gsplat"):
+            raise ValueError(depth_mode)
+        # ray_plane: supervise the same per-pixel ray-plane depth that render_cavity and the Jacobians
+        # use (gsplat's RGB+D blends per-surfel centre depth, which never sees surfel tilt);
+        # gsplat: the stock rasteriser depth (kept for comparison)
+        self.depth_mode, self.px_stride = depth_mode, px_stride
         self.n_warmup, self.n_steps = n_warmup, n_steps
         self.lrs = (lr_mu, lr_rot, lr_scale, lr_opacity)
         self.stride, self.device = stride, device
@@ -166,6 +205,10 @@ class GsplatBackend:
             h, wd = f.depth.shape
             d = np.asarray(f.depth, dtype=np.float32)
             valid = np.isfinite(d) & (d > 0)
+            sel = np.zeros(h * wd, bool)
+            sel[:: self.px_stride] = True
+            sel &= valid.reshape(-1)
+            rays_np = _frame_rays(f)
             views.append(
                 (
                     w,
@@ -175,6 +218,12 @@ class GsplatBackend:
                     wd,
                     T(np.where(valid, d, 0.0)),
                     torch.as_tensor(valid, device=dev),
+                    (
+                        torch.as_tensor(np.nonzero(sel)[0], device=dev),
+                        T(rays_np[sel]),
+                        T(f.T_wc[:3, 3]),
+                        T(f.T_wc[:3, :3]),
+                    ),
                 )
             )
         loss_v = float("nan")
@@ -185,7 +234,14 @@ class GsplatBackend:
             R = R0 @ torch.linalg.matrix_exp(_skew(phi))
             quats = _rot_to_quat_wxyz(R)
             loss = mu.new_zeros(())
-            for w, view, Kmat, h, wd, y, valid in views:
+            for w, view, Kmat, h, wd, y, valid, rp in views:
+                if self.depth_mode == "ray_plane":
+                    idx, rays_t, c_t, Rc_t = rp
+                    D, Wacc = _ray_plane_depth(mu, R, log_s, logit, c_t, Rc_t, rays_t)
+                    m = Wacc > 0.05
+                    if m.any():
+                        loss = loss + w * ((D - y.reshape(-1)[idx])[m] ** 2).mean()
+                    continue
                 out = rasterization_2dgs(
                     means=mu,
                     quats=quats,
