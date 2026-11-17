@@ -29,13 +29,14 @@
             country={USA}}
 
 \begin{abstract}
-Single-image depth networks leave global scale free, fail regionally, and return a point estimate against which no covariance can be tested.
+Single-image depth networks leave the global scale free, fail regionally, and return a point estimate that carries no covariance to test against.
 We study a generative alternative: a latent diffusion model (SDXL with low-rank adaptation) fine-tuned to sample an affine-invariant per-view depth from the RGB image alone.
-Its unguided samples are the object of a leave-view-out fault test: a Gaussian-splat (2DGS) surface is built from the other posed views only, never view $j$,
-a per-view scale and shift is fitted between the samples and the render, and the residual is tested against the sample covariance plus the render covariance with an empirically calibrated threshold.
-Guided sampling, in which the likelihood gradient toward the leave-view-out render acts in the last denoising steps, is intended as the multi-view-consistent product; training is planned to be semi-self-supervised, with ground-truth depth where it exists and render-and-compare elsewhere.
-So far we have (i) a synthetic check of the statistic, in which fitting the scale and shift costs almost no power when the covariance is known (minimum detectable fault $0.88\sigma$ against $0.89\sigma$) and an estimated covariance accounts for most of the power loss,
-and (ii) a supervised first stage of the model, trained for 2{,}000 of a planned 10{,}000 steps on BlendedMVS and Hypersim, whose validation loss fell monotonically; on three held-out views of one ETH3D scene the affine-fitted AbsRel (fitted to sparse laser depth) was between $0.10$ and $0.11$ depending on checkpoint and number of sampler steps, whereas on one of those views, the only one where we scored it, the untrained base gave $0.38$ (trained: $0.11$--$0.14$).
+Its unguided samples feed a leave-view-out fault test: a Gaussian-splat (2DGS) surface is built from the other posed views only, never the tested view,
+a per-view scale and shift is fitted between the samples and the render, and the residual is tested against the sum of the sample and render covariances with an empirically calibrated threshold.
+Guided sampling, in which the likelihood gradient toward the leave-view-out render acts in the last denoising steps, is the intended multi-view-consistent product; training is planned to be semi-self-supervised, with ground-truth depth where it exists and render-and-compare elsewhere.
+So far we have two pieces of evidence.
+(i) A synthetic check of the statistic: with a known covariance, fitting the scale and shift costs almost no power (minimum detectable fault $0.88\sigma$ against $0.89\sigma$), and an estimated covariance accounts for most of the power loss.
+(ii) A supervised first stage of the model, trained for 2{,}000 of a planned 10{,}000 steps on BlendedMVS and Hypersim, whose validation loss fell monotonically. On three held-out views of one ETH3D scene its AbsRel, after a scale and shift fitted to sparse laser depth, was $0.10$--$0.11$ depending on checkpoint and number of sampler steps; on the one view where we also scored the untrained base, the base gave $0.38$ and the trained model $0.11$--$0.14$.
 That check is a sanity test, not a result.
 The semi-self-supervised stage, guided sampling, and the calibration and fault-injection experiments on real model samples have not been run, and no claim is made about them.
 \end{abstract}
