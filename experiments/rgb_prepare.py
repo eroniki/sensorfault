@@ -26,7 +26,11 @@ def load_split(tar_path: Path, transforms: Path):
     want = {f["frame_index"]: f for f in T["frames"]}
     imgs, poses, idx = [], [], []
     with tarfile.open(tar_path) as tf:
-        members = {Path(m.name).stem: m for m in tf.getmembers() if m.name.lower().endswith((".png", ".jpg"))}
+        members = {
+            Path(m.name).stem: m
+            for m in tf.getmembers()
+            if m.name.lower().endswith((".png", ".jpg"))
+        }
         for k in sorted(want):
             m = members.get(f"{k:04d}")
             if m is None:
@@ -49,8 +53,18 @@ def main(root: str) -> None:
     tr = load_split(root / "block_3_rgb_train.tar", root / "transforms_block3.json")
     te = load_split(root / "block_3_rgb_test.tar", root / "transforms_block3_test.json")
     fov = tr[3]
-    np.savez(root / "rgb_block3_half.npz", train_images=tr[0], train_c2w=tr[1], train_frames=tr[2],
-             test_images=te[0], test_c2w=te[1], test_frames=te[2], fov_x=fov, width=W, height=H)
+    np.savez(
+        root / "rgb_block3_half.npz",
+        train_images=tr[0],
+        train_c2w=tr[1],
+        train_frames=tr[2],
+        test_images=te[0],
+        test_c2w=te[1],
+        test_frames=te[2],
+        fov_x=fov,
+        width=W,
+        height=H,
+    )
     # initial points: E1 surfels (exact-depth voxels), colours from the first training view that sees them
     K, views, geo = pickle.loads((root / "e1_cache_step20_vox3.0.pkl").read_bytes())
     mu = geo["mu"]
@@ -65,9 +79,23 @@ def main(root: str) -> None:
         ok = (z > 1) & (u >= 0) & (u < W - 1) & (v >= 0) & (v < H - 1) & ~seen
         col[ok] = img[v[ok].astype(int), u[ok].astype(int)]
         seen |= ok
-    np.savez(root / "rgb_block3_init.npz", means=mu.astype(np.float32), colors=(col / 255.0).astype(np.float32), seen=seen)
-    print(json.dumps({"train": int(len(tr[2])), "test": int(len(te[2])), "fov_x": fov, "init_points": int(len(mu)),
-                      "init_coloured": int(seen.sum())}))
+    np.savez(
+        root / "rgb_block3_init.npz",
+        means=mu.astype(np.float32),
+        colors=(col / 255.0).astype(np.float32),
+        seen=seen,
+    )
+    print(
+        json.dumps(
+            {
+                "train": int(len(tr[2])),
+                "test": int(len(te[2])),
+                "fov_x": fov,
+                "init_points": int(len(mu)),
+                "init_coloured": int(seen.sum()),
+            }
+        )
+    )
 
 
 if __name__ == "__main__":
