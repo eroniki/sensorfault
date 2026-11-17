@@ -21,6 +21,24 @@ Load: `sensorfault.depthcache.load_depth(root, dataset, scene, model_id, view_id
 Models run one at a time; the estimator is deleted and the CUDA cache emptied between models
 (8 GB target). Defaults live in `configs/depth_cache.yaml`.
 
+## GPU environment (tested 2026-11-17, TITAN RTX 24 GB, driver 550)
+Python 3.10 conda env with `PYTHONNOUSERSITE=1` (user site-packages otherwise leak in), then:
+
+    pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+    pip install -e ".[dev]" transformers pillow huggingface_hub safetensors einops timm tqdm
+    # UniDepth: clone lpiccinelli-eth/UniDepth, `pip install --no-deps -e <clone>`; it imports
+    # wandb, h5py and tabulate at import time; xformers is optional (warning only)
+    pip install wandb h5py tabulate
+    # Metric3D: clone YvanYin/Metric3D, set SENSORFAULT_METRIC3D_HUB=<clone>. Its mono/utils/comm.py
+    # imports mmcv.utils (mmcv 1.x); mmengine alone is not enough. Python-only build:
+    pip install "setuptools<70" wheel mmengine opencv-python-headless
+    MMCV_WITH_OPS=0 pip install --no-build-isolation mmcv==1.7.2
+
+transformers >= 5 needs torch >= 2.6 (it disables torch silently below that).
+MatrixCity block 3 test split (`small_city/aerial/test/block_3_test.tar`, its `transforms.json`,
+19 frames of 25 PNGs, 1920x1080 RGBA) extracts to `data/matrixcity/block3/images/<frame:04d>.png`,
+which is the reader's fallback name.
+
 ## Datasets
 - MatrixCity: reads `<data_root>/matrixcity/<scene>/transforms.json` and `images/` (frame image,
   `frame['file_path']` or `<frame_index:04d>.png`); focal from `camera_angle_x` at 1920 px width as in

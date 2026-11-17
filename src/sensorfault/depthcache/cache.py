@@ -182,6 +182,8 @@ class ModelCache:
             "shape": list(np.asarray(result.depth).shape),
             "has_confidence": result.confidence is not None,
             "focal_px": None if result.focal_px is None else float(result.focal_px),
+            # e.g. Depth Pro's predicted focal and focal_source: needed to undo a focal rescale
+            "extra": json.loads(json.dumps(result.extra or {}, default=float)),
         }
 
     def fail(self, view_id: str, error: str, seconds: float = 0.0) -> None:

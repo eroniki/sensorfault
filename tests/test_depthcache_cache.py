@@ -196,8 +196,10 @@ def test_unknown_model_and_missing_wrapper(tmp_path):
         run("ds", "sc", ["nope"], tmp_path, views=make_views())
     from sensorfault.depthcache.run import default_builder
 
-    with pytest.raises((RuntimeError, ImportError, AttributeError, OSError)):
-        default_builder("unidepth_v2").load(device="cpu")  # wrapper absent or weights absent
+    est = default_builder("unidepth_v2")
+    est.checkpoint = str(tmp_path / "no-such-checkpoint")  # never reach the hub from this test
+    with pytest.raises((RuntimeError, ImportError, AttributeError, OSError, ValueError)):
+        est.load(device="cpu")  # wrapper deps absent or weights absent
 
 
 def test_stub_datasets_raise_clearly():
@@ -226,3 +228,17 @@ def test_matrixcity_views_from_synthetic_block(tmp_path):
 
     Image.fromarray(np.full((4, 6, 3), 9, np.uint8)).save(block / "images" / "7.png")
     assert views[0].load_rgb().shape == (4, 6, 3)
+
+
+def test_manifest_keeps_result_extra(tmp_path):
+    cache = dc.ModelCache(tmp_path, "ds", "sc", "depth_pro", "float32")
+    r = DepthResult(
+        np.ones((2, 2), np.float32),
+        "metric_depth",
+        focal_px=10.0,
+        extra={"focal_source": "given_rescaled", "focal_pred_px": np.float32(8.0)},
+    )
+    cache.put("0001", r, 0.1)
+    cache.flush()
+    rec = dc.ModelCache(tmp_path, "ds", "sc", "depth_pro").manifest["views"]["0001"]
+    assert rec["extra"] == {"focal_source": "given_rescaled", "focal_pred_px": 8.0}

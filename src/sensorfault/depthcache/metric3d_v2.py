@@ -77,9 +77,15 @@ def fit_geometry(
     return s, (nh, nw), (ph // 2, ph - ph // 2, pw // 2, pw - pw // 2)
 
 
-def decanonicalise(depth_canon: np.ndarray, focal_net_px: float) -> np.ndarray:
-    """Canonical-camera depth -> metric depth for a camera of focal ``focal_net_px`` (net input px)."""
-    return np.clip(depth_canon * np.float32(focal_net_px / F_CANON), 0.0, MAX_DEPTH_M).astype(
+def decanonicalise(
+    depth_canon: np.ndarray, focal_net_px: float, max_depth_m: float = MAX_DEPTH_M
+) -> np.ndarray:
+    """Canonical-camera depth -> metric depth for a camera of focal ``focal_net_px`` (net input px).
+
+    Clamped to [0, max_depth_m]; the upstream demo uses 300 m, which is below most of a 300 m-altitude
+    oblique aerial view (MatrixCity block 3: median GT depth ~340 m), so aerial runs may raise it.
+    """
+    return np.clip(depth_canon * np.float32(focal_net_px / F_CANON), 0.0, max_depth_m).astype(
         np.float32
     )
 
@@ -113,6 +119,7 @@ class Metric3DV2Estimator:
         checkpoint_path: str | None = None,
         hub_source: str | None = None,
         assumed_focal_px: float | None = None,
+        max_depth_m: float = MAX_DEPTH_M,
     ) -> None:
         if variant not in HUB_ENTRY:
             raise ValueError(f"variant must be one of {sorted(HUB_ENTRY)}")
@@ -122,6 +129,7 @@ class Metric3DV2Estimator:
             "SENSORFAULT_METRIC3D_HUB", DEFAULT_HUB_SOURCE
         )
         self.assumed_focal_px = assumed_focal_px
+        self.max_depth_m = float(max_depth_m)
         self._model = None
         self._device = "cpu"
 
@@ -171,7 +179,7 @@ class Metric3DV2Estimator:
         x, s, pad = preprocess(rgb)
         d_net, c_net = self._run(x)
         depth = resize_bilinear(unpad(np.squeeze(d_net), pad), (h, w))
-        depth = decanonicalise(depth, s * f)
+        depth = decanonicalise(depth, s * f, self.max_depth_m)
         conf = None
         if c_net is not None:
             conf = resize_bilinear(unpad(np.squeeze(c_net), pad), (h, w))
@@ -197,6 +205,7 @@ class Metric3DV2Estimator:
             "kind": self.kind,
             "canonical_focal_px": F_CANON,
             "input_hw": list(INPUT_HW),
+            "max_depth_m": self.max_depth_m,
             "confidence_semantics": CONFIDENCE_SEMANTICS,
             "weights_licence": WEIGHTS_LICENCE,
             "versions": versions,
@@ -208,5 +217,6 @@ def build(
     checkpoint_path: str | None = None,
     hub_source: str | None = None,
     assumed_focal_px: float | None = None,
+    max_depth_m: float = MAX_DEPTH_M,
 ) -> DepthEstimator:
-    return Metric3DV2Estimator(variant, checkpoint_path, hub_source, assumed_focal_px)
+    return Metric3DV2Estimator(variant, checkpoint_path, hub_source, assumed_focal_px, max_depth_m)

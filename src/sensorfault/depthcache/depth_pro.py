@@ -2,8 +2,10 @@
 
 Metric depth, no confidence output. The HF port (checkpoint ``apple/DepthPro-hf``) is used rather
 than the ``depth_pro`` pip package so that one dependency (transformers) serves all wrappers.
-Weights licence: the Hugging Face card shows ``apple-amlr`` / "Apple-ASCL" (Apple ML Research
-licence; research use) and is not an OSI licence; read the licence text before any other use.
+Weights licence: the Hugging Face cards (``apple/DepthPro-hf``, ``apple/DepthPro``) show
+``apple-amlr`` / "Apple-ASCL" (Apple ML Research licence; research use), not an OSI licence. The
+GitHub release (apple/ml-depth-pro README) instead says the weights are under its LICENSE, the
+Apple sample-code licence. The two disagree (checked 2026-11-17); read both before any other use.
 All heavy imports are lazy; nothing is downloaded at import time.
 """
 
@@ -18,7 +20,8 @@ from sensorfault.depthcache.base import DepthEstimator, DepthResult
 
 DEFAULT_CHECKPOINT = "apple/DepthPro-hf"
 WEIGHTS_LICENCE = (
-    "apple-amlr (Apple ML Research licence; HF card also says Apple-ASCL); research use"
+    "apple-amlr (Apple ML Research licence; HF card also says Apple-ASCL); research use. "
+    "GitHub apple/ml-depth-pro says its Apple sample-code LICENSE; sources disagree"
 )
 
 

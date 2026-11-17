@@ -36,10 +36,16 @@ def main(argv=None) -> int:
     p.add_argument("--root", default=cfg.get("root", "data/depth_cache"))
     p.add_argument("--dtype", default=cfg.get("dtype", "float16"), choices=["float16", "float32"])
     p.add_argument("--data-root", default=None, help="dataset root (default $SENSORFAULT_DATA)")
+    p.add_argument("--transforms", default=None, help="MatrixCity transforms.json override")
+    p.add_argument("--images", default=None, help="MatrixCity RGB directory override")
     p.add_argument("--dry-run", action="store_true", help="list work, load no model")
     a = p.parse_args(argv)
     models = [m.strip() for m in a.models.split(",") if m.strip()]
-    kw = {"data_root": a.data_root} if a.data_root else {}
+    kw = {
+        k: v
+        for k, v in [("data_root", a.data_root), ("transforms", a.transforms), ("images", a.images)]
+        if v
+    }
     try:
         run(a.dataset, a.scene, models, a.root, a.device, a.limit, a.dry_run, a.dtype, **kw)
     except (DatasetUnavailableError, ValueError, RuntimeError) as e:
