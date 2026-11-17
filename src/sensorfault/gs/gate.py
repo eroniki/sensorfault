@@ -120,6 +120,11 @@ class ViewGateTest:
         # scale of the region-scan z-scores: fitted from the other views ("empirical", default; one more
         # scene-level scale, no per-view parameters) or tied to the energy temperature ("energy")
         self.scan_noise = p.pop("scan_noise", "empirical")
+        # cavity mean: Newton step on the other views' gradient ("others", default) or on minus the
+        # tested view's gradient ("view", exact only at a stationary point)
+        self.cavity_gradient = p.pop("cavity_gradient", "others")
+        if self.cavity_gradient not in ("others", "view"):
+            raise ValueError(f"cavity_gradient={self.cavity_gradient!r}")
         if self.scan_noise not in ("empirical", "energy"):
             raise ValueError(f"scan_noise={self.scan_noise!r}")
         self.shared_bias = p.pop("shared_bias", "distance")
@@ -204,7 +209,17 @@ class ViewGateTest:
             block = [v for v in self.blocks.get(j, [j]) if v in infos]
             Lj = sum((infos[v].Lambda for v in block), np.zeros_like(L))
             ej = sum((infos[v].eta for v in block), np.zeros((K, DIM)))
-            mean, cov = leave_view_out_newton(np.zeros((K, 9)), L, Lj, -ej)
+            if self.cavity_gradient == "others":
+                # Newton step on the other views' own gradient. At an exact MAP the total gradient is
+                # zero, so sum_{v not in block} eta_v = -eta_block and this equals the plain
+                # infinitesimal jackknife; away from the MAP (an Adam fit that has not converged) it
+                # also removes the leftover total gradient instead of carrying it into the cavity.
+                g_cav = sum(
+                    (vi.eta for v, vi in infos.items() if v not in block), np.zeros((K, DIM))
+                )
+            else:
+                g_cav = -ej
+            mean, cov = leave_view_out_newton(np.zeros((K, 9)), L, Lj, g_cav)
             if self.spawn == "keep_view_j_only_surfels":
                 keep = np.ones(K, bool)
             else:

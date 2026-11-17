@@ -308,3 +308,12 @@ def test_scan_noise_and_omega_options_validate_and_run():
         run(0, heterogeneity_omega="bogus")
     (p, lp), g = run(0, views=["v1"])  # defaults: empirical scan scale, estimated omega
     assert lp["v1"] <= 0.0 and "gamma2_scan" in g.last["v1"] and g.last["v1"]["omega"] >= 0.0
+
+
+def test_cavity_gradient_options_agree_at_a_stationary_state():
+    sc = {"bias_view": "v2", "bias": 0.05}
+    (_, a), _ = run(5, params={"cavity_gradient": "others"}, scene=sc, views=["v2"])
+    (_, b), _ = run(5, params={"cavity_gradient": "view"}, scene=sc, views=["v2"])
+    assert a["v2"] < -10 and b["v2"] < -10  # both detect the biased view
+    with pytest.raises(ValueError):
+        run(0, params={"cavity_gradient": "bogus"})
