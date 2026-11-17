@@ -9,7 +9,7 @@
 \node[box, right=of in] (pose) {\textbf{Poses}\\[1pt] cubic B-spline in time\\ from GNSS/IMU;\\ pose graph + render-\\and-compare refinement\\ (no correspondences)};
 \node[box, right=of pose, text width=3.15cm] (map) {\textbf{2DGS surfel map}\\[1pt] depth-only geometry;\\ information per surfel\\[2pt] \mbox{$\Lambda_k=\Lambda_0+\sum\nolimits_i J^{\top}\!R^{-1}J$}};
 \node[new, right=of map, text width=2.9cm] (cav) {\textbf{Leave-$B$-out cavity}\\[1pt] remove view $j$ and its\\ block $\mathcal{B}_j$ of $B$ strip frames:\\[2pt] \mbox{$\Lambda_k-\sum\nolimits_{i\in\mathcal{B}_j}\Lambda_k^{(i)}$}\\[1pt] + one Newton step};
-\node[new, below=1.0cm of cav] (ren) {\textbf{Render into view $j$}\\[1pt] \includegraphics[width=2.25cm]{\qfigdir/faulty_render.png}\\[1pt] depth $\hat D_{-j}$, variance $V_{-j}$};
+\node[new, below=1.3cm of cav] (ren) {\textbf{Render into view $j$}\\[1pt] \includegraphics[width=2.25cm]{\qfigdir/faulty_render.png}\\[1pt] depth $\hat D_{-j}$, variance $V_{-j}$};
 \node[new, left=of ren, text width=2.9cm] (res) {\textbf{Whitened residual}\\[1pt] \includegraphics[width=2.25cm]{\qfigdir/faulty_std.png}\\[1pt] \mbox{$\Sigma_r=\gamma^2DCD$}\\ \mbox{$+\,a^2\,UP^{(-j)}U^{\top}+\dots$}};
 \node[new, left=of res] (scan) {\textbf{Region scan}\\[1pt] \includegraphics[width=2.25cm]{\qfigdir/faulty_scan.png}\\[1pt] $\max_{\mathcal{R}}|z_{\mathcal{R}}|$ and energy $T_j$};
 \node[new, left=of scan] (gate) {\textbf{Gate}\\[1pt] Holm over\\ $M=NR_{\max}$ tests\\ at level $\alpha$:\\[2pt] keep, \textcolor{sfred}{flag}\\ or untestable};
@@ -20,7 +20,8 @@
 \draw[arr] (ren) -- (res);
 \draw[arr] (res) -- (scan);
 \draw[arr] (scan) -- (gate);
-\draw[arr, sfred, dashed] (gate.north) -- ($(gate.north)!0.5!(in.south)$) -| node[pos=0.22, above, font=\sffamily\fontsize{6}{7}\selectfont, text=sfred, inner sep=1.5pt]
+\coordinate (loopy) at ($(gate.north|-in.south)!0.5!(gate.north|-ren.north)$);
+\draw[arr, sfred, dashed, rounded corners=2pt] (gate.north) -- (loopy) -| node[pos=0.3, above, font=\sffamily\fontsize{6}{7}\selectfont, text=sfred, inner sep=1.5pt]
   {outer loop: drop the top flagged view, retrain} (map.south);
 \node[tag, anchor=south west] at (in.north west) {data};
 \node[tag, anchor=south west, text=sfred] at (cav.north west) {this paper};
