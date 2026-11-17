@@ -170,8 +170,15 @@ def view_information(
     a: float = 1.0,
     information_deflation: float = 1.0,
     j_opacity: np.ndarray | None = None,
+    lumped: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Information (Lambda_i, eta_i) that one view adds to every surfel (10 x 10 blocks).
+
+    ``lumped=True`` builds the geometric part of Lambda from sqrt(w_hat) J instead of w_hat J, i.e.
+    Lambda_k = sum_u w_uk J^T J / sigma^2. Since the weights sum to one per pixel, this block-diagonal
+    matrix majorises the true Hessian (Jensen), so a step Lambda^{-1} eta cannot overshoot when
+    surfels overlap; the unlumped w_hat^2 blocks drop the cross-surfel terms and overshoot by the
+    overlap factor sum w / sum w^2. The gradient eta is unchanged.
 
     Contributions are listed per (pixel, surfel) pair: ``pix`` pixel index, ``gid`` surfel index,
     ``w_hat`` normalised weight, ``J`` (m, 10) ray-surfel Jacobians, ``j_opacity`` (m,) optional
@@ -184,8 +191,12 @@ def view_information(
     Jw = a * w_hat[:, None] * J
     if j_opacity is not None:
         Jw[:, OPA] = a * j_opacity
+    Jl = Jw
+    if lumped:
+        Jl = Jw.copy()
+        Jl[:, :OPA] = a * np.sqrt(w_hat)[:, None] * J[:, :OPA]
     inv = information_deflation / sigma2[pix]
-    np.add.at(L, gid, inv[:, None, None] * Jw[:, :, None] * Jw[:, None, :])
+    np.add.at(L, gid, inv[:, None, None] * Jl[:, :, None] * Jl[:, None, :])
     np.add.at(eta, gid, (inv * e[pix])[:, None] * Jw)
     return L, eta
 

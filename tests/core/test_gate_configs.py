@@ -10,7 +10,7 @@ import yaml
 
 import sensorfault.baselines  # noqa: F401  (registers the stubs)
 from sensorfault.baselines.base import get_fuser, list_fusers
-from sensorfault.baselines.gate_testbed import GATE_TESTBED_NAMES
+from sensorfault.baselines.gate_testbed import GATE_TESTBED_NAMES, IMPLEMENTED
 from sensorfault.runner import load_config
 
 CFG = Path(__file__).resolve().parents[2] / "configs"
@@ -66,7 +66,7 @@ def test_baseline_files_use_registered_names_and_cover_all_stubs():
     used = set(baseline_ids().values())
     assert used == set(GATE_TESTBED_NAMES)
     assert used <= set(list_fusers())
-    for n in used:
+    for n in used - IMPLEMENTED:
         ok, reason = type(get_fuser(n)).available()
         assert not ok and "not implemented" in reason
 
