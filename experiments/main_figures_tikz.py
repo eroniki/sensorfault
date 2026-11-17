@@ -223,8 +223,8 @@ def upu() -> str:
 # ------------------------------------------------------------------------------------------ mechanism illustrations
 
 
-def _ell(P: np.ndarray, k: float = 2.0, m: int = 72) -> str:
-    """k-sigma ellipse of a 2x2 covariance as a closed coordinate list."""
+def _ell(P: np.ndarray, k: float = 1.0, m: int = 72) -> str:
+    """k-sigma ellipse of a 2x2 covariance as a coordinate list."""
     w, V = np.linalg.eigh(P)
     t = np.linspace(0, 2 * np.pi, m, endpoint=False)
     pts = (V @ np.diag(k * np.sqrt(w)) @ np.stack([np.cos(t), np.sin(t)])).T
@@ -232,245 +232,204 @@ def _ell(P: np.ndarray, k: float = 2.0, m: int = 72) -> str:
 
 
 def surfel() -> str:
-    """One surfel's uncertainty and how it renders (a), and fusion / cavity in its (nu, tau) plane (b)."""
-    # ---------------- (a) geometry, tikz cm; surfel tilted by 8 degrees, half-length 2.2
-    th = np.deg2rad(8)
-    t = np.array([np.cos(th), np.sin(th)])
-    nrm = np.array([-np.sin(th), np.cos(th)])
-    mu = np.array([0.0, 0.0])
-    L = 2.2
-    Pnn, Ptt = 0.010, 0.010  # normal-offset and tilt variances (schematic)
-    s = np.linspace(-L, L, 45)
-    sd = np.sqrt(Pnn + s**2 * Ptt)
-    up = [mu + a * t + 2 * b * nrm for a, b in zip(s, sd)]
-    lo = [mu + a * t - 2 * b * nrm for a, b in zip(s, sd)][::-1]
-    P = lambda p: f"({p[0]:.3f},{p[1]:.3f})"
-    seg = lambda a, b: f"{P(a)} -- {P(b)}"
-    env = " -- ".join(P(p) for p in up + lo) + " -- cycle"
-    cam = np.array([-0.9, 3.0])
-    sx = 1.35  # where the ray meets the surfel, along t
-    x = mu + sx * t
-    w = (x - cam) / np.linalg.norm(x - cam)
+    """One surfel: its uncertainty in section, the rendered depth std along it, and fuse/cavity in (nu, tau)."""
+    L = 1.0  # surfel half-length [m]
+    s = np.linspace(-L, L, 41)
 
-    def hit(c, n_, p0):  # ray c + l w meets the plane through p0 with normal n_
-        return c + (n_ @ (p0 - c)) / (n_ @ w) * w
-
-    nu = 0.28
-    x_nu = hit(cam, nrm, mu + nu * nrm)
-    tau = np.deg2rad(8)
-    R = np.array([[np.cos(tau), -np.sin(tau)], [np.sin(tau), np.cos(tau)]])
-    t2, n2 = R @ t, R @ nrm
-    x_tau = hit(cam, n2, mu)
-    font = r"\sffamily\fontsize{7}{8.4}\selectfont"
-    small = r"\sffamily\fontsize{6}{7}\selectfont"
-    dim = 0.72  # lever-arm dimension line below the surfel
-    a_tex = rf"""\fill[sforange!30] {env};
-\draw[sforange!70!black, line width=0.3pt] {" -- ".join(P(p) for p in up)};
-\draw[sforange!70!black, line width=0.3pt] {" -- ".join(P(p) for p in lo)};
-\draw[sfgrey, densely dashed, line width=0.6pt] {seg(mu + nu * nrm - L * t, mu + nu * nrm + L * t)};
-\draw[sforange!80!black, densely dashed, line width=0.6pt] {seg(mu - L * t2, mu + L * t2)};
-\draw[black, line width=2.0pt] {seg(mu - L * t, mu + L * t)};
-\draw[->, line width=0.6pt] {P(mu)} -- {P(mu + 0.85 * nrm)} node[left=0pt, inner sep=1pt] {{$\mathbf{{n}}$}};
-\fill {P(mu)} circle (1.3pt);
-\node[anchor=south east, inner sep=1pt] at {P(mu + 0.03 * nrm - 0.06 * t)} {{$\boldsymbol\mu_k$}};
-\draw[sfred, line width=0.7pt] {P(cam)} -- {P(x + 0.5 * w)};
-\fill[black] ({cam[0] - 0.2:.3f},{cam[1] + 0.2:.3f}) -- ({cam[0] + 0.2:.3f},{cam[1] + 0.2:.3f}) -- {P(cam)} -- cycle;
-\node[anchor=east, inner sep=2pt] at ({cam[0] - 0.2:.3f},{cam[1] + 0.1:.3f}) {{view $i$}};
-\node[text=sfred, anchor=west, inner sep=2pt] at {P(cam + 0.45 * (x - cam))} {{pixel $u$, ray $\mathbf{{w}}$}};
-\fill[sfgrey] {P(x_nu)} circle (1.1pt);
-\fill[sforange!80!black] {P(x_tau)} circle (1.1pt);
-\fill[sfred] {P(x)} circle (1.3pt);
-\node[sfred, anchor=south west, inner sep=1pt] at {P(x + 0.12 * t + 0.42 * nrm)} {{$\mathbf{{x}}$, depth $d_k$}};
-\draw[sfgrey, line width=0.3pt] {seg(mu - 0.1 * nrm, mu - (dim + 0.08) * nrm)};
-\draw[sfgrey, line width=0.3pt] {seg(x - 0.1 * nrm, x - (dim + 0.08) * nrm)};
-\draw[<->, >={{Stealth[length=2.5pt]}}, line width=0.4pt] {seg(mu - dim * nrm, x - dim * nrm)};
-\node[anchor=north, rotate={np.rad2deg(th):.1f}, inner sep=1.5pt, font={small}] at {P(0.5 * (mu + x) - dim * nrm)} {{$\mathbf{{t}}^{{\top}}(\mathbf{{x}}-\boldsymbol\mu_k)$}};
-"""
-    key = rf"""\begin{{scope}}[shift={{(0.1cm,-0.15cm)}}, font={small}]
-\draw[black, line width=2.0pt] (0,0) -- (0.4,0); \node[anchor=west] at (0.45,0) {{surfel shape}};
-\draw[sfgrey, densely dashed, line width=0.6pt] (1.95,0) -- (2.35,0); \node[anchor=west] at (2.4,0) {{offset $\nu$}};
-\draw[sforange!80!black, densely dashed, line width=0.6pt] (3.45,0) -- (3.85,0); \node[anchor=west] at (3.9,0) {{tilt $\tau$}};
-\fill[sforange!30, draw=sforange!70!black, line width=0.3pt] (4.75,-0.07) rectangle (5.15,0.07); \node[anchor=west] at (5.2,0) {{$\pm2\sqrt{{J_{{uk}}P_kJ_{{uk}}^{{\top}}}}$}};
-\node[anchor=west] at (0,-0.42) {{$J_{{uk}}\propto\bigl[\,1,\ -\mathbf{{t}}^{{\top}}(\mathbf{{x}}-\boldsymbol\mu_k)\bigr]/\mathbf{{n}}^{{\top}}\mathbf{{w}}$: the band widens with the lever arm}};
-\end{{scope}}
-"""
-    # ---------------- (b) (nu, tau) plane: messages, fused belief, cavity
-    def info(s0, s1, npx, sig=1.0):
+    def info(s0, s1, npx, sig=0.05):  # depth pixels on [s0, s1]; J = [1, -s] in (nu [m], tau [rad])
         ss = np.linspace(s0, s1, npx)
         J = np.stack([np.ones_like(ss), -ss], 1)
         return J.T @ J / sig**2
 
-    L0 = np.diag([0.25, 0.25])
-    A, Bj = info(-1.7, -0.4, 4), info(-1.0, 1.7, 8)
+    L0 = np.diag([1 / 0.5**2, 1 / 0.5**2])
+    A, Bj = info(-1.0, -0.2, 6), info(-0.6, 1.0, 12)
     fused = np.linalg.inv(L0 + A + Bj)
     cav = np.linalg.inv(L0 + A)
-    lim = 1.8
-    b_tex = rf"""\begin{{axis}}[sfaxis, scale only axis, width=3.7cm, height=3.7cm, axis equal image, xmin=-{lim}, xmax={lim}, ymin=-{lim}, ymax={lim},
-  xlabel={{Normal offset $\nu$}}, ylabel={{Tilt $\tau$}}, xtick={{-1,0,1}}, ytick={{-1,0,1}}, clip=true, at={{(9.55cm,0.75cm)}}, anchor=south west,
-  title={{\sfsub{{b}} Fuse and cavity in $(\nu,\tau)$, $1\sigma$}}, legend style={{at={{(0.42,-0.3)}}, anchor=north, legend columns=2, font=\sffamily\tiny}}]
-\addplot[fill=sforange!45, draw=sforange!70!black, line width=0.6pt, area legend] coordinates {{{_ell(cav, 1.0)}}} -- cycle;
-\addplot[fill=black!75, draw=black, line width=0.6pt, area legend] coordinates {{{_ell(fused, 1.0)}}} -- cycle;
-\addplot[black, line width=0.6pt, densely dashed] coordinates {{{_ell(np.linalg.inv(A), 1.0)}}} -- cycle;
-\addplot[sfred, line width=0.7pt, densely dashed] coordinates {{{_ell(np.linalg.inv(Bj), 1.0)}}} -- cycle;
-\legend{{cavity $P_k^{{(-j)}}$, fused $P_k$, view outside $\mathcal{{B}}_j$, block $\mathcal{{B}}_j$}}
-\end{{axis}}
-"""
-    return rf"""% One surfel's uncertainty and how it renders; fusion and cavity in its (nu, tau) plane
-% (generated by experiments/main_figures_tikz.py); illustrative, not a measurement
-\begin{{tikzpicture}}[font={font}, >={{Stealth[length=3.5pt]}}]
-\node[anchor=south west, inner sep=0pt] at (0,4.55) {{\sfsub{{a}} A surfel's uncertainty renders into depth}};
-\begin{{scope}}[shift={{(3.5cm,1.25cm)}}]
-{a_tex}\end{{scope}}
-{key}{b_tex}\end{{tikzpicture}}
+
+    def sd(P):  # rendered depth std along the surfel, nadir ray: sqrt([1,-s] P [1,-s]^T)
+        return np.sqrt(P[0, 0] - 2 * s * P[0, 1] + s**2 * P[1, 1])
+
+    sf, sc = sd(fused), sd(cav)
+    k = 4.0  # band exaggeration in (a)
+    band = lambda S, col: (
+        rf"\addplot[fill={col}, draw=none, forget plot] coordinates {{"
+        + " ".join(f"({a:.3f},{2 * k * b:.4f})" for a, b in zip(s, S))
+        + " "
+        + " ".join(f"({a:.3f},{-2 * k * b:.4f})" for a, b in zip(s[::-1], S[::-1]))
+        + "} -- cycle;"
+    )
+    nu, tau = 0.1, 0.12  # one draw of each perturbation, shown at the same x10 scale
+    sx = 0.55  # where the drawn ray meets the surfel
+    cm = lambda v: v * 100
+    deg = lambda v: np.rad2deg(v)
+    Pc = np.diag([100, np.rad2deg(1)]) @ cav @ np.diag([100, np.rad2deg(1)])
+    Pf = np.diag([100, np.rad2deg(1)]) @ fused @ np.diag([100, np.rad2deg(1)])
+    PA = np.diag([100, np.rad2deg(1)]) @ np.linalg.inv(A) @ np.diag([100, np.rad2deg(1)])
+    PB = np.diag([100, np.rad2deg(1)]) @ np.linalg.inv(Bj) @ np.diag([100, np.rad2deg(1)])
+    lim = 1.15 * max(np.sqrt(np.diag(PA)).max(), np.sqrt(np.diag(Pc)).max())
+    lx, ly = 1.15 * np.sqrt(max(PA[0, 0], Pc[0, 0])), 1.15 * np.sqrt(max(PA[1, 1], Pc[1, 1]))
+    _ = (cm, deg, lim)
+    return rf"""% One surfel's uncertainty (generated by experiments/main_figures_tikz.py); schematic, not a measurement
+\begin{{tikzpicture}}
+\begin{{groupplot}}[sfaxis, group style={{group size=3 by 1, horizontal sep=1.3cm}}, scale only axis, height=3.0cm]
+\nextgroupplot[width=3.35cm, xmin=-1.15, xmax=1.15, ymin=-1.1, ymax=1.35, xlabel={{Along the surfel, $s$ [m]}},
+  ylabel={{Normal offset [m]}}, title={{\sfsub{{a}} One surfel, in section}}]
+{band(sc, "sforange!50")}
+{band(sf, "black!25")}
+\addplot[black!60, densely dashed, line width=0.6pt, forget plot] coordinates {{({-L},{k * nu}) ({L},{k * nu})}};
+\addplot[sforange!80!black, densely dashed, line width=0.6pt, forget plot] coordinates {{({-L},{k * tau * L}) ({L},{-k * tau * L})}};
+\addplot[black, line width=2pt, forget plot] coordinates {{({-L},0) ({L},0)}};
+\addplot[sfred, line width=0.8pt, forget plot] coordinates {{({sx - 0.3},1.35) ({sx},0)}};
+\addplot[only marks, mark=*, mark size=1.4pt, sfred, forget plot] coordinates {{({sx},0)}};
+\addplot[black, -{{Stealth[length=3pt]}}, line width=0.6pt, forget plot] coordinates {{(0,0) (0,0.55)}};
+\node[anchor=west, inner sep=1pt, font=\sffamily\scriptsize] at (axis cs:0.02,0.5) {{$\mathbf{{n}}$}};
+\node[anchor=north, inner sep=1.5pt, font=\sffamily\scriptsize] at (axis cs:0,-0.02) {{$\boldsymbol\mu_k$}};
+\node[anchor=east, inner sep=1.5pt, text=sfred, font=\sffamily\scriptsize] at (axis cs:{sx - 0.27},1.15) {{ray of $u$}};
+\nextgroupplot[width=3.35cm, xmin=-1.05, xmax=1.05, ymin=0, xlabel={{Along the surfel, $s$ [m]}},
+  ylabel={{Depth std [cm]}}, title={{\sfsub{{b}} Depth std along it}}]
+\addplot[sforange!80!black, line width=1.0pt] coordinates {{{" ".join(f"({a:.3f},{100 * b:.3f})" for a, b in zip(s, sc))}}};
+\addplot[black, line width=1.0pt] coordinates {{{" ".join(f"({a:.3f},{100 * b:.3f})" for a, b in zip(s, sf))}}};
+\nextgroupplot[width=3.0cm, xmin={-lx:.2f}, xmax={lx:.2f}, ymin={-ly:.2f}, ymax={ly:.2f},
+  xlabel={{Offset $\nu$ [cm]}}, ylabel={{Tilt $\tau$ [$^\circ$]}}, title={{\sfsub{{c}} Fuse and cavity, $1\sigma$}}]
+\addplot[fill=sforange!50, draw=sforange!70!black, line width=0.5pt, forget plot] coordinates {{{_ell(Pc)}}} -- cycle;
+\addplot[black, densely dashed, line width=0.6pt, forget plot] coordinates {{{_ell(PA)}}} -- cycle;
+\addplot[sfred, densely dashed, line width=0.7pt, forget plot] coordinates {{{_ell(PB)}}} -- cycle;
+\addplot[fill=black!70, draw=black, line width=0.5pt, forget plot] coordinates {{{_ell(Pf)}}} -- cycle;
+\end{{groupplot}}
+\node[anchor=north, draw=sfgrey, rounded corners=1.5pt, fill=white, inner sep=2pt, font=\sffamily\scriptsize, align=left]
+  at ($(group c2r1.south)+(0,-1.0cm)$) {{%
+\tikz[baseline=-0.6ex]{{\draw[black, line width=2pt] (0,0) -- (0.35,0);}} surfel shape\quad
+\tikz[baseline=-0.6ex]{{\draw[black!60, densely dashed, line width=0.6pt] (0,0) -- (0.35,0);}} an offset $\nu$\quad
+\tikz[baseline=-0.6ex]{{\draw[sforange!80!black, densely dashed, line width=0.6pt] (0,0) -- (0.35,0);}} a tilt $\tau$\quad
+\tikz[baseline=-0.6ex]{{\fill[black!25] (0,-0.07) rectangle (0.35,0.09);}}/\tikz[baseline=-0.6ex]{{\fill[sforange!50] (0,-0.07) rectangle (0.35,0.09);}} $\pm2\sigma$ fused/cavity (a: $\times{k:.0f}$)\\
+\tikz[baseline=-0.6ex]{{\draw[black, line width=1pt] (0,0) -- (0.35,0);}}/\tikz[baseline=-0.6ex]{{\draw[sforange!80!black, line width=1pt] (0,0) -- (0.35,0);}} fused/cavity\quad
+\tikz[baseline=-0.6ex]{{\draw[black, densely dashed, line width=0.6pt] (0,0) -- (0.35,0);}} message of a view outside $\mathcal{{B}}_j$\quad
+\tikz[baseline=-0.6ex]{{\draw[sfred, densely dashed, line width=0.7pt] (0,0) -- (0.35,0);}} message of the block $\mathcal{{B}}_j$}};
+\end{{tikzpicture}}
 """
 
 
 def cavity() -> tuple[str, float]:
-    """Schematic of the cavity test along one strip (side view) and along one image row of view j."""
-    # ---------------- geometry (tikz cm): cameras on a strip at height 3, a flat roof between x 2.5 and 3.9
-    cams = [0.5 + 0.9 * i for i in range(7)]
-    jj, block = 3, {2, 3, 4}
-    half, alt, roof = 1.85, 3.0, (2.5, 3.9, 0.8)
-    surf = [(x, 0.0) for x in (0.35, 0.9, 1.45, 2.0)] + [(x, roof[2]) for x in (2.8, 3.2, 3.6)] + \
-           [(x, 0.0) for x in (4.4, 4.95, 5.5, 6.05)]
-    seen = [[i for i, c in enumerate(cams) if abs(x - c) <= half] for x, _ in surf]
-    n_all = [len(s) for s in seen]
-    n_cav = [len([i for i in s if i not in block]) for s in seen]
-    sig = lambda n: 0.042 * (5 / n) ** 0.8  # schematic normal-offset std, cm
-    floater = (3.2, 0.42)  # spawned by the faulty view j, which reads the glass roof too deep
+    """The cavity test in four panels, in the idiom of the aerial figure: boxed axes with units,
+    one idea per panel, framed legends. Schematic numbers, not a measurement."""
+    H = 120.0  # flying height [m]
+    cams = [14.0 + 36.0 * i for i in range(7)]  # frame positions along the strip [m]
+    blk, jj = {2, 3, 4}, 3
+    half = 72.0  # footprint half-width on the ground [m]
+    r0, r1, rh = 92.0, 150.0, 30.0  # roof extent and height [m]
+    L = 244.0
+    segs = [(0.0, r0, 0.0), (r0, r1, rh), (r1, L, 0.0)]
+    exag = 10.0  # uncertainty bands drawn x10
 
-    def scene(cavity_: bool) -> str:
-        out = [r"\begin{scope}", r"\clip (-0.05,-0.15) rectangle (6.45,3.4);"]
-        # footprints (fans) of the views that contribute
-        for i, c in enumerate(cams):
-            if cavity_ and i in block:
-                continue
-            col = "sfred" if (i in block and not cavity_) else "black"
-            op = 0.07 if col == "sfred" else 0.028
-            out.append(rf"\fill[{col}, opacity={op}] ({c:.2f},{alt - 0.08:.2f}) -- ({c - half:.2f},0) -- ({c + half:.2f},0) -- cycle;")
-        if cavity_:  # view j's frustum: where the cavity is rendered
-            c = cams[jj]
-            out.append(rf"\draw[sfred, densely dashed, line width=0.5pt] ({c - half:.2f},0) -- ({c:.2f},{alt - 0.08:.2f}) -- ({c + half:.2f},0);")
-        out.append(r"\end{scope}")
-        # scene: ground line and a building with a glass roof
-        out.append(rf"\fill[sflightgrey] ({roof[0]:.2f},0) rectangle ({roof[1]:.2f},{roof[2]:.2f});")
-        out.append(rf"\draw[sfgrey, line width=0.5pt] (0,0) -- ({roof[0]:.2f},0) -- ({roof[0]:.2f},{roof[2]:.2f}) -- ({roof[1]:.2f},{roof[2]:.2f}) -- ({roof[1]:.2f},0) -- (6.4,0);")
-        out.append(r"\fill[pattern=north east lines, pattern color=sfgrey] (0,-0.12) rectangle (6.4,0);")
-        # surfels: shape (black bar) and normal-offset uncertainty (ellipse, +-2 sigma)
-        for (x, y), na, nc in zip(surf, n_all, n_cav):
-            n = nc if cavity_ else na
-            grow = cavity_ and nc < na
-            fill = "sforange!55" if grow else "sforange!30"
-            out.append(rf"\fill[{fill}, draw=sforange!70!black, line width=0.3pt] ({x:.2f},{y:.2f}) ellipse [x radius=0.19, y radius={2 * sig(n):.3f}];")
-            out.append(rf"\draw[black, line width=1.6pt] ({x - 0.15:.2f},{y:.2f}) -- ({x + 0.15:.2f},{y:.2f});")
-        fx, fy = floater
-        if cavity_:
-            out.append(rf"\draw[sfred, line width=1.2pt, densely dashed] ({fx - 0.15:.2f},{fy:.2f}) -- ({fx + 0.15:.2f},{fy:.2f});")
-            out.append(rf"\node[sfred, font=\sffamily\bfseries\small, inner sep=0pt] at ({fx:.2f},{fy:.2f}) {{$\times$}};")
-        else:
-            out.append(rf"\draw[sfred, line width=1.6pt] ({fx - 0.15:.2f},{fy:.2f}) -- ({fx + 0.15:.2f},{fy:.2f});")
-        # cameras
-        for i, c in enumerate(cams):
-            tri = rf"({c - 0.17:.2f},{alt + 0.17:.2f}) -- ({c + 0.17:.2f},{alt + 0.17:.2f}) -- ({c:.2f},{alt - 0.08:.2f}) -- cycle"
-            if i in block and cavity_:
-                out.append(rf"\draw[sfgrey, line width=0.5pt, densely dashed, fill=white] {tri};")
-            elif i in block:
-                out.append(rf"\fill[sfred, draw=sfred!60!black, line width=0.4pt] {tri};")
-            else:
-                out.append(rf"\fill[black] {tri};")
-        c0, c1 = cams[min(block)], cams[max(block)]
-        out.append(rf"\draw[decorate, decoration={{brace, amplitude=3pt}}, line width=0.5pt, {'sfgrey' if cavity_ else 'sfred'}] "
-                   rf"({c0 - 0.2:.2f},{alt + 0.27:.2f}) -- node[above=3.5pt, inner sep=0pt] {{block $\mathcal{{B}}_j${' removed' if cavity_ else ''}}} ({c1 + 0.2:.2f},{alt + 0.27:.2f});")
-        out.append(rf"\node[font=\sffamily\fontsize{{6}}{{7}}\selectfont, text={'sfgrey' if cavity_ else 'sfred'}, anchor=north, inner sep=1pt] at ({cams[jj]:.2f},{alt - 0.12:.2f}) {{$j$}};")
+    def support(x, cav):  # soft footprint edges so the bands vary smoothly
+        return sum(1 / (1 + np.exp(-(half - abs(x - c)) / 6.0)) for i, c in enumerate(cams) if not (cav and i in blk))
+
+    def sd(x, cav):  # normal-offset std of the surface [m]
+        return 0.18 * np.sqrt(5.0 / max(support(x, cav), 0.35))
+
+    def band(cav, sty):
+        out = []
+        for a, b, y in segs:
+            xs = np.linspace(a + 0.5, b - 0.5, 50)
+            up = " ".join(f"({x:.1f},{y + 2 * exag * sd(x, cav):.2f})" for x in xs)
+            lo = " ".join(f"({x:.1f},{y - 2 * exag * sd(x, cav):.2f})" for x in xs[::-1])
+            out.append(rf"\addplot[{sty}, forget plot] coordinates {{{up} {lo}}} -- cycle;")
         return "\n".join(out)
 
-    # ---------------- (c) one image row of view j: 96 pixels over x in [cj - half, cj + half]
-    rng = np.random.default_rng(11)
+    surf = rf"\addplot[black, line width=1.0pt, forget plot] coordinates {{(0,0) ({r0},0) ({r0},{rh}) ({r1},{rh}) ({r1},0) ({L},0)}};"
+    others = " ".join(f"({c},{H})" for i, c in enumerate(cams) if i not in blk)
+    blk_pts = " ".join(f"({c},{H})" for i, c in enumerate(cams) if i in blk and i != jj)
     cj = cams[jj]
-    xs = np.linspace(cj - half + 0.02, cj + half - 0.02, 96)
-    scale = 40.0  # m per tikz cm: flying height 120 m, roof 32 m
-    on_roof = (xs >= roof[0]) & (xs <= roof[1])
-    depth = scale * (alt - np.where(on_roof, roof[2], 0.0))
-    nearest = np.array([np.argmin([abs(x - sx) + (0 if (sy > 0) == r else 9) for sx, sy in surf]) for x, r in zip(xs, on_roof)])
-    sd_sens = 0.7
-    # residual covariance: independent sensor noise + one shared offset per surfel (the U P U^T blocks)
-    n = len(xs)
-    U = np.zeros((n, len(surf)))
-    U[np.arange(n), nearest] = 1.0
-    P = np.diag([(0.55 * (5 / max(m, 1)) ** 0.8) ** 2 for m in n_cav])
-    S = sd_sens**2 * np.eye(n) + U @ P @ U.T
-    fault = np.where((xs >= 2.85) & (xs <= 3.75), 6.0, 0.0)  # glass roof read 6 m too deep in view j
-    r = np.linalg.cholesky(S) @ rng.normal(size=n) + fault
-    dj = depth + r
-    std = r / np.sqrt(np.diag(S))
+
+    def cam_plots(cav):
+        o = [rf"\addplot[only marks, mark=*, mark size=1.6pt, black, forget plot] coordinates {{{others}}};"]
+        if cav:
+            o.append(rf"\addplot[only marks, mark=o, mark size=1.9pt, sfred, forget plot] coordinates {{{blk_pts}}};")
+            o.append(rf"\draw[sfred, densely dashed, line width=0.5pt] (axis cs:{cj - half},0) -- (axis cs:{cj},{H}) -- (axis cs:{cj + half},0);")
+        else:
+            o.append(rf"\addplot[only marks, mark=*, mark size=1.9pt, sfred, forget plot] coordinates {{{blk_pts}}};")
+        o.append(rf"\addplot[only marks, mark=x, mark size=3.2pt, sfred, line width=1.1pt, forget plot] coordinates {{({cj},{H})}};")
+        return "\n".join(o)
+
+    # (c), (d): one row of view j, 64 pixels over its footprint
+    rng = np.random.default_rng(11)
+    n = 64
+    xw = np.linspace(cj - half + 1, cj + half - 1, n)
+    roof = (xw >= r0) & (xw <= r1)
+    depth = H - np.where(roof, rh, 0.0)
+    s_tot = np.sqrt(0.6**2 + np.array([sd(x, True) * 4.0 for x in xw]) ** 2)  # [m]; surface term at render scale
+    fault = np.where((xw >= 105) & (xw <= 140), 4.0, 0.0)  # glass roof read 4 m too deep
+    obs = depth + fault + rng.normal(0, 0.6, n)
+    z = (obs - depth) / s_tot
     R = fault > 0
-    g = R.astype(float)
-    Si = np.linalg.inv(S)
-    zR = float(g @ Si @ r / np.sqrt(g @ Si @ g))
+    zR = float(z[R].sum() / np.sqrt(R.sum() * 2.2))  # schematic: shared surfel errors inflate the region variance
     u = np.arange(n)
-    band = 2 * np.sqrt(np.diag(S))
-    up = " ".join(f"({a},{b:.2f})" for a, b in zip(u, depth + band))
-    lo = " ".join(f"({a},{b:.2f})" for a, b in zip(u[::-1], (depth - band)[::-1]))
-    ren = " ".join(f"({a},{b:.2f})" for a, b in zip(u, depth))
-    obs = " ".join(f"({a},{b:.2f})" for a, b in zip(u, dj))
-    stdp = " ".join(f"({a},{b:.2f})" for a, b in zip(u, std))
-    r0, r1 = int(u[R][0]) - 0.5, int(u[R][-1]) + 0.5
-    k0, k1 = int(u[on_roof][0]) - 0.5, int(u[on_roof][-1]) + 0.5
-    font = r"\sffamily\fontsize{7}{8.4}\selectfont"
-    small = r"\sffamily\fontsize{6}{7}\selectfont"
-    tex = rf"""% Cavity test schematic (generated by experiments/main_figures_tikz.py); illustrative, not a measurement
-\begin{{tikzpicture}}[font={font}, >={{Stealth[length=3.5pt]}}]
-\begin{{scope}}
-{scene(False)}
-\node[anchor=south west, inner sep=0pt] at (0,{alt + 0.85:.2f}) {{\sfsub{{a}} Fuse: every view sends $\Lambda_k^{{(i)}}$}};
-\node[anchor=north, align=center, inner sep=1pt] at (3.2,-0.2) {{$\Lambda_k=\Lambda_0+\sum_i\Lambda_k^{{(i)}}$}};
-\draw[->, sfred, line width=0.5pt] (4.1,0.62) -- (3.4,0.45);
-\node[anchor=west, text=sfred, font={small}, align=left, inner sep=1pt] at (4.1,0.62) {{spawned\\[-1pt] by view $j$}};
-\end{{scope}}
-\begin{{scope}}[xshift=6.95cm]
-{scene(True)}
-\node[anchor=south west, inner sep=0pt] at (0,{alt + 0.85:.2f}) {{\sfsub{{b}} Cavity of view $j$: subtract its block}};
-\node[anchor=north, align=center, inner sep=1pt] at (3.2,-0.2) {{$\Lambda_k^{{(-j)}}=\Lambda_k-\sum_{{i\in\mathcal{{B}}_j}}\Lambda_k^{{(i)}}$, one Newton step}};
-\draw[->, sfred, line width=0.5pt] (4.1,0.62) -- (3.4,0.45);
-\node[anchor=west, text=sfred, font={small}, align=left, inner sep=1pt] at (4.1,0.62) {{made by $\mathcal{{B}}_j$:\\[-1pt] dropped}};
-\draw[->, sforange!70!black, line width=0.5pt] (2.25,1.45) -- (2.68,0.98);
-\node[anchor=south east, text=sforange!70!black, font={small}, align=right, inner sep=1pt] at (2.3,1.4) {{less support:\\[-1pt] wider $P_k^{{(-j)}}$}};
-\end{{scope}}
-\begin{{scope}}[shift={{(1.25cm,-4.0cm)}}]
-\begin{{groupplot}}[sfaxis, group style={{group size=1 by 2, vertical sep=0.22cm, x descriptions at=edge bottom}}, scale only axis,
-  width=12.0cm, xmin=-0.5, xmax={n - 0.5}]
-\nextgroupplot[height=1.9cm, ymin=72, ymax=134, y dir=reverse, ylabel={{Depth [m]}}, ytick={{80,100,120}},
-  title={{\sfsub{{c}} Test along one image row of view $j$}}, title style={{at={{(0,1)}}, anchor=south west, xshift=-1.25cm}},
-  legend style={{at={{(1,1.04)}}, anchor=south east, legend columns=3, font=\sffamily\tiny}}]
-\fill[sfred, opacity=0.08] (axis cs:{r0},72) rectangle (axis cs:{r1},134);
-\addplot[fill=sforange!35, draw=none, area legend] coordinates {{{up} {lo}}} -- cycle;
-\addplot[black, line width=0.8pt] coordinates {{{ren}}};
-\addplot[only marks, mark=*, mark size=0.55pt, sfred] coordinates {{{obs}}};
-\legend{{$\pm2\sqrt{{(\Sigma_r)_{{uu}}}}$, cavity render $a_j\hat D_{{-j}}+b_j$, depth of view $j$, $\hat d_j$}}
-\node[font={small}, anchor=north, text=sfgrey] at (axis cs:{(k0 + k1) / 2:.1f},73.5) {{glass roof}};
-\nextgroupplot[height=1.3cm, ymin=-4, ymax=11, ylabel={{$r/\sqrt{{(\Sigma_r)_{{uu}}}}$}}, xlabel={{Pixel $u$ along the row}}, ytick={{0,5,10}}]
-\fill[sfred, opacity=0.08] (axis cs:{r0},-4) rectangle (axis cs:{r1},11);
-\addplot[sfgrey, densely dotted, line width=0.5pt, domain=-0.5:{n - 0.5}, samples=2] {{2}};
-\addplot[sfgrey, densely dotted, line width=0.5pt, domain=-0.5:{n - 0.5}, samples=2] {{-2}};
-\addplot[black, line width=0.6pt, mark=*, mark size=0.45pt] coordinates {{{stdp}}};
-\node[font={small}, text=sfred, anchor=north west, inner sep=1.5pt, fill=white, fill opacity=0.8, text opacity=1] at (axis cs:{r1 + 1},10.6)
-  {{region $\mathcal{{R}}$: $z_{{\mathcal{{R}}}}={zR:.1f}$ $\Rightarrow$ flag $j$}};
+    up = " ".join(f"({a},{d + 2 * s:.2f})" for a, d, s in zip(u, depth, s_tot))
+    lo = " ".join(f"({a},{d - 2 * s:.2f})" for a, d, s in zip(u[::-1], depth[::-1], s_tot[::-1]))
+    ren = " ".join(f"({a},{d:.2f})" for a, d in zip(u, depth))
+    ob = " ".join(f"({a},{d:.2f})" for a, d in zip(u, obs))
+    zz = " ".join(f"({a},{v:.2f})" for a, v in zip(u, z))
+    ua, ub = int(u[R][0]) - 0.5, int(u[R][-1]) + 0.5
+
+    geo = (rf"xmin=0, xmax={L}, ymin=-14, ymax={H + 16}, xlabel={{Along-track [m]}}, xtick={{0,50,100,150,200}}, "
+           rf"ytick={{0,30,60,90,120}}")
+    tex = rf"""% The cavity test (generated by experiments/main_figures_tikz.py); schematic, uncertainty bands x{exag:.0f}
+\begin{{tikzpicture}}
+\begin{{groupplot}}[sfaxis, group style={{group size=2 by 2, horizontal sep=1.45cm, vertical sep=2.45cm}}, scale only axis,
+  width=5.2cm, height=2.5cm]
+\nextgroupplot[{geo}, ylabel={{Height [m]}}, title={{\sfsub{{a}} Fused: all views}}]
+{band(False, "fill=black!22, draw=none")}
+{surf}
+{cam_plots(False)}
+\nextgroupplot[{geo}, yticklabels={{}}, title={{\sfsub{{b}} Cavity of view $j$: block $\mathcal{{B}}_j$ removed}}]
+{band(True, "fill=sforange!55, draw=none")}
+{band(False, "draw=black!45, line width=0.3pt, fill=none")}
+{surf}
+{cam_plots(True)}
+\nextgroupplot[xmin=-0.5, xmax={n - 0.5}, ymin=78, ymax=136, y dir=reverse, xlabel={{Pixel $u$ along a row of view $j$}},
+  ylabel={{Depth [m]}}, ytick={{80,100,120}}, title={{\sfsub{{c}} View $j$ against the cavity render}}]
+\fill[sfred, opacity=0.08] (axis cs:{ua},78) rectangle (axis cs:{ub},136);
+\addplot[fill=sforange!40, draw=none, forget plot] coordinates {{{up} {lo}}} -- cycle;
+\addplot[black, line width=0.9pt, forget plot] coordinates {{{ren}}};
+\addplot[only marks, mark=*, mark size=0.8pt, sfred, forget plot] coordinates {{{ob}}};
+\node[font=\sffamily\tiny, text=sfred, anchor=north] at (axis cs:{(ua + ub) / 2:.1f},79) {{region $\mathcal{{R}}$}};
+\nextgroupplot[xmin=-0.5, xmax={n - 0.5}, ymin=-4, ymax=9, xlabel={{Pixel $u$ along a row of view $j$}},
+  ylabel={{Residual [$\sigma$]}}, ytick={{-2,0,2,4,6,8}}, title={{\sfsub{{d}} Whitened residual, region scan}}]
+\fill[sfred, opacity=0.08] (axis cs:{ua},-4) rectangle (axis cs:{ub},9);
+\addplot[black!50, densely dotted, line width=0.6pt, domain=-0.5:{n - 0.5}, samples=2, forget plot] {{2}};
+\addplot[black!50, densely dotted, line width=0.6pt, domain=-0.5:{n - 0.5}, samples=2, forget plot] {{-2}};
+\addplot[black, line width=0.7pt, mark=*, mark size=0.5pt, forget plot] coordinates {{{zz}}};
+\node[font=\sffamily\scriptsize, text=sfred, anchor=north, fill=white, fill opacity=0.85, text opacity=1, inner sep=1.5pt] at (axis cs:{(ua + ub) / 2:.1f},8.6) {{$z_{{\mathcal{{R}}}}={zR:.0f}$}};
 \end{{groupplot}}
-\end{{scope}}
+\node[anchor=north, draw=sfgrey, rounded corners=1.5pt, fill=white, inner sep=2pt, font=\sffamily\scriptsize]
+  at ($(group c1r1.south east)!0.5!(group c2r1.south west)+(0,-1.08cm)$) {{%
+\tikz[baseline=-0.6ex]{{\fill[black] (0,0) circle (1.6pt);}} other views\quad
+\tikz[baseline=-0.6ex]{{\fill[sfred] (0,0) circle (1.9pt);}}/\tikz[baseline=-0.6ex]{{\draw[sfred] (0,0) circle (1.9pt);}} block $\mathcal{{B}}_j$ in/left out\quad
+\tikz[baseline=-0.6ex]{{\draw[sfred, line width=1.1pt] (-0.08,-0.08) -- (0.08,0.08) (-0.08,0.08) -- (0.08,-0.08);}} view $j$\quad
+\tikz[baseline=-0.6ex]{{\fill[black!22] (0,-0.07) rectangle (0.35,0.09);}} fused $\pm2\sigma$\quad
+\tikz[baseline=-0.6ex]{{\fill[sforange!55] (0,-0.07) rectangle (0.35,0.09);}} cavity $\pm2\sigma$ (both $\times{exag:.0f}$)}};
+\node[anchor=north, draw=sfgrey, rounded corners=1.5pt, fill=white, inner sep=2pt, font=\sffamily\scriptsize]
+  at ($(group c1r2.south east)!0.5!(group c2r2.south west)+(0,-1.08cm)$) {{%
+\tikz[baseline=-0.6ex]{{\draw[black, line width=0.9pt] (0,0) -- (0.35,0);}} cavity render $a_j\hat D_{{-j}}+b_j$\quad
+\tikz[baseline=-0.6ex]{{\fill[sforange!40] (0,-0.07) rectangle (0.35,0.09);}} $\pm2\sqrt{{(\Sigma_r)_{{uu}}}}$\quad
+\tikz[baseline=-0.6ex]{{\fill[sfred] (0.1,0) circle (0.8pt);}} depth of view $j$, $\hat d_j$\quad
+\tikz[baseline=-0.6ex]{{\fill[sfred, opacity=0.15] (0,-0.07) rectangle (0.35,0.09);}} faulty region\quad
+\tikz[baseline=-0.6ex]{{\draw[black!50, densely dotted, line width=0.6pt] (0,0) -- (0.35,0);}} $\pm2\sigma$}};
 \end{{tikzpicture}}
 """
     return tex, zR
 
 
 def scene3d() -> str:
-    """3D schematic: survey strips, block B_j, view j's footprint and the cavity's surfel uncertainty."""
-    # strips along x, three of them across y; frames along each strip; flying height H
-    H = 5.2
-    ys = [1.5, 3.5, 5.5]
-    xs = [1.0 + 1.3 * k for k in range(7)]
-    mid, jk, blk = 1, 3, {2, 3, 4}  # middle strip, tested frame, block of B=3 frames
-    fx, fy = 1.9, 1.6  # footprint half sizes
-    bld = [((3.9, 2.75, 5.7, 4.25), 1.3), ((7.3, 0.6, 8.5, 1.7), 0.9), ((1.4, 4.6, 2.6, 5.6), 0.7)]
+    """Leave-block-out in a survey, as a PGFPlots 3D axis with units: strips, the block, view j's
+    footprint, and surfels coloured by the number of views supporting them (cavity inside the footprint)."""
+    H = 120.0
+    ys = [40.0, 90.0, 140.0]
+    xs = [20.0 + 35.0 * k for k in range(7)]
+    mid, jk, blk = 1, 3, {2, 3, 4}
+    fx, fy = 45.0, 40.0  # footprint half sizes [m]
+    bld = [((100, 70, 150, 110), 30.0), ((195, 20, 225, 50), 20.0), ((30, 125, 60, 155), 15.0)]
+    X, Y = xs[jk], ys[mid]
 
     def height(x, y):
         for (x0, y0, x1, y1), h in bld:
@@ -478,120 +437,78 @@ def scene3d() -> str:
                 return h
         return 0.0
 
-    def near_wall(x, y, m=0.25):
+    def near_wall(x, y, m=2.5):
         for (x0, y0, x1, y1), _h in bld:
-            inside = x0 - m <= x <= x1 + m and y0 - m <= y <= y1 + m
-            core = x0 + m <= x <= x1 - m and y0 + m <= y <= y1 - m
-            if inside and not core:
+            if (x0 - m <= x <= x1 + m and y0 - m <= y <= y1 + m) and not (x0 + m <= x <= x1 - m and y0 + m <= y <= y1 - m):
                 return True
         return False
 
     cams = [(x, y, i, k) for i, y in enumerate(ys) for k, x in enumerate(xs)]
-    is_blk = lambda i, k: i == mid and k in blk
-    surf = []
-    for x in np.arange(0.45, 10.0, 0.62):
-        for y in np.arange(0.4, 7.0, 0.62):
+    ground, roof = [], []
+    for x in np.arange(6.0, 250.0, 12.0):
+        for y in np.arange(6.0, 180.0, 12.0):
             if near_wall(x, y):
                 continue
             z = height(x, y)
-            seen = [(i, k) for (cx, cy, i, k) in cams if abs(x - cx) <= fx and abs(y - cy) <= fy]
-            n_cav = len([1 for i, k in seen if not is_blk(i, k)])
-            surf.append((x, y, z, len(seen), n_cav))
-    cj = (xs[jk], ys[mid])
-
-    def in_fp(x, y):
-        return abs(x - cj[0]) <= fx and abs(y - cj[1]) <= fy
-
-    # colour by the cavity's normal-offset std, relative to the fused one
-    def shade(n):
-        return None if n == 0 else {1: 90, 2: 72, 3: 55, 4: 40, 5: 28}.get(n, 14)
-
-    def disc(x, y, z, n, n_all):
-        sh = shade(n)
-        if sh is None:
-            return rf"\begin{{scope}}[canvas is xy plane at z={z:.2f}]\filldraw[fill=sflightgrey, draw=sfgrey, line width=0.2pt] ({x:.2f},{y:.2f}) circle (0.2);\end{{scope}}"
-        s = 0.22 * np.sqrt(4 / n)
-        bar = (rf"\draw[sforange!70!black, line width=0.8pt] ({x:.2f},{y:.2f},{z - s:.2f}) -- ({x:.2f},{y:.2f},{z + s:.2f});"
-               if n < n_all and in_fp(x, y) else "")
-        return (rf"\begin{{scope}}[canvas is xy plane at z={z:.2f}]\filldraw[fill=sforange!{sh}, draw=sforange!70!black, line width=0.2pt] "
-                rf"({x:.2f},{y:.2f}) circle (0.2);\end{{scope}}" + bar)
-
-    show = lambda x, y, na, nc: nc if in_fp(x, y) else na  # cavity inside j's footprint, fused elsewhere
-    ground = [disc(x, y, z, show(x, y, na, nc), na) for x, y, z, na, nc in surf if z == 0]
-    roofs = [disc(x, y, z, show(x, y, na, nc), na) for x, y, z, na, nc in surf if z > 0]
+            n = sum(1 for cx, cy, i, k in cams if abs(x - cx) <= fx and abs(y - cy) <= fy
+                    and not (i == mid and k in blk))
+            (roof if z > 0 else ground).append((x, y, z, n))
 
     def box(r, h):
         x0, y0, x1, y1 = r
-        f = "fill=sflightgrey!70, draw=sfgrey, line width=0.4pt"
+        f = "fill=black!8, draw=black!55, line width=0.4pt"
         return "\n".join([
-            rf"\filldraw[{f}] ({x0},{y0},0) -- ({x1},{y0},0) -- ({x1},{y0},{h}) -- ({x0},{y0},{h}) -- cycle;",  # front (y0)
-            rf"\filldraw[{f}, fill=sflightgrey!95!black] ({x1},{y0},0) -- ({x1},{y1},0) -- ({x1},{y1},{h}) -- ({x1},{y0},{h}) -- cycle;",  # right (x1)
-            rf"\filldraw[{f}, fill=sflightgrey!40] ({x0},{y0},{h}) -- ({x1},{y0},{h}) -- ({x1},{y1},{h}) -- ({x0},{y1},{h}) -- cycle;",  # roof
+            rf"\draw[{f}] (axis cs:{x0},{y0},0) -- (axis cs:{x1},{y0},0) -- (axis cs:{x1},{y0},{h}) -- (axis cs:{x0},{y0},{h}) -- cycle;",
+            rf"\draw[{f}, fill=black!16] (axis cs:{x1},{y0},0) -- (axis cs:{x1},{y1},0) -- (axis cs:{x1},{y1},{h}) -- (axis cs:{x1},{y0},{h}) -- cycle;",
+            rf"\draw[{f}, fill=black!4] (axis cs:{x0},{y0},{h}) -- (axis cs:{x1},{y0},{h}) -- (axis cs:{x1},{y1},{h}) -- (axis cs:{x0},{y1},{h}) -- cycle;",
         ])
 
-    # draw buildings back to front (larger y first, then smaller x)
+    stops = np.array([(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 98), (253, 231, 37)], float)
+
+    def vir(n):  # the sfviridis colormap at n in [0, 6]
+        t = min(n, 6) / 6 * 4
+        k = min(int(t), 3)
+        c = stops[k] + (t - k) * (stops[k + 1] - stops[k])
+        r_, g_, b_ = (int(v) for v in np.round(c))
+        return f"{{rgb,255:red,{r_};green,{g_};blue,{b_}}}"
+
+    dots = lambda pts: "\n".join(
+        rf"\fill[fill={'black!45' if n == 0 else vir(n)}] (axis cs:{x:.0f},{y:.0f},{z:.0f}) circle (1.8pt);" for x, y, z, n in pts)
+    roof_tex, ground_tex = dots(roof), dots(ground)
     order = sorted(range(len(bld)), key=lambda b: (-bld[b][0][1], bld[b][0][0]))
-    roofs_by_b = {b: [] for b in order}
-    for (x, y, _z, _na, _nc), d in zip([s_ for s_ in surf if s_[2] > 0], roofs):
-        for b, ((x0, y0, x1, y1), _h) in enumerate(bld):
-            if x0 <= x <= x1 and y0 <= y <= y1:
-                roofs_by_b[b].append(d)
-    blds = "\n".join(box(*bld[b]) + "\n" + "\n".join(roofs_by_b[b]) for b in order)
-
-    def frustum(x, y, sty, fill):
-        a, zb = 0.24, H - 0.38
-        c = [(x - a, y - a), (x + a, y - a), (x + a, y + a), (x - a, y + a)]
-        base = " -- ".join(f"({p:.2f},{q:.2f},{zb:.2f})" for p, q in c) + " -- cycle"
-        sides = " ".join(rf"\draw[{sty}] ({x:.2f},{y:.2f},{H:.2f}) -- ({p:.2f},{q:.2f},{zb:.2f});" for p, q in c)
-        return rf"\filldraw[{sty}, fill={fill}] {base};" + sides
-
-    cam_tex = []
-    for x, y, i, k in cams:
-        if i == mid and k == jk:
-            continue
-        if is_blk(i, k):
-            cam_tex.append(frustum(x, y, "sfred, line width=0.4pt, densely dashed", "white"))
-        else:
-            cam_tex.append(frustum(x, y, "black, line width=0.35pt", "black!65"))
-    # flight path: strips joined by turns at the ends
+    boxes = "\n".join(box(*bld[b]) for b in order)
     path = []
     for i, y in enumerate(ys):
         seq = xs if i % 2 == 0 else xs[::-1]
         path += [(x, y) for x in seq]
-    route = " -- ".join(f"({x:.2f},{y:.2f},{H:.2f})" for x, y in path)
-    # view j: frustum rays to its footprint corners, footprint on the ground
-    X, Y = cj
+    route = " ".join(f"({x:.0f},{y:.0f},{H:.0f})" for x, y in path)
+    others = " ".join(f"({x:.0f},{y:.0f},{H:.0f})" for x, y, i, k in cams if not (i == mid and k in blk))
+    blkp = " ".join(f"({x:.0f},{y:.0f},{H:.0f})" for x, y, i, k in cams if i == mid and k in blk and k != jk)
     corners = [(X - fx, Y - fy), (X + fx, Y - fy), (X + fx, Y + fy), (X - fx, Y + fy)]
-    fp = " -- ".join(f"({p:.2f},{q:.2f},0)" for p, q in corners) + " -- cycle"
-    rays = "\n".join(rf"\draw[sfred, line width=0.45pt, densely dashed] ({X:.2f},{Y:.2f},{H:.2f}) -- ({p:.2f},{q:.2f},0);" for p, q in corners)
-    font = r"\sffamily\fontsize{7}{8.4}\selectfont"
-    small = r"\sffamily\fontsize{6}{7}\selectfont"
-    key_items = [(14, "6 or more views"), (40, "4 views"), (72, "2 views"), (90, "1 view")]
-    key = "\n".join(rf"\filldraw[fill=sforange!{sh}, draw=sforange!70!black, line width=0.2pt] (0,{-0.36 * r:.2f}) circle (0.09); "
-                    rf"\node[anchor=west, inner sep=1pt] at (0.14,{-0.36 * r:.2f}) {{{t}}};" for r, (sh, t) in enumerate(key_items))
-    key += "\n" + rf"\filldraw[fill=sflightgrey, draw=sfgrey, line width=0.2pt] (0,{-0.36 * 4:.2f}) circle (0.09); \node[anchor=west, inner sep=1pt] at (0.14,{-0.36 * 4:.2f}) {{none left: untestable}};"
-    key += "\n" + rf"\draw[sforange!70!black, line width=0.5pt] (0,{-0.36 * 5 - 0.1:.2f}) -- (0,{-0.36 * 5 + 0.1:.2f}); \node[anchor=west, inner sep=1pt, align=left] at (0.14,{-0.36 * 5 - 0.12:.2f}) {{$\pm\sigma$ of the normal offset,\\[-1pt] where the cavity widens it}};"
-    return rf"""% Survey in 3D: strips, the block B_j, view j's footprint and the cavity's surfel uncertainty
-% (generated by experiments/main_figures_tikz.py); schematic, not to scale
-\begin{{tikzpicture}}[font={font}, x={{(0.8cm,-0.2cm)}}, y={{(0.49cm,0.33cm)}}, z={{(0cm,0.6cm)}}, >={{Stealth[length=3.5pt]}}]
-\filldraw[fill=sflightgrey!35, draw=sfgrey, line width=0.4pt] (0,0,0) -- (10,0,0) -- (10,7,0) -- (0,7,0) -- cycle;
-\fill[sfred, opacity=0.10] {fp};
-{chr(10).join(ground)}
-\draw[sfred, line width=0.6pt] {fp};
-{blds}
+    fp = " ".join(f"({a:.0f},{b:.0f},0)" for a, b in corners + corners[:1])
+    rays = "\n".join(rf"\draw[sfred, densely dashed, line width=0.45pt] (axis cs:{X:.0f},{Y:.0f},{H:.0f}) -- (axis cs:{a:.0f},{b:.0f},0);" for a, b in corners)
+    return rf"""% Leave-block-out in a survey, 3D (generated by experiments/main_figures_tikz.py); schematic
+\begin{{tikzpicture}}
+\begin{{axis}}[sfaxis, view={{-32}}{{30}}, width=10.8cm, height=7.0cm, xmin=0, xmax=250, ymin=0, ymax=180, zmin=0, zmax=125,
+  xlabel={{Along-track [m]}}, ylabel={{Across-track [m]}}, zlabel={{Height [m]}}, xtick={{0,100,200}}, ytick={{0,90,180}}, ztick={{0,60,120}},
+  clip=false, point meta min=0, point meta max=6, colormap name=sfviridis, colorbar, colorbar style={{width=0.18cm, height=3.4cm, ytick={{0,2,4,6}}, yticklabels={{0,2,4,6+}},
+  ylabel={{Views left supporting a surfel}}, ylabel style={{font=\sffamily\scriptsize}}, at={{(1.08,0.62)}}, anchor=west}},
+  legend style={{at={{(0.5,-0.13)}}, anchor=north, legend columns=3}}]
+\addplot3[draw=none, fill=sfred, fill opacity=0.10, forget plot] coordinates {{{fp}}};
+{ground_tex}
+\addplot3[sfred, line width=0.7pt, forget plot] coordinates {{{fp}}};
+{boxes}
+{roof_tex}
+\addplot3[draw=none, forget plot, point meta=0] coordinates {{(0,0,0)}};
 {rays}
-\draw[sfgrey, line width=0.5pt] {route};
-{chr(10).join(cam_tex)}
-{frustum(X, Y, "sfred!70!black, line width=0.4pt", "sfred")}
-\node[text=sfred, anchor=west, inner sep=3pt] at ({X + 0.25:.2f},{Y:.2f},{H:.2f}) {{view $j$}};
-\draw[sfred, line width=0.4pt] ({xs[min(blk)]:.2f},{Y:.2f},{H + 0.05:.2f}) -- ({xs[min(blk)] - 0.4:.2f},{6.8:.2f},{H + 0.25:.2f}) node[anchor=south, text=sfred, inner sep=1.5pt] {{block $\mathcal{{B}}_j$ ($B=3$), left out}};
-\node[anchor=east, text=sfgrey, inner sep=2pt] at ({xs[0] - 0.3:.2f},{ys[0]:.2f},{H:.2f}) {{strip 1}};
-\node[anchor=east, text=sfgrey, inner sep=2pt] at ({xs[0] - 0.3:.2f},{ys[2]:.2f},{H:.2f}) {{strip 3}};
-\draw[sfred, line width=0.4pt] ({X - fx:.2f},{Y - fy:.2f},0) -- ({X - fx - 0.6:.2f},-0.7,0) node[anchor=north, text=sfred, align=center, inner sep=1.5pt] {{footprint of view $j$:\\[-1pt] the cavity is rendered here}};
-\begin{{scope}}[x={{(1cm,0cm)}}, y={{(0cm,1cm)}}, shift={{(10.55cm,3.8cm)}}, font={small}]
-\node[anchor=south west, inner sep=0pt, font={font}] at (-0.12,0.15) {{Views supporting a surfel}};
-{key}
-\end{{scope}}
+\addplot3[sfgrey, line width=0.5pt, forget plot] coordinates {{{route}}};
+\addplot3[only marks, mark=*, mark size=1.6pt, black] coordinates {{{others}}};
+\addplot3[only marks, mark=o, mark size=2.0pt, sfred, line width=0.7pt] coordinates {{{blkp}}};
+\addplot3[only marks, mark=x, mark size=3.2pt, sfred, line width=1.1pt] coordinates {{({X:.0f},{Y:.0f},{H:.0f})}};
+\addlegendimage{{only marks, mark=*, mark size=1.6pt, black!45}}
+\addlegendimage{{area legend, draw=sfred, fill=sfred, fill opacity=0.1}}
+\legend{{Frames, Block $\mathcal{{B}}_j$ (left out), View $j$, No view left: untestable, Footprint of view $j$}}
+\end{{axis}}
 \end{{tikzpicture}}
 """
 
