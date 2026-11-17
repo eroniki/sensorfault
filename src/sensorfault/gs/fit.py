@@ -2,13 +2,16 @@
 
 ``torch`` and ``gsplat`` are imported lazily inside methods, so importing this module is always safe;
 ``GsplatBackend.available()`` reports whether the fit can run. The fit uses
-``gsplat.rasterization_2dgs`` (accumulated depth normalised by the accumulated alpha, the same
-``D = sum w d / sum w`` as the closed-form Jacobians). ``view_information`` and ``render_cavity`` use
+``depth_mode='ray_plane'`` (default): a torch port of the reference compositor, the same per-pixel ray-plane
+depth ``D = sum w d / sum w`` as ``render_cavity`` and the closed-form Jacobians. ``depth_mode='gsplat'``
+uses ``gsplat.rasterization_2dgs`` RGB+D, which blends per-surfel centre depth and so does not see surfel
+tilt (found on the TITAN smoke test; kept for comparison only). ``view_information`` and ``render_cavity`` use
 the closed-form alpha-weighted Jacobian of ``gaussian_uncertainty`` through the chunked dense
 implementation of ``reference.py`` (memory O(K * chunk)); a rasteriser-side per-(pixel, surfel) weight
 dump would replace it for large K.
 
-Untested here (no GPU/torch in the authoring environment): everything that touches torch or gsplat.
+The ray-plane torch path is verified against the numpy reference only by tests/gs/test_torch_port.py
+(needs torch) and has not been run on the GPU yet.
 """
 
 from __future__ import annotations
