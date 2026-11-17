@@ -7,22 +7,50 @@ from sensorfault.gs.reference import NumpyReferenceBackend
 from sensorfault.types import DepthFrame
 
 
-def _scene(bias_view=None, n=5, hw=16, seed=0):
+def _scene(
+    bias_view=None, n=6, hw=32, f=40.0, noise=0.005, bias=0.05, seed=0, region=(0, 16, 0, 16)
+):
+    """Tilted plane seen from n cameras; optional bias on a (possibly off-grid) pixel region."""
     rng = np.random.default_rng(seed)
-    K = np.array([[20.0, 0, hw / 2], [0, 20.0, hw / 2], [0, 0, 1]])
+    K = np.array([[f, 0, hw / 2], [0, f, hw / 2], [0, 0, 1.0]])
+    nrm = np.array([0.15, -0.1, 1.0])
+    nrm /= np.linalg.norm(nrm)
     frames = []
     for i in range(n):
         T = np.eye(4)
-        T[0, 3] = 0.05 * (i - n // 2)
-        d = 2.0 + 0.01 * rng.standard_normal((hw, hw))
+        T[0, 3] = 0.12 * (i - (n - 1) / 2)
+        T[1, 3] = 0.03 * ((i % 2) - 0.5)
+        u, v = np.meshgrid(np.arange(hw) + 0.5, np.arange(hw) + 0.5)
+        rays = np.stack([(u - K[0, 2]) / f, (v - K[1, 2]) / f, np.ones_like(u)], -1)
+        d = ((np.array([0, 0, 2.0]) - T[:3, 3]) @ nrm) / (rays @ nrm)
+        d = d + noise * rng.standard_normal(d.shape)
         if i == bias_view:
-            d[: hw // 2, : hw // 2] += 0.15
+            r0, r1, c0, c1 = region
+            d[r0:r1, c0:c1] += bias
         frames.append(DepthFrame(f"v{i}", i, d.astype(np.float32), K, T))
     return frames
 
 
-def test_view_gate_runs_end_to_end_on_reference_backend():
-    be = NumpyReferenceBackend(stride=4)
-    res = ViewGate(backend=be).fuse(_scene(bias_view=2), {"round_cap": 3, "sigma": 0.01})
-    assert set(res.excluded_sensors) == {f"v{i}" for i in range(5)}
+def _fuse(frames):
+    return ViewGate(backend=NumpyReferenceBackend(stride=4)).fuse(
+        frames, {"round_cap": 3, "sigma": 0.01}
+    )
+
+
+def _excluded(res):
+    return {v for v, flag in res.excluded_sensors.items() if flag}
+
+
+def test_view_gate_excludes_only_the_biased_view():
+    res = _fuse(_scene(bias_view=3))
+    assert _excluded(res) == {"v3"}
     assert "rounds" in res.meta
+
+
+def test_view_gate_excludes_off_grid_fault():
+    res = _fuse(_scene(bias_view=3, region=(5, 17, 7, 19)))
+    assert "v3" in _excluded(res)
+
+
+def test_view_gate_clean_scene_excludes_nothing():
+    assert _excluded(_fuse(_scene())) == set()

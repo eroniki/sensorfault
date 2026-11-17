@@ -10,8 +10,8 @@ the closed-form alpha-weighted Jacobian of ``gaussian_uncertainty`` through the 
 implementation of ``reference.py`` (memory O(K * chunk)); a rasteriser-side per-(pixel, surfel) weight
 dump would replace it for large K.
 
-The ray-plane torch path is verified against the numpy reference only by tests/gs/test_torch_port.py
-(needs torch) and has not been run on the GPU yet.
+The ray-plane torch path is verified against the numpy reference by tests/gs/test_torch_port.py
+(needs torch) and has been run on the TITAN (see the PR description for the smoke results).
 """
 
 from __future__ import annotations
@@ -131,8 +131,8 @@ class GsplatBackend:
     (the cavity step overshoots by roughly the overlap factor).
 
     n_warmup steps train geometry + opacity, then opacity is frozen for n_steps more geometry steps
-    (Adam; separate learning rates). ``sigma_fit`` is unused: a view's weight scales its squared
-    depth loss (mean over its valid pixels)."""
+    (Adam; separate learning rates). A view's weight scales its squared depth loss
+    (mean over its valid pixels)."""
 
     def __init__(
         self,
