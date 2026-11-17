@@ -2,7 +2,8 @@
 
 Layout (the real cache may differ; adapt here)::
 
-    <root>/<scene>/<model>/<view_id>.npz      arrays: depth (H, W) metres; conf (H, W) optional
+    <root>/<scene>/<model>/<view_id>.npz  (depthcache layout: pass scene='<dataset>/<scene>');
+    arrays: depth (H, W) metres; confidence (H, W) optional (legacy key 'conf' also read)
     <root>/<scene>/transforms.json            {"views": {<view_id>: {"K": 3x3, "T_wc": 4x4}}}
                                               or {"K": 3x3 (shared), "views": {<id>: {"T_wc": ...}}}
 
@@ -37,7 +38,12 @@ class DirectoryDepthSource:
             v = views[vid]
             with np.load(f) as z:
                 depth = np.asarray(z["depth"], dtype=np.float32)
-                conf = np.asarray(z["conf"], dtype=np.float32) if "conf" in z.files else None
+                ck = (
+                    "confidence"
+                    if "confidence" in z.files
+                    else ("conf" if "conf" in z.files else None)
+                )
+                conf = np.asarray(z[ck], dtype=np.float32) if ck else None
             out.append(
                 DepthFrame(
                     sensor_id=vid,
