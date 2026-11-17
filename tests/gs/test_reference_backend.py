@@ -140,6 +140,7 @@ def test_view_information_matches_gaussian_uncertainty_loop():
             sigma2=np.array([sigma**2]),
             n_gauss=K,
             j_opacity=dD[kk],
+            lumped=True,
         )
         L += Li
         eta += ei
@@ -223,3 +224,45 @@ def test_gsplat_fit_recovers_plane():
     cav = b.render_cavity(st, frames[0], np.zeros((K, 9)), np.zeros((K, 9, 9)), np.ones(K, bool))
     err = np.abs(cav.depth[cav.valid] - _plane_depth(frames[0])[cav.valid])
     assert err.mean() < 2e-2
+
+
+def _bias_scene(n=6, hw=32, f=40.0, noise=0.005, bias=0.05, bias_view=3):
+    rng = np.random.default_rng(0)
+    K = np.array([[f, 0, hw / 2], [0, f, hw / 2], [0, 0, 1.0]])
+    nrm = np.array([0.15, -0.1, 1.0])
+    nrm /= np.linalg.norm(nrm)
+    frames = []
+    for i in range(n):
+        T = np.eye(4)
+        T[0, 3] = 0.12 * (i - (n - 1) / 2)
+        T[1, 3] = 0.03 * ((i % 2) - 0.5)
+        u, v = np.meshgrid(np.arange(hw) + 0.5, np.arange(hw) + 0.5)
+        rays = np.stack([(u - K[0, 2]) / f, (v - K[1, 2]) / f, np.ones_like(u)], -1)
+        d = ((np.array([0, 0, 2.0]) - T[:3, 3]) @ nrm) / (rays @ nrm)
+        d = d + noise * rng.standard_normal(d.shape)
+        if i == bias_view:
+            d[: hw // 2, : hw // 2] += bias
+        frames.append(DepthFrame(f"v{i}", i, d.astype(np.float32), K, T))
+    return frames
+
+
+def test_newton_cavity_is_closer_to_a_refit_than_no_step():
+    """Regression for the overlap overshoot: with w^2 blocks the leave-view-out step is several times
+    too long and worse than no step; the lumped (w) blocks are a majoriser and must beat no step."""
+    from sensorfault.gs.gate import ViewGateTest
+
+    frames = _bias_scene()
+    be = ref.NumpyReferenceBackend(stride=4)
+    w = {f.sensor_id: 1.0 for f in frames}
+    st = be.fit(frames, w)
+    st.meta["weights"] = dict(w)
+    st2 = be.fit(frames, {**w, "v3": 0.0}, init=st)
+    K = len(st.mu)
+    z, cov, keep = np.zeros((K, 9)), np.zeros((K, 9, 9)), np.ones(K, bool)
+    exact = be.render_cavity(st2, frames[3], z, cov, keep)
+    nostep = be.render_cavity(st, frames[3], z, cov, keep)
+    gate = ViewGateTest(be, frames, sigma=0.01)
+    cav = gate._pass(st, gate._fused(st), [], 1.0, want_cache_only=True)["v3"]
+    m = exact.valid & nostep.valid & cav.valid
+    rms = lambda a: float(np.sqrt(np.mean(a[m] ** 2)))
+    assert rms(cav.depth - exact.depth) < 0.7 * rms(nostep.depth - exact.depth)

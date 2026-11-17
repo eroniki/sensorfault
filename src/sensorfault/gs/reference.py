@@ -184,7 +184,11 @@ class NumpyReferenceBackend:
         n_iter: int = 25,
         opacity_lr: float = 0.2,
         chunk: int = 512,
+        lumped_information: bool = True,
     ):
+        # lumped_information: Lambda_k = sum_u w_uk J^T J (majorises the Hessian, never overshoots) instead
+        # of the w^2 blocks that drop the cross-surfel terms and overshoot by the overlap factor
+        self.lumped_information = lumped_information
         self.stride, self.n_warmup, self.n_iter = stride, n_warmup, n_iter
         self.opacity_lr, self.chunk = opacity_lr, chunk
 
@@ -307,6 +311,7 @@ class NumpyReferenceBackend:
                 sigma2=np.full(len(e), sigma**2),
                 n_gauss=K,
                 j_opacity=comp["dD"][kk, pp],
+                lumped=self.lumped_information,
             )
             Lam += Li
             eta += ei
