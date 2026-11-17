@@ -4,15 +4,13 @@
 \begin{figure}[!t]
 \centering
 \input{\mfigdir/fig_overview.tex}
-\caption{Method overview. Posed survey images with one depth map each (left) and a trajectory spline
+\caption{Method overview. Posed survey images with one depth map each (data) and a trajectory spline
 refined by render-and-compare build a depth-only 2DGS surfel map whose surfels carry information blocks
-$\Lambda_k$. To test view $j$, the block $\mathcal{B}_j$ of $B$ neighbouring strip frames is subtracted (red:
-the contribution), the remaining views' surface and its variance are rendered into view $j$, and the
-residual is whitened by $\Sigma_r$ of \eqref{eq:res}, whose surface term $UP^{(-j)}U^{\top}$ keeps the
-correlation between pixels of one surfel (the dots stand for the pose term $J_q\Sigma_qJ_q^{\top}$). A region scan
-and an energy statistic feed a Holm-controlled decision; the outer loop drops one flagged view per round
-and retrains. The thumbnails are the faulty view of E1 (Section~\ref{sec:results:e1}): its true depth,
-the cavity render, the standardised residual and the region-scan statistic per tile.}
+$\Lambda_k$ (shared surface). To test view $j$, the block $\mathcal{B}_j$ of $B$ neighbouring strip frames
+is subtracted, the remaining views' surface and its variance are rendered into view $j$, and the residual
+is whitened by $\Sigma_r$ of \eqref{eq:res} and scanned over regions (test). After all views are tested, a
+Holm step-down decides; if a view is flagged, the outer loop drops the top flagged view and retrains,
+otherwise the kept views and their fused surface are returned.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -129,7 +127,24 @@ normalised alpha weights $w_{uk}$; with opacity frozen, the rendered depth varia
   \label{eq:var}
 \end{equation}
 with $P_k$ the inverse of $\Lambda_k$ restricted to the nine geometric coordinates; only the $3\times3$
-marginal of $(\nu,\tau_1,\tau_2)$ enters.
+marginal of $(\nu,\tau_1,\tau_2)$ enters. Figure~\ref{fig:surfel}(a) draws one surfel in section: the
+offset moves every pixel's depth alike, the tilt moves it in proportion to the lever arm, so the rendered
+band is narrowest at the centre and widens towards the rim.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_surfel.tex}
+\caption{One surfel's uncertainty (schematic). (\textbf{a})~The surfel in section: its shape (black) is
+used for rendering only, its uncertainty over normal offset $\nu$ and tilt $\tau$ is a separate block
+(dashed: one draw of each). Bands: $\pm2\sigma$ of the surface, fused (grey) and in the cavity without
+the block $\mathcal{B}_j$ (orange), drawn $\times4$; red: the ray of one pixel. (\textbf{b})~The rendered
+depth standard deviation along the surfel, $\sqrt{J_{uk}P_kJ_{uk}^{\top}}$: an offset moves every pixel
+alike, a tilt in proportion to the lever arm, so it grows away from the pixels the remaining views
+support. (\textbf{c})~The same surfel in its $(\nu,\tau)$ plane, $1\sigma$: a view that sees one end
+constrains a mix of offset and tilt (black dashed), the block the rest (red dashed); fused, they give the
+small $P_k$ (black), without the block the cavity $P_k^{(-j)}$ (orange).}
+\label{fig:surfel}
+\end{figure}
 
 \subsection{Bayesian Fusion on Rendering and Leave-View-Out}
 \label{sec:method:fusion}
@@ -171,7 +186,22 @@ subtraction at the MAP and run no moment-matching iterations. The loop parallels
 of vanilla 3DGS, which fits every view's rendering by gradient steps; the difference is the explicit
 exchange of information between views, which gives both the fused uncertainty and the leave-view-out
 reference. Gaussian belief propagation for spatial AI \cite{mp_davison_gbp}, which passes Gaussian
-messages on factor graphs, is the closest relative in vision.
+messages on factor graphs, is the closest relative in vision. Figure~\ref{fig:cavity} follows one
+strip through fuse, cavity and test.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_cavity.tex}
+\caption{The cavity test along one strip (schematic; one roof is glass, which view $j$ reads 4~m too
+deep). (\textbf{a})~Fused: every frame's information gives a tight surface ($\pm2\sigma$, grey, drawn
+$\times10$). (\textbf{b})~Cavity of view $j$: the block $\mathcal{B}_j$ of $B=3$ frames is subtracted;
+the roof, which the block saw most, loses support and its band widens (orange; grey outline: fused). The
+cavity is rendered into view $j$ (red dashed). (\textbf{c})~Along one image row of view $j$: the aligned
+cavity render with $\pm2\sqrt{(\Sigma_r)_{uu}}$ against the depth of view $j$. (\textbf{d})~The standardised
+residual: each pixel of the faulty region (shaded) is within about $3\sigma$, but the region statistic
+$z_{\mathcal{R}}$ under the full $\Sigma_r$ is far beyond any threshold.}
+\label{fig:cavity}
+\end{figure}
 
 \subsection{The View Gate}
 \label{sec:method:gate}
@@ -235,10 +265,11 @@ pixels on one image row are rendered by three surfels (12, 10 and 8 pixels); eac
 independent sensor noise, and each surfel an offset and a tilt error with covariance $P_k$, large for the
 weakly supported first surfel (variances 1.0 and 0.3 $\sigma^{2}$) and small for the others (0.04 and 0.01).
 (\textbf{a})~Three draws of the residual: under the weak surfel (shaded) the pixels move together.
-(\textbf{b})~The full covariance $\Sigma_r$ has a dense block per surfel; (\textbf{c})~a diagonal-only
-model keeps the per-pixel variances but drops these blocks. (\textbf{d})~The variance of the residual
-summed over the first $w$ pixels of the weak surfel, full over diagonal: a region statistic under the
-diagonal model understates it by a factor that grows with the region, 6.1 over the whole surfel here.
+(\textbf{b})~The full covariance $\Sigma_r$ has a dense block per surfel; a diagonal-only model keeps the
+per-pixel variances on the diagonal but drops these blocks. (\textbf{c})~The variance of the residual summed
+over the first $w$ pixels of the weak surfel, with the full $\Sigma_r$ (red) and the diagonal only (black):
+a region statistic under the diagonal model understates it by a factor that grows with the region, 6.1 over
+the whole surfel here.
 On E1, this ratio per region-scan tile had median 1.54 and maximum 9.3 on a weakly supported view
 (Figure~\ref{fig:e1qualunc}).}
 \label{fig:upu}
@@ -263,7 +294,18 @@ cavity; the other views of the block are tested against their own blocks. The bl
 the reference, not the number of tests: the Holm family stays $M=NR_{\max}$, independent of $B$ (testing
 whole blocks instead would give $\lceil N/B\rceil R_{\max}$ tests, an alternative we do not use). In the
 outer loop, a rejected view is dropped alone, not with its block, and its neighbours are re-tested in the
-next round against a cavity that no longer contains it.
+next round against a cavity that no longer contains it. Figure~\ref{fig:scene3d} shows the block in a survey.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_scene3d.tex}
+\caption{Leave-block-out in a survey (schematic). Three strips of frames; the block $\mathcal{B}_j$ of
+$B=3$ frames around view $j$ is left out (hollow red), and the cavity is rendered into view $j$'s footprint
+(red). Each surfel is coloured by the number of views outside the block that still support it: lowest
+along the middle strip, where only the adjacent strips and the strip's farther frames remain. The centre of
+the roof, which only the block saw, keeps no support and its pixels are untestable (grey).}
+\label{fig:scene3d}
+\end{figure}
 
 The price is a weaker cavity. Removing $B$ views removes more information, so the rendered variance
 grows and the minimum detectable bias rises; pixels seen only within the block become untestable, so
