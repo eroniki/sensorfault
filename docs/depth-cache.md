@@ -48,6 +48,41 @@ which is the reader's fallback name.
 ## Tests
 `pytest tests/test_depthcache_cache.py` (CPU, offline, fake estimator).
 
+## Scale alignment
+
+Cached depth is raw model output. On aerial MatrixCity block 3 the metric models are off by a large global
+scale (Depth Pro ~0.01x, Metric3D v2 ~0.15x, UniDepthV2 ~0.87x), and Depth Anything V2 is relative inverse depth.
+`sensorfault.depthcache.align` fits this per view against reference depth that is valid at some pixels
+(SfM points, LiDAR, exact synthetic depth):
+
+```python
+from sensorfault.depthcache import load_depth_aligned
+
+res, al = load_depth_aligned(root, "matrixcity", "block3", "depth_pro", "0000", ref_depth)
+```
+
+- Metric models: one scale, the median of ref/pred (robust to outliers).
+- DAv2 (`relative_inverse_depth`): affine fit `1/ref = a*raw + b`; RANSAC over pixel pairs
+  (inlier = relative inverse-depth error <= 10%) then least squares on the inliers. Measured on synthetic
+  data to hold up to 40% corrupted reference pixels.
+- Raises `AlignmentError` for fewer than `min_pixels` (200) usable reference pixels, constant raw depth, no
+  consensus, or a non-positive slope. Nothing is returned silently from a degenerate fit.
+- Returns a metric `DepthResult` plus an `Alignment` (parameters, `n_valid`, `n_inliers`, median relative
+  residual over all valid pixels). The residual is in-sample: gate on `n_inliers` as well.
+- Metric3D's clamp (`max_depth_m`, read from the manifest) marks saturated pixels: they are excluded from the
+  fit and NaN in the output.
+- Confidence is dropped by default (its semantics differ per model and are not converted); `keep_confidence=True`
+  passes the raw map through. The cache on disk is never modified.
+
+**Scope.** Alignment removes a per-view scale (and offset) error, so a fault that is only a scale or offset
+error cannot be detected after it; faults are deviations from "reference-aligned depth up to scale and
+offset", consistent with the scale/offset the gate already projects out. If the reference is the exact
+synthetic depth the view is later tested against, the fit absorbs part of the fault under test and clean-view
+residuals are optimistic. For experiments take the reference from something available at test time (SfM
+points, or the other views' fused surface), leave-view-out with respect to the tested view. Where the
+reference comes from for real sets (UseGeo/ETH3D) is not decided here; decide it before any H-series result
+depends on alignment.
+
 ## First GPU run: MatrixCity block 3 (4 views: 0000, 0005, 0006, 0007; 2026-11-17, TITAN RTX)
 
 | Model | Peak VRAM | s/view | Result vs exact depth (median GT 338 m) |
@@ -72,3 +107,27 @@ next to a centimetre-level fault: use `--dtype float32` for synthetic fault expe
 
 **Confidence.** UniDepth's confidence reads as predicted error (higher = worse). Metric3D's direction
 flips between views on block 3, so neither is a drop-in "higher = better" score.
+
+### Alignment on the real block 3 cache (4 views, reference = exact GT, CPU, 2026-11-17)
+
+Run a: dense exact depth. Run b: 1% of valid pixels (20,736) with 10% of those multiplied by 3, to mimic SfM
+points; "err vs GT" in b is measured on the 99% held-out pixels. All 32 fits succeeded (no `AlignmentError`).
+Scale is ref/pred; resid is the in-sample median relative residual (inflated in b by the x3 points).
+
+| Model | Scale per view, a / b | Median rel. error vs GT after alignment, a / b |
+|---|---|---|
+| Depth Pro | 63.1-82.6 / 63.5-83.4 | 0.027-0.054 / 0.027-0.056 |
+| Metric3D v2 | 5.4-6.9 / 5.5-7.0 | 0.095-0.141 / 0.084-0.136 |
+| UniDepthV2 | 1.145-1.184 / 1.146-1.186 | 0.003-0.008 / 0.003-0.008 |
+| DAv2 (affine, 1/ref = a*raw + b) | a 3.6-5.8e-6, b 2.1-2.3e-3 | 0.012-0.024 / 0.012-0.024 |
+
+- The scale must be per view: it varies about +-13% across the 4 views for Depth Pro (63-83) and Metric3D (5.4-6.9).
+- One scale per view is enough for Depth Pro (3-5% left), UniDepth (under 1%) and DAv2 with its affine fit
+  (1-2%). Metric3D keeps 9.5-14% error after scaling, so its error has a shape component beyond scale.
+- Robustness: sparse-run scales stay within 0.5-4% of the dense ones, held-out error is no worse than the dense
+  in-sample error, and the DAv2 RANSAC rejected 10-17% of the sparse points (10% were planted).
+- This cache was written before `max_depth_m` was recorded in the manifest, so the Metric3D clamp was not
+  picked up; it does not matter here (largest prediction 92 m, below 300 m).
+- The reference here is the exact GT, so this checks the premise (a per-view scale/affine fits), not the
+  fault-detection setting: see Scope above. Tested environment: `docs/depth-cache-env.txt` on branch
+  `depth-cache-env`.
