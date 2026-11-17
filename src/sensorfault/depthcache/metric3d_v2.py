@@ -23,9 +23,11 @@ Confidence
 ``model.inference`` returns ``(pred_depth, confidence, output_dict)``. The README documents no
 semantics for ``confidence`` (it only documents the normal confidence). The training code
 (``training/mono/model/losses/ConfidenceLoss.py``) regresses ``1 - |pred - gt| / gt`` where the
-relative error is below 1, so higher = more reliable and the value is roughly ``1 - AbsRel``. It is
-returned unmodified (no de-canonicalisation: it is dimensionless), resampled to the input size.
-UNVERIFIED: that the released checkpoints were trained with that loss, and its calibration.
+relative error is below 1, which would make higher = more reliable. MEASURED on MatrixCity block 3
+(4 views, 2026-11-17): values span -0.97..1.07 (not [0, 1]) and after median scaling to the ground
+truth the Spearman correlation with absolute error is -0.57..+0.31, i.e. the direction flips between
+views. Do not use it as a reliability score without per-scene validation. It is returned unmodified
+(no de-canonicalisation: it is dimensionless), resampled to the input size.
 
 Licence: code BSD-2-Clause (repository README/LICENSE). The Hugging Face weights repo
 ``JUGGHM/Metric3D`` carries no model card or licence text (checked 2026-11-17); the weights
@@ -61,8 +63,9 @@ WEIGHTS_LICENCE = (
     "treat as unconfirmed"
 )
 CONFIDENCE_SEMANTICS = (
-    "raw head output; training loss targets 1-|pred-gt|/gt (higher = more reliable); "
-    "calibration unverified"
+    "raw head output, not limited to [0, 1]; training loss targets 1-|pred-gt|/gt but measured "
+    "direction vs error is inconsistent between views (MatrixCity block 3, Spearman -0.57..+0.31): "
+    "do not treat as a reliability score"
 )
 
 

@@ -242,3 +242,40 @@ def test_manifest_keeps_result_extra(tmp_path):
     cache.flush()
     rec = dc.ModelCache(tmp_path, "ds", "sc", "depth_pro").manifest["views"]["0001"]
     assert rec["extra"] == {"focal_source": "given_rescaled", "focal_pred_px": 8.0}
+
+
+def test_resume_refuses_changed_settings_and_load_returns_extra(tmp_path):
+    import numpy as np
+    import pytest
+
+    from sensorfault.depthcache.base import DepthResult
+    from sensorfault.depthcache.cache import ModelCache, load_depth
+
+    c = ModelCache(tmp_path, "d", "s", "m")
+    c.start({"max_depth_m": 300.0}, "cpu")
+    res = DepthResult(
+        depth=np.ones((4, 4), np.float32), kind="metric_depth", extra={"focal_source": "given"}
+    )
+    c.put("v0", res, 0.1)
+    c.flush()
+    assert load_depth(tmp_path, "d", "s", "m", "v0").extra == {"focal_source": "given"}
+    c2 = ModelCache(tmp_path, "d", "s", "m")
+    c2.start({"max_depth_m": 300.0}, "cpu")  # same settings resumes
+    with pytest.raises(RuntimeError, match="max_depth_m"):
+        ModelCache(tmp_path, "d", "s", "m").start({"max_depth_m": 1000.0}, "cpu")
+    ModelCache(tmp_path, "d", "s", "m").start({"max_depth_m": 1000.0}, "cpu", True)
+    with pytest.raises(RuntimeError, match="dtype"):
+        ModelCache(tmp_path, "d", "s", "m", "float32").start({"max_depth_m": 1000.0}, "cpu")
+
+
+def test_cli_opt_validation(capsys):
+    import importlib.util
+    import pathlib
+
+    spec = importlib.util.spec_from_file_location(
+        "depth_cache_cli", pathlib.Path(__file__).parents[1] / "scripts" / "depth_cache.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    rc = mod.main(["--dataset", "matrixcity", "--scene", "x", "--dry-run", "--opt", "bad"])
+    assert rc == 2 and "MODEL.KEY=VALUE" in capsys.readouterr().err

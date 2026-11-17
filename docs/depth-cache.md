@@ -66,3 +66,27 @@ res, al = load_depth_aligned(root, "matrixcity", "block3", "depth_pro", "0000", 
 - Returns a metric `DepthResult` plus an `Alignment` (parameters, pixels used, median relative residual).
   Gate on `n_used` and the residual before trusting a view. The cache on disk is never modified.
 - Open question: where the reference comes from for real sets (UseGeo/ETH3D) is not decided here.
+## First GPU run: MatrixCity block 3 (4 views: 0000, 0005, 0006, 0007; 2026-11-17, TITAN RTX)
+
+| Model | Peak VRAM | s/view | Result vs exact depth (median GT 338 m) |
+|---|---|---|---|
+| Depth Pro (fp16) | 6.3 GB | 0.54 | pred/GT 0.009 (0.013-0.016 with given-focal rescale), AbsRel 0.98; reads the scene as a miniature (3-5 m) |
+| Metric3D v2 ViT-L | 4.4 GB | 1.35 | median 0.15x GT (clamped at 300 m by default; 72% of GT is beyond that) |
+| UniDepthV2 ViT-L | 4.6 GB | 0.22 | median 0.87x GT, AbsRel 0.12-0.15 (CUDA patch op not compiled: slow fallback) |
+| DAv2 Large | 2.1 GB | 0.35 | relative; affine fit to 1/GT gives AbsRel 1.4-3.7% |
+
+VRAM is from nvidia-smi and includes about 0.5 GB used by other processes. Environment pins
+(`transformers`, `timm`, `einops`, the UniDepth and Metric3D checkouts) were not recorded in the run:
+record `pip freeze` and the two clone commit hashes next time.
+
+Settings: `model_options` in `configs/depth_cache.yaml` or `--opt metric3d_v2.max_depth_m=1000` pass
+options to a wrapper's `build()`. Resuming a cache directory with different model settings or dtype is
+refused (use a fresh `--root`). `load_depth` returns `extra` from the manifest (e.g. Depth Pro's
+predicted focal, needed to undo the focal rescale).
+
+**Storage precision.** The cache stores float16 by default: a 0.25 m step at 256-512 m, and a Depth Pro
+map at 3-5 m scaled by about 70 lands on a 0.27 m step. Small next to the models' error on block 3, but not
+next to a centimetre-level fault: use `--dtype float32` for synthetic fault experiments on cached depth.
+
+**Confidence.** UniDepth's confidence reads as predicted error (higher = worse). Metric3D's direction
+flips between views on block 3, so neither is a drop-in "higher = better" score.

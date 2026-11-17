@@ -8,3 +8,8 @@ datasets:
   matrixcity: {scene: block3}   # needs data/matrixcity/<scene>/{transforms.json,images/}; not downloaded here
   usegeo: stub                  # needs M's approval before any download
   eth3d: stub                   # needs M's approval; licence unchecked
+# Per-model build() options (also --opt model.key=value). Metric3D clamps depth at 300 m by default,
+# which is below most aerial ground truth; raise it for aerial runs and re-run (the cache does not
+# notice settings changes, so use a fresh --root).
+model_options: {}
+#  metric3d_v2: {max_depth_m: 1000}

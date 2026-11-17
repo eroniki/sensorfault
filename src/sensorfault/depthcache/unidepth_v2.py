@@ -18,7 +18,10 @@ Confidence semantics (NOTE: differs from the name). In the released code the out
 ``log(confidence)`` regress the norm of the (median-aligned) depth error, so it reads as a
 predicted error magnitude, i.e. HIGHER = LESS reliable. The README only lists "Confidence output"
 without semantics. Returned unmodified; downstream code must not assume higher is better.
-UNVERIFIED empirically: monotone relation to real error and its units.
+MEASURED on MatrixCity block 3 (4 views, 2026-11-17): after scaling depth to the ground-truth median
+(as its loss does), higher confidence goes with larger error (Spearman +0.29..+0.72; bottom 10% of
+confidence 0.2-0.4% error, top 10% 4-8%). Against the unscaled error the sign flips because the global
+scale error dominates. Values span 0.6..568, so they are not bounded.
 
 Licence: code CC BY-NC 4.0 (repository README/LICENSE). The Hugging Face weights cards carry no
 licence field (checked 2026-11-17), so the weights are treated as CC BY-NC 4.0 (non-commercial),
