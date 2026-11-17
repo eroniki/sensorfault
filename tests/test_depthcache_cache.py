@@ -196,8 +196,10 @@ def test_unknown_model_and_missing_wrapper(tmp_path):
         run("ds", "sc", ["nope"], tmp_path, views=make_views())
     from sensorfault.depthcache.run import default_builder
 
-    with pytest.raises((RuntimeError, ImportError, AttributeError, OSError)):
-        default_builder("unidepth_v2").load(device="cpu")  # wrapper absent or weights absent
+    est = default_builder("unidepth_v2")
+    est.checkpoint = str(tmp_path / "no-such-checkpoint")  # never reach the hub from this test
+    with pytest.raises((RuntimeError, ImportError, AttributeError, OSError, ValueError)):
+        est.load(device="cpu")  # wrapper deps absent or weights absent
 
 
 def test_stub_datasets_raise_clearly():
@@ -226,3 +228,54 @@ def test_matrixcity_views_from_synthetic_block(tmp_path):
 
     Image.fromarray(np.full((4, 6, 3), 9, np.uint8)).save(block / "images" / "7.png")
     assert views[0].load_rgb().shape == (4, 6, 3)
+
+
+def test_manifest_keeps_result_extra(tmp_path):
+    cache = dc.ModelCache(tmp_path, "ds", "sc", "depth_pro", "float32")
+    r = DepthResult(
+        np.ones((2, 2), np.float32),
+        "metric_depth",
+        focal_px=10.0,
+        extra={"focal_source": "given_rescaled", "focal_pred_px": np.float32(8.0)},
+    )
+    cache.put("0001", r, 0.1)
+    cache.flush()
+    rec = dc.ModelCache(tmp_path, "ds", "sc", "depth_pro").manifest["views"]["0001"]
+    assert rec["extra"] == {"focal_source": "given_rescaled", "focal_pred_px": 8.0}
+
+
+def test_resume_refuses_changed_settings_and_load_returns_extra(tmp_path):
+    import numpy as np
+    import pytest
+
+    from sensorfault.depthcache.base import DepthResult
+    from sensorfault.depthcache.cache import ModelCache, load_depth
+
+    c = ModelCache(tmp_path, "d", "s", "m")
+    c.start({"max_depth_m": 300.0}, "cpu")
+    res = DepthResult(
+        depth=np.ones((4, 4), np.float32), kind="metric_depth", extra={"focal_source": "given"}
+    )
+    c.put("v0", res, 0.1)
+    c.flush()
+    assert load_depth(tmp_path, "d", "s", "m", "v0").extra == {"focal_source": "given"}
+    c2 = ModelCache(tmp_path, "d", "s", "m")
+    c2.start({"max_depth_m": 300.0}, "cpu")  # same settings resumes
+    with pytest.raises(RuntimeError, match="max_depth_m"):
+        ModelCache(tmp_path, "d", "s", "m").start({"max_depth_m": 1000.0}, "cpu")
+    ModelCache(tmp_path, "d", "s", "m").start({"max_depth_m": 1000.0}, "cpu", True)
+    with pytest.raises(RuntimeError, match="dtype"):
+        ModelCache(tmp_path, "d", "s", "m", "float32").start({"max_depth_m": 1000.0}, "cpu")
+
+
+def test_cli_opt_validation(capsys):
+    import importlib.util
+    import pathlib
+
+    spec = importlib.util.spec_from_file_location(
+        "depth_cache_cli", pathlib.Path(__file__).parents[1] / "scripts" / "depth_cache.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    rc = mod.main(["--dataset", "matrixcity", "--scene", "x", "--dry-run", "--opt", "bad"])
+    assert rc == 2 and "MODEL.KEY=VALUE" in capsys.readouterr().err

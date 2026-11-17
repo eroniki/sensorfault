@@ -15,15 +15,15 @@ from sensorfault.depthcache.datasets import View, enumerate_views
 MODEL_IDS = ("depth_pro", "metric3d_v2", "unidepth_v2", "depth_anything_v2")
 
 
-def default_builder(model_id: str) -> DepthEstimator:
-    """Import ``sensorfault.depthcache.<model_id>`` lazily and call its ``build()``."""
+def default_builder(model_id: str, **options) -> DepthEstimator:
+    """Import ``sensorfault.depthcache.<model_id>`` lazily and call ``build(**options)``."""
     if model_id not in MODEL_IDS:
         raise ValueError(f"unknown model {model_id!r}; known: {', '.join(MODEL_IDS)}")
     try:
         mod = importlib.import_module(f"sensorfault.depthcache.{model_id}")
     except ImportError as e:
         raise RuntimeError(f"wrapper for {model_id} is not available: {e}") from e
-    return mod.build()
+    return mod.build(**options)
 
 
 def free_gpu() -> None:

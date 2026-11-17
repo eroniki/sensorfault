@@ -91,10 +91,19 @@ def save_depth(
 
 
 def load_depth(root, dataset: str, scene: str, model_id: str, view_id: str) -> DepthResult:
-    """Load one cached view. Depth and confidence are returned as float32."""
+    """Load one cached view. Depth and confidence are returned as float32.
+
+    ``extra`` (e.g. Depth Pro's predicted focal and ``focal_source``, Metric3D's clamp) is read back
+    from the model's manifest.json when present.
+    """
     path = view_path(root, dataset, scene, model_id, view_id)
     if not path.is_file():
         raise FileNotFoundError(f"no cached depth at {path}")
+    extra: dict = {}
+    mpath = model_dir(root, dataset, scene, model_id) / MANIFEST
+    if mpath.is_file():
+        rec = json.loads(mpath.read_text()).get("views", {}).get(view_id, {})
+        extra = dict(rec.get("extra") or {})
     with np.load(path, allow_pickle=False) as z:
         conf = z["confidence"].astype(np.float32) if "confidence" in z.files else None
         focal = float(z["focal_px"]) if "focal_px" in z.files else None
@@ -103,6 +112,7 @@ def load_depth(root, dataset: str, scene: str, model_id: str, view_id: str) -> D
             kind=str(z["kind"]),
             confidence=conf,
             focal_px=focal,
+            extra=extra,
         )
 
 
@@ -153,8 +163,23 @@ class ModelCache:
             self.manifest = json.loads(self.manifest_path.read_text())
             self.manifest.setdefault("views", {})
 
-    def start(self, info: dict, device: str) -> None:
-        """Record run metadata (overwrites model info/environment, keeps view records)."""
+    def start(self, info: dict, device: str, allow_settings_change: bool = False) -> None:
+        """Record run metadata (overwrites model info/environment, keeps view records).
+
+        Refuses to resume over existing views if the model settings or dtype differ from the ones
+        recorded, because the manifest would then describe depth it did not produce.
+        """
+        old = self.manifest.get("model_info")
+        if old is not None and self.manifest["views"] and not allow_settings_change:
+            new = json.loads(json.dumps(info, default=float))
+            diff = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
+            if self.manifest.get("dtype") not in (None, self.dtype):
+                diff.append("dtype")
+            if diff:
+                raise RuntimeError(
+                    f"{self.dir}: settings changed since the cached views were written "
+                    f"({', '.join(diff)}); use a fresh --root or pass allow_settings_change=True"
+                )
         self.manifest.update(
             dataset=self.dataset,
             scene=self.scene,
@@ -182,6 +207,8 @@ class ModelCache:
             "shape": list(np.asarray(result.depth).shape),
             "has_confidence": result.confidence is not None,
             "focal_px": None if result.focal_px is None else float(result.focal_px),
+            # e.g. Depth Pro's predicted focal and focal_source: needed to undo a focal rescale
+            "extra": json.loads(json.dumps(result.extra or {}, default=float)),
         }
 
     def fail(self, view_id: str, error: str, seconds: float = 0.0) -> None:

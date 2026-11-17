@@ -26,6 +26,7 @@ def test_decanonicalise_math():
     assert np.allclose(m3d.decanonicalise(d, 500.0), 5.0)  # f/1000 scaling
     assert np.allclose(m3d.decanonicalise(d, 1000.0), 10.0)
     assert m3d.decanonicalise(d * 1e3, 1000.0).max() == m3d.MAX_DEPTH_M
+    assert m3d.decanonicalise(d * 1e3, 1000.0, max_depth_m=1000.0).max() == 1000.0
 
 
 def test_metric3d_predict_rescales_with_focal(monkeypatch):
