@@ -62,10 +62,27 @@ res, al = load_depth_aligned(root, "matrixcity", "block3", "depth_pro", "0000", 
 ```
 
 - Metric models: one scale, the median of ref/pred (robust to outliers).
-- DAv2 (`relative_inverse_depth`): affine fit `1/ref = a*raw + b`, trimmed least squares.
-- Returns a metric `DepthResult` plus an `Alignment` (parameters, pixels used, median relative residual).
-  Gate on `n_used` and the residual before trusting a view. The cache on disk is never modified.
-- Open question: where the reference comes from for real sets (UseGeo/ETH3D) is not decided here.
+- DAv2 (`relative_inverse_depth`): affine fit `1/ref = a*raw + b`; RANSAC over pixel pairs
+  (inlier = relative inverse-depth error <= 10%) then least squares on the inliers. Measured on synthetic
+  data to hold up to 40% corrupted reference pixels.
+- Raises `AlignmentError` for fewer than `min_pixels` (200) usable reference pixels, constant raw depth, no
+  consensus, or a non-positive slope. Nothing is returned silently from a degenerate fit.
+- Returns a metric `DepthResult` plus an `Alignment` (parameters, `n_valid`, `n_inliers`, median relative
+  residual over all valid pixels). The residual is in-sample: gate on `n_inliers` as well.
+- Metric3D's clamp (`max_depth_m`, read from the manifest) marks saturated pixels: they are excluded from the
+  fit and NaN in the output.
+- Confidence is dropped by default (its semantics differ per model and are not converted); `keep_confidence=True`
+  passes the raw map through. The cache on disk is never modified.
+
+**Scope.** Alignment removes a per-view scale (and offset) error, so a fault that is only a scale or offset
+error cannot be detected after it; faults are deviations from "reference-aligned depth up to scale and
+offset", consistent with the scale/offset the gate already projects out. If the reference is the exact
+synthetic depth the view is later tested against, the fit absorbs part of the fault under test and clean-view
+residuals are optimistic. For experiments take the reference from something available at test time (SfM
+points, or the other views' fused surface), leave-view-out with respect to the tested view. Where the
+reference comes from for real sets (UseGeo/ETH3D) is not decided here; decide it before any H-series result
+depends on alignment.
+
 ## First GPU run: MatrixCity block 3 (4 views: 0000, 0005, 0006, 0007; 2026-11-17, TITAN RTX)
 
 | Model | Peak VRAM | s/view | Result vs exact depth (median GT 338 m) |
