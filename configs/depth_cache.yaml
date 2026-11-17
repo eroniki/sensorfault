@@ -1,0 +1,10 @@
+# Depth-cache defaults (CLI flags override). Cache is git-ignored: keep root under data/ or outputs/.
+root: data/depth_cache
+device: cuda
+dtype: float16        # float16 | float32 (stored depth/confidence)
+models: [depth_pro, metric3d_v2, unidepth_v2, depth_anything_v2]
+# depth_anything_v2 stores raw relative inverse depth (kind="relative_inverse_depth"); the fit aligns it.
+datasets:
+  matrixcity: {scene: block3}   # needs data/matrixcity/<scene>/{transforms.json,images/}; not downloaded here
+  usegeo: stub                  # needs M's approval before any download
+  eth3d: stub                   # needs M's approval; licence unchecked
