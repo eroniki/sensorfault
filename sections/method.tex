@@ -4,15 +4,13 @@
 \begin{figure}[!t]
 \centering
 \input{\mfigdir/fig_overview.tex}
-\caption{Method overview. Posed survey images with one depth map each (left) and a trajectory spline
+\caption{Method overview. Posed survey images with one depth map each (data) and a trajectory spline
 refined by render-and-compare build a depth-only 2DGS surfel map whose surfels carry information blocks
-$\Lambda_k$. To test view $j$, the block $\mathcal{B}_j$ of $B$ neighbouring strip frames is subtracted (red:
-the contribution), the remaining views' surface and its variance are rendered into view $j$, and the
-residual is whitened by $\Sigma_r$ of \eqref{eq:res}, whose surface term $UP^{(-j)}U^{\top}$ keeps the
-correlation between pixels of one surfel (the dots stand for the pose term $J_q\Sigma_qJ_q^{\top}$). A region scan
-and an energy statistic feed a Holm-controlled decision; the outer loop drops one flagged view per round
-and retrains. The thumbnails are the faulty view of E1 (Section~\ref{sec:results:e1}): its true depth,
-the cavity render, the standardised residual and the region-scan statistic per tile.}
+$\Lambda_k$ (shared surface). To test view $j$, the block $\mathcal{B}_j$ of $B$ neighbouring strip frames
+is subtracted, the remaining views' surface and its variance are rendered into view $j$, and the residual
+is whitened by $\Sigma_r$ of \eqref{eq:res} and scanned over regions (test). After all views are tested, a
+Holm step-down decides; if a view is flagged, the outer loop drops the top flagged view and retrains,
+otherwise the kept views and their fused surface are returned.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -267,10 +265,11 @@ pixels on one image row are rendered by three surfels (12, 10 and 8 pixels); eac
 independent sensor noise, and each surfel an offset and a tilt error with covariance $P_k$, large for the
 weakly supported first surfel (variances 1.0 and 0.3 $\sigma^{2}$) and small for the others (0.04 and 0.01).
 (\textbf{a})~Three draws of the residual: under the weak surfel (shaded) the pixels move together.
-(\textbf{b})~The full covariance $\Sigma_r$ has a dense block per surfel; (\textbf{c})~a diagonal-only
-model keeps the per-pixel variances but drops these blocks. (\textbf{d})~The variance of the residual
-summed over the first $w$ pixels of the weak surfel, full over diagonal: a region statistic under the
-diagonal model understates it by a factor that grows with the region, 6.1 over the whole surfel here.
+(\textbf{b})~The full covariance $\Sigma_r$ has a dense block per surfel; a diagonal-only model keeps the
+per-pixel variances on the diagonal but drops these blocks. (\textbf{c})~The variance of the residual summed
+over the first $w$ pixels of the weak surfel, with the full $\Sigma_r$ (red) and the diagonal only (black):
+a region statistic under the diagonal model understates it by a factor that grows with the region, 6.1 over
+the whole surfel here.
 On E1, this ratio per region-scan tile had median 1.54 and maximum 9.3 on a weakly supported view
 (Figure~\ref{fig:e1qualunc}).}
 \label{fig:upu}

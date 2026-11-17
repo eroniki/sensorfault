@@ -1,24 +1,22 @@
 % E1, one faulty view: detection [%] at matched 5% per-view false alarm (10 seeds per cell)
 \begin{tikzpicture}
-\begin{groupplot}[sfaxis, group style={group size=2 by 1, horizontal sep=1.5cm}, width=4.3cm, height=4.0cm,
-  scale only axis, enlargelimits=false, point meta min=50, point meta max=100,
-  xtick={0,...,3}, xticklabels={0.05,0.1,0.2,0.4},
-  ytick={0,...,3}, yticklabels={2,4,8,16}]
-\nextgroupplot[xlabel={Area fraction [--]}, ylabel={Magnitude [$\sigma$]},
-  title={\sfsub{a}~Gate}]
-\addplot[matrix plot*, point meta=explicit, mesh/cols=4,
-  nodes near coords={\pgfmathprintnumber[fixed,precision=0]{\pgfplotspointmeta}},
-  every node near coord/.append style={font=\sffamily\sansmath\tiny, anchor=center,
-    color=black}] table[x=ai, y=di, meta=gate, col sep=comma] {\efigdir/e1_grid_detection.csv};
-\nextgroupplot[xlabel={Area fraction [--]}, ylabel={Magnitude [$\sigma$]},
-  title={\sfsub{b}~Aligned RMS}]
-\addplot[matrix plot*, point meta=explicit, mesh/cols=4,
-  nodes near coords={\pgfmathprintnumber[fixed,precision=0]{\pgfplotspointmeta}},
-  every node near coord/.append style={font=\sffamily\sansmath\tiny, anchor=center,
-    color=black}] table[x=ai, y=di, meta=rms, col sep=comma] {\efigdir/e1_grid_detection.csv};
+\begin{groupplot}[sfaxis, sfbar, /pgf/bar width=5.5pt, group style={group size=2 by 1, horizontal sep=0.35cm},
+  width=5.6cm, height=3.0cm, scale only axis, ymin=0, ymax=118, ytick={0,25,50,75,100}, xmin=-0.55, xmax=3.55,
+  xtick={0,...,3}, xticklabels={$2\sigma$,$4\sigma$,$8\sigma$,$16\sigma$}, xlabel={Fault magnitude},
+  every node near coord/.append style={font=\sffamily\sansmath\tiny, anchor=south, inner sep=1pt},
+  legend style={at={(-0.03,-0.36)}, anchor=north, legend columns=5}]
+\nextgroupplot[title={\sfsub{a} Gate (this paper)}, ylabel={Detected [\%]}]
+\addplot[fill=sfgrey!45, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y=gate0, meta=gate0lab, col sep=comma] {\efigdir/e1_grid_bars.csv};
+\addplot[fill=sfgrey, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y=gate1, meta=gate1lab, col sep=comma] {\efigdir/e1_grid_bars.csv};
+\addplot[fill=black!65, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y=gate2, meta=gate2lab, col sep=comma] {\efigdir/e1_grid_bars.csv};
+\addplot[fill=black, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y=gate3, meta=gate3lab, col sep=comma] {\efigdir/e1_grid_bars.csv};
+
+\nextgroupplot[title={\sfsub{b} Aligned RMS}, yticklabels={}]
+\addlegendimage{empty legend}
+\addplot[fill=sfgrey!45, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y=rms0, meta=rms0lab, col sep=comma] {\efigdir/e1_grid_bars.csv};
+\addplot[fill=sfgrey, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y=rms1, meta=rms1lab, col sep=comma] {\efigdir/e1_grid_bars.csv};
+\addplot[fill=black!65, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y=rms2, meta=rms2lab, col sep=comma] {\efigdir/e1_grid_bars.csv};
+\addplot[fill=black, draw=black, point meta=explicit symbolic, nodes near coords] table[x=x, y=rms3, meta=rms3lab, col sep=comma] {\efigdir/e1_grid_bars.csv};
+\legend{Fault area (share of the view):, 5\%, 10\%, 20\%, 40\%}
 \end{groupplot}
-\begin{axis}[sfcolorbar=4.3cm, at={($(group c2r1.south east)+(0,-1.25cm)$)}, anchor=north east,
-  point meta min=50, point meta max=100, colorbar style={xlabel={Detected [\%]}}]
-\addplot[draw=none] coordinates {(0,0)};
-\end{axis}
 \end{tikzpicture}

@@ -36,9 +36,11 @@ wall-clock per stage; a gate pass tests every active view once.}
 \begin{figure}[!htbp]
 \centering
 \input{\efigdir/fig_e1_grid.tex}
-\caption{E1, one faulty view: detection (\%) by the gate and by the aligned-RMS baseline, each at a
-per-view threshold matched to 5\% false alarm on clean scenes, across fault magnitude and area (10 seeds
-per cell). The grid is too easy to separate them; the baseline misses only at $2\sigma$ over 5\%.}
+\caption{E1, one faulty view: share of seeds in which the faulty view was detected (10 seeds per bar), by
+fault magnitude and by the share of the view the fault covers, (\textbf{a})~for the gate and
+(\textbf{b})~for the aligned-RMS baseline, each at a per-view threshold matched to 5\% false alarm on clean
+scenes. The grid is too easy to separate them: both detect every case except one, where the baseline
+misses 3 of 10 at $2\sigma$ over 5\% of the view.}
 \label{fig:e1grid}
 \end{figure}
 
@@ -55,9 +57,10 @@ Holm-controlled loop excluded any view, with and without the scene temperature.}
 \centering
 \input{\efigdir/fig_e1_repeated.tex}
 \caption{E1, the same $8\sigma$ error on a 25~m patch in three neighbouring frames of a strip (10 seeds per
-bar): faulty frames excluded and clean views excluded for leave-block-out ($B=3$) and single-view
+bar), at the calibrated noise (black) and at $1.3\times$ (grey): (\textbf{a})~share of the faulty frames
+excluded and (\textbf{b})~share of the clean views excluded, for leave-block-out ($B=3$) and single-view
 leave-out ($B=1$), with the loop (one view per round) or a single pass (all rejected views at once), and
-without the scene temperature or without whitening.}
+for the loop without the scene temperature or without whitening.}
 \label{fig:e1repeated}
 \end{figure}
 
@@ -66,10 +69,11 @@ without the scene temperature or without whitening.}
 \input{\mfigdir/fig_e1_compact.tex}
 \caption{E1, the test on single views of one grid scene ($8\sigma$ on 40\% of view 59). Rows: a clean view far
 from the fault, the faulty view, and a clean neighbour on the same strip, swamped while the faulty view
-still shapes its cavity. Columns: true depth; the cavity's rendered surfel depth (grey: untestable);
-the residual standardised by $\sqrt{(\Sigma_r)_{uu}}$; and the region-scan $|z|$ per tile, with the tiles
-above the first Holm threshold outlined. Flagged tiles: 0, 21 and 16. Once the faulty view is dropped, the
-neighbour has none (Figure~\ref{fig:e1qualviews}, which also shows the raw residuals).}
+still shapes its cavity. Columns: (\textbf{a})~true depth; (\textbf{b})~the cavity's rendered surfel depth (grey: untestable);
+(\textbf{c})~the residual standardised by $\sqrt{(\Sigma_r)_{uu}}$; and (\textbf{d})~the region-scan $|z|$ per
+tile ($\geq$20 clipped), with the tiles above the first Holm threshold (red mark on the colour bar) outlined
+in black. The verdict and the number of flagged tiles are given at the end of each row. Once the faulty view
+is dropped, the neighbour has none (Figure~\ref{fig:e1qualviews}, which also shows the raw residuals).}
 \label{fig:e1compact}
 \end{figure}
 
