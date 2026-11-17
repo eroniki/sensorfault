@@ -92,7 +92,7 @@ class ViewGateTest:
         sigma: float = 0.01,
         params: Mapping | None = None,
         *,
-        prior_precision: float = 1e-3,
+        prior_precision: float = 1e3,
         rho: float = 0.5,
         lam_min: float | None = None,
         scan_grids: Sequence[int] = (2, 4),
