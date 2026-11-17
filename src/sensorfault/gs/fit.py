@@ -191,7 +191,7 @@ class GsplatBackend:
                     quats=quats,
                     scales=torch.exp(log_s),
                     opacities=torch.sigmoid(logit),
-                    colors=torch.ones(len(mu), 3, dtype=dt, device=dev),
+                    colors=torch.ones(1, len(mu), 3, dtype=dt, device=dev),  # [C, N, 3]
                     viewmats=view,
                     Ks=Kmat,
                     width=wd,
