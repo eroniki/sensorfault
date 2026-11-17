@@ -141,23 +141,24 @@ def repeated(fig: Path) -> str:
     )
     panels = []
     for sub, a, b, ylab, ymax in (
-        ("a", "det_10", "det_13", "Faulty frames excluded [\\%]", 112),
-        ("b", "fa_10", "fa_13", "Clean views excluded [\\%]", 10.5),
+        ("a", "det_10", "det_13", "Faulty frames\\\\excluded [\\%]", 118),
+        ("b", "fa_10", "fa_13", "Clean views\\\\excluded [\\%]", 11.5),
     ):
         panels.append(
-            rf"""\nextgroupplot[ylabel={{{ylab}}}, ymax={ymax}, title={{\sfsub{{{sub}}}}}]
+            rf"""\nextgroupplot[ylabel={{{ylab}}}, ylabel style={{align=center}}, ymax={ymax}]
+\node[anchor=north west, inner sep=2pt] at (rel axis cs:0,1) {{\sfsub{{{sub}}}}};
 \addplot[sfbarblack] table[x=x, y={a}, col sep=comma] {{\efigdir/e1_repeated_by_noise.csv}};
 \addplot[sfbarred] table[x=x, y={b}, col sep=comma] {{\efigdir/e1_repeated_by_noise.csv}};"""
-            + (r"\legend{Nominal noise, Noise $1.3\times$}" if sub == "b" else "")
+            + (r"\legend{Nominal noise, Noise $1.3\times$}" if sub == "a" else "")
         )
     return rf"""% E1, the same 8-sigma error on three neighbouring frames (10 seeds per bar)
 \begin{{tikzpicture}}
-\begin{{groupplot}}[sfaxis, sfbar, /pgf/bar width=6pt, group style={{group size=1 by 2, vertical sep=2.1cm}},
+\begin{{groupplot}}[sfaxis, sfbar, /pgf/bar width=8.5pt, group style={{group size=1 by 2, vertical sep=0.3cm, x descriptions at=edge bottom}},
   width=10.4cm, height=2.6cm, scale only axis, ymin=0, xmin=-0.5, xmax={len(labs) - 0.5},
   xtick={{0,...,{len(labs) - 1}}}, xticklabels={{{ticks}}}, xticklabel style={{align=center}},
   nodes near coords, every node near coord/.append style={{font=\sffamily\sansmath\tiny, /pgf/number format/fixed,
-    /pgf/number format/precision=1, rotate=90, anchor=west}},
-  legend style={{at={{(0.99,0.95)}}, anchor=north east}}]
+    /pgf/number format/precision=1, anchor=south, inner sep=1.5pt}},
+  legend style={{at={{(1,1.03)}}, anchor=south east, legend columns=2}}]
 {chr(10).join(panels)}
 \end{{groupplot}}
 \end{{tikzpicture}}
