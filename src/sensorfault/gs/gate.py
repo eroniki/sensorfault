@@ -125,6 +125,13 @@ class ViewGateTest:
         self.cavity_gradient = p.pop("cavity_gradient", "others")
         if self.cavity_gradient not in ("others", "view"):
             raise ValueError(f"cavity_gradient={self.cavity_gradient!r}")
+        # surfels the other views do not support: "inflate" (default) keeps them in the blend with a
+        # large covariance (pixels they dominate are down-weighted by the whitening); "drop" removes
+        # them from the render, which leaves partial-coverage pixels whose normalised depth is 2-4 cm off
+        self.unsupported = p.pop("unsupported", "inflate")
+        self.unsupported_sd = float(p.pop("unsupported_sd", 0.1))
+        if self.unsupported not in ("inflate", "drop"):
+            raise ValueError(f"unsupported={self.unsupported!r}")
         if self.scan_noise not in ("empirical", "energy"):
             raise ValueError(f"scan_noise={self.scan_noise!r}")
         self.shared_bias = p.pop("shared_bias", "distance")
@@ -228,6 +235,10 @@ class ViewGateTest:
                 )
         if jk is not None:
             cov = cov + jk
+        if self.unsupported == "inflate" and not keep.all():
+            cov = cov.copy()
+            cov[~keep] += self.unsupported_sd**2 * np.eye(cov.shape[-1])
+            keep = np.ones(K, bool)
         cav = self.backend.render_cavity(state, frame, mean, cov, keep)
         var = np.zeros_like(cav.var) if self.uncertainty == "constant_sigma" else cav.var
         valid = cav.valid & np.isfinite(cav.depth) & np.isfinite(frame.depth) & (frame.depth > 0)

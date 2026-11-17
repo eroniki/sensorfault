@@ -215,9 +215,17 @@ def test_temperature_does_not_hide_a_biased_view():
 
 
 def test_unsupported_surfels_dropped_unless_spawn_kept():
-    (_, _), g1 = run(0, views=["v0"])
+    (_, _), g1 = run(0, params={"unsupported": "drop"}, views=["v0"])
     (_, _), g2 = run(0, params={"spawn": "keep_view_j_only_surfels"}, views=["v0"])
     assert g1.last["v0"]["dof"] < g2.last["v0"]["dof"]
+
+
+def test_unsupported_inflate_keeps_pixels_and_rejects_bad_option():
+    (_, _), gd = run(0, params={"unsupported": "drop"}, views=["v0"])
+    (_, _), gi = run(0, views=["v0"])
+    assert gi.last["v0"]["dof"] >= gd.last["v0"]["dof"]
+    with pytest.raises(ValueError):
+        run(0, params={"unsupported": "nope"}, views=["v0"])
 
 
 def test_shared_bias_fitted_and_switch_off():
