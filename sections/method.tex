@@ -1,36 +1,132 @@
 \section{Method}
 \label{sec:method}
-\subsection{Setting}
-Posed views $\{(I_i, K_i, T_i)\}_{i=1}^N$ of a static scene. For a tested view $j$ the model produces samples of its depth.
-\TODO{Notation and assumptions: poses and intrinsics given; static scene; minority of faulty views.}
+
+\subsection{Setting and notation}
+\label{sec:setting}
+We are given posed views $\{(I_i, K_i, T_i)\}_{i=1}^N$ of a static scene, with images $I_i$, intrinsics $K_i$ and camera-to-world poses $T_i$.
+Poses and intrinsics are taken as known (from a structure-from-motion system or a dataset), the scene is assumed static, and faults, where present, are assumed to affect a minority of the views and, within a faulty view, a minority of its pixels.
+For a tested view $j$ we write $n$ for the number of pixels at which the test is evaluated and stack all per-pixel quantities of view $j$ into vectors in $\R^n$.
+Three objects enter the test.
+(i) $M$ \emph{unguided} depth samples $\{d^{(k)}\}_{k=1}^M$ of view $j$, drawn from the model conditioned on $I_j$ alone.
+(ii) A depth render $D^{-j}$ of view $j$ from a surface built from the other views $\{i\neq j\}$, and its per-pixel variance $\Sigma_r^{-j}$ (diagonal, or diagonal plus low rank).
+(iii) A support mask: the pixels of view $j$ at which the surface is observed by at least two of the other views; all vectors are restricted to these pixels.
+The superscript $-j$ marks quantities that are, by construction, independent of every datum of view $j$ (image, depth, pose).
+This independence is checked in the implementation by perturbing and by poisoning view $j$ and verifying that the render does not change beyond the run-to-run floor of the rasteriser.
+
+The samples are affine-invariant: each is defined up to an unknown positive scale and an unknown shift, and the render is in scene units.
+The test therefore compares the \emph{local shape} of the samples with the render after fitting a single scale and shift for the view, and no other parameter is estimated from view $j$.
 
 \subsection{Affine-invariant depth diffusion}
 \label{sec:model}
-A pretrained latent image diffusion model is fine-tuned to sample the depth of a view conditioned on its RGB latent. The target is the
-per-view percentile-normalised depth; global scale and shift are not predicted and no camera embedding is used.
-\TODO{Backbone, adaptation (parameter-efficient or full), objective, sampler and number of steps.}
+\runin{Representation.} The target for an image is its depth after cropping, normalised per image with its 2nd and 98th percentiles to $[-1,1]$ and clipped, as in Marigold~\cite{ke2024marigold}.
+The normalised depth is replicated to three channels and encoded with the frozen image VAE of the backbone, so that image and depth share one latent space~\cite{rombach2022latent}.
+No metric scale is predicted and no camera embedding is used; the model sees only the RGB latent of $I_j$.
+
+\runin{Backbone and adaptation.} The backbone is the SDXL base U-Net~\cite{podell2023sdxl}, frozen and stored in half precision.
+Low-rank adapters~\cite{hu2021lora} of rank $32$ (scale $\alpha=32$) are attached to the query, key, value and output projections of every attention block.
+The input convolution is widened from $4$ to $8$ channels, to take the concatenated RGB latent and noisy depth latent, by duplicating its pretrained weights and halving them; it is trained in full.
+Text conditioning is replaced by the embedding of the empty prompt from both CLIP encoders, computed once.
+The VAE is run in single precision, because the SDXL VAE can overflow in half precision.
+
+\runin{Objective.} The model is trained with $v$-prediction~\cite{salimans2022progressive} on a noise schedule rescaled to zero terminal signal-to-noise ratio~\cite{lin2023common}, with timesteps drawn uniformly.
+The loss is the mean squared error on the depth latent, masked at latent resolution to where the ground truth is valid (an $8\times8$ pixel block counts as valid if at least half its pixels are).
+Pixels without ground truth are filled with the nearest valid value before encoding, so that holes in the label do not appear as depth edges in the target latent.
+
+\runin{Sampler.} Samples are drawn with DDIM~\cite{song2021ddim} with trailing timestep spacing, from independent Gaussian noise per sample and with no classifier-free guidance~\cite{ho2022classifierfree}.
+A sample is decoded by the VAE back to a normalised depth map.
+The number of sampler steps is a free parameter; Section~\ref{sec:stage1} reports its effect on the first-stage model.
+\TODO{Fix the number of sampler steps and $M$ used for the test once the trade-off between sample diversity and accuracy in Section~\ref{sec:stage1} is resolved.}
 
 \subsection{Unguided and guided sampling}
 \label{sec:guidance}
-\emph{Unguided} samples use only $I_j$ and give the measurement with its own covariance. \emph{Guided} samples add, at the last denoising
-steps, a likelihood gradient toward the depth rendered from a Gaussian-splat surface fitted to the other views, after a closed-form per-step
-scale and shift alignment. The render for view $j$ uses nothing derived from view $j$.
-\TODO{Surface construction, variance of the render, support mask, guidance schedule, rounds of refitting.}
+\emph{Unguided} samples use only $I_j$. They are the measurement and carry their own spread, and they are the only samples the test of Section~\ref{sec:statistic} sees: if the render entered the samples, agreement with it would be built in.
+
+\emph{Guided} samples are the intended product. At the last denoising steps only (initially the last two of about five to ten), the predicted clean depth $\hat x_0$ of the current step is decoded, aligned to the render by a closed-form weighted least-squares scale and shift (variable projection), and the gradient of
+\begin{equation}
+\mathcal L_{\mathrm{guide}}(\hat x_0)=\min_{s,t}\ \bigl\lVert s\,\mathrm{dec}(\hat x_0)+t\mathbf 1-D^{-j}\bigr\rVert^2_{(\Sigma_r^{-j})^{-1}}
+\label{eq:guide}
+\end{equation}
+with respect to the latent is added to the update, in the manner of diffusion posterior sampling~\cite{chung2023dps}.
+Restricting guidance to late steps follows the observation that early predictions of $\hat x_0$ are too noisy to guide~\cite{depthsync2025}.
+Because $(s,t)$ is solved at every step, the guided sample inherits the render's scale and shift without the model ever being asked to predict them.
+
+\runin{Surface.} The surface is a structure-only two-dimensional Gaussian splat~\cite{huang2024twodgs}: surfels are initialised from the depth of every view except $j$, optimised with a depth and a photometric term on those views only, and rasterised into view $j$~\cite{ye2024gsplat}.
+Each surfel carries a depth variance proportional to the square of its depth; each other view's surfels are rasterised into view $j$ separately, the per-view depths within a tolerance of the nearest one are kept, and their depths and variances are averaged, so that $\Sigma_r^{-j}$ is the mean variance divided by the number of supporting views. A view supports a pixel where its rasterised opacity exceeds $0.5$, and the support mask keeps pixels supported by at least two views.
+\TODO{Guidance weight and schedule; number of rounds in which the surface is refitted to guided samples of the other views; variance model of the render beyond the per-pixel spread. None of these has been run with the model.}
 
 \subsection{Leave-view-out statistic with a fitted scale and shift}
 \label{sec:statistic}
-Let $\bar m$ be the mean of $M$ unguided samples aligned to each other, $\Sigma_U$ their local-shape covariance, and $D^{-j}$, $\Sigma_r^{-j}$ the
-render from the other views and its variance. Fit only a per-view scale and shift,
-\begin{equation}
-(s,t)=\argmin_{s,t}\ \lVert s\,\bar m + t\mathbf 1 - D^{-j}\rVert^{2}_{(s^{2}(1+1/M)\Sigma_U+\Sigma_r^{-j})^{-1}},
-\end{equation}
-and test the residual local shape
-$T=r^\top \bigl(s^{2}(1+1/M)\Sigma_U+\Sigma_r^{-j}\bigr)^{-1} r$, $r=s\bar m+t\mathbf 1-D^{-j}$.
-\TODO{Robust fit, effective degrees of freedom, empirical threshold calibration through the identical pipeline, the blind spot
-(a constant offset is absorbed exactly by $t$), and the minority-fault condition.}
+\runin{Aligning the samples.} Each sample is itself affine-invariant, because the percentile normalisation of the training target fixes scale and shift only approximately.
+Each sample is therefore aligned to the raw mean $\tilde m=\tfrac1M\sum_k d^{(k)}$ by its own least-squares scale and shift, $a^{(k)}=\alpha_k d^{(k)}+\beta_k\mathbf 1$; using the fixed raw mean as the reference avoids a drift of the common scale.
+Let $\bar m=\tfrac1M\sum_k a^{(k)}$ and let $\Sigma_U$ be the covariance of the aligned deviations $a^{(k)}-\bar m$, which describes the local shape uncertainty of one sample.
 
-\subsection{Semi-self-supervised training}
+\runin{Null model.} If the samples are draws from a calibrated posterior of the local shape and the truth is one more such draw, the render of a fault-free view satisfies
+\begin{equation}
+D^{-j}=s\,\bar m+t\mathbf 1+\varepsilon,\qquad \varepsilon\sim\mathcal N\!\bigl(0,\ C(s)\bigr),\qquad C(s)=s^{2}\bigl(1+\tfrac1M\bigr)\Sigma_U+\Sigma_r^{-j},
+\label{eq:null}
+\end{equation}
+where $(s,t)$ is the unknown map from the model's normalised units to scene units.
+The factor $1+1/M$ is the predictive variance of a new draw about the mean of $M$ draws.
+The sample covariance is rescaled by $s^2$ because it is expressed in the model's units; this is what makes a scale error detectable (below).
+
+\runin{Fit.} Only $(s,t)$ is fitted with view $j$'s data:
+\begin{equation}
+(\hat s,\hat t)=\argmin_{s,t}\ \rho\Bigl(L(s)^{-1}\bigl(s\,\bar m+t\mathbf 1-D^{-j}\bigr)\Bigr),\qquad L(s)L(s)^\top=C(s),
+\label{eq:fit}
+\end{equation}
+where $\rho$ is the Huber loss (threshold $1.345$) summed over the whitened residual, so that a fault covering a minority of pixels does not drag the fit.
+Because $C$ depends on $s$, the fit alternates between whitening with the current $s$ and an iteratively reweighted least-squares solve for $(s,t)$, started from the ordinary least-squares solution (three outer and eight inner iterations).
+
+\runin{Statistic.} With $r=\hat s\,\bar m+\hat t\mathbf 1-D^{-j}$, the statistic is the squared norm of the whitened residual,
+\begin{equation}
+T_j=r^\top C(\hat s)^{-1}r .
+\label{eq:stat}
+\end{equation}
+With a known covariance and an ordinary least-squares fit, $T_j$ would follow $\chi^2_{n-2}$ under~\eqref{eq:null}.
+This reference is not used: the robust fit, the dependence of $C$ on $\hat s$, and above all an estimated $\Sigma_U$ break it (Section~\ref{sec:toy}).
+
+\runin{Covariance estimate.} With $M\approx10$ samples, the sample covariance has rank $M-1$ and cannot be inverted on its own.
+$\Sigma_U$ is instead modelled as a stationary kernel plus a nugget, $\Sigma_U=\sigma^2 k_\ell(\lVert p-p'\rVert)+\nu I$, fitted to the empirical autocovariance of the aligned deviations pooled over the $M$ samples and over all pixel pairs at short lags (up to five pixels; at longer lags the per-sample alignment biases the autocovariance downward).
+The kernel family (exponential, Mat\'ern-$3/2$ or squared exponential) and the length scale $\ell$ are chosen by the residual of this lag fit.
+A rank-$(M-1)$ sample covariance shrunk toward its diagonal is the baseline estimator.
+Dense matrices are used for the synthetic check; at image resolution the same kernel-plus-diagonal structure admits fast solves.
+\TODO{Covariance estimator at image resolution (structured kernel plus diagonal plus low rank, with Woodbury or conjugate-gradient solves) and its effect on the null; not yet implemented.}
+
+\runin{Threshold.} The threshold $\tau_\alpha$ is the empirical $(1-\alpha)$ quantile of $T$ over a set of clean calibration views passed through the identical pipeline (alignment, covariance estimate, robust fit), with the conformal $(k+1)$ correction~\cite{angelopoulos2021gentle}: for $K$ null values, $\tau_\alpha$ is the $\lceil (K+1)(1-\alpha)\rceil$-th smallest.
+View $j$ is flagged when $T_j>\tau_\alpha$.
+This presumes that the calibration views are exchangeable with the test views.
+
+\runin{What the statistic can and cannot see.} A fault $f$ added to the samples is invisible exactly when it lies in the span of the fitted directions. A constant offset, $f\propto\mathbf 1$, is absorbed by $\hat t$ and cannot be detected by construction.
+A global scale error, $f\propto\bar m-\mathrm{mean}(\bar m)\mathbf 1$, is absorbed in the mean by $\hat s$ but not in the covariance: the fitted scale also rescales $s^2\Sigma_U$, so the implied scale disagrees with the sample spread and the view is flagged.
+The robust fit assumes that the faulty pixels are a minority; when they are a majority, the fit follows them and the clean pixels are what look inconsistent, so the statistic still detects an inconsistency but cannot attribute it.
+A fault common to all views is invisible to any test of multi-view consistency.
+
+\subsection{Synthetic check of the statistic}
+\label{sec:toy-design}
+Before any learned model exists, the statistic is checked in a synthetic Gaussian world in which every covariance is known, so that the cost of each approximation can be measured separately.
+On a $g\times g$ grid, a fixed mean relief $\mu$ (a smooth surface plus a step edge, large compared with the noise so that $\bar m$ and $\mathbf 1$ are not collinear) is perturbed by a Mat\'ern-$3/2$ process with covariance $K_U$ (standard deviation $1$, length scale $3$ pixels) to give the truth; the truth is one more draw of the posterior that the samples come from.
+The render is the truth under a random scale $a\sim\mathcal U(0.8,1.25)$ and shift $b\sim\mathcal U(-1,1)$ plus Mat\'ern-$3/2$ noise with covariance $K_r$ (standard deviation $0.7$, length scale $6$).
+The $M$ samples are independent draws of $\mu$ plus $K_U$ noise, each with its own scale and shift wobble of standard deviation $0.05$, which imitates the per-image percentile normalisation.
+A fault of magnitude $\kappa$ is added to the samples, in units of the per-pixel total residual standard deviation $\sqrt{\mathrm{median\,diag}(a^2(1+1/M)K_U+K_r)}$.
+Fault families are a square region and a region following a level set of the truth (both $12\%$ of the view), a smooth warp over the whole view, a constant offset and a change of scale, and a band covering a chosen fraction of the view.
+A miscalibrated sampler is simulated by scaling the sample deviations by $0.6$ or $1.6$ while the truth keeps the calibrated spread.
+
+Five variants of the statistic are compared:
+the true $(a,b)$ with the true covariance and no fit (an unattainable bound);
+the robustly fitted $(s,t)$ with the true covariance (the oracle);
+the fitted $(s,t)$ with the stationary-kernel estimate of $\Sigma_U$, robust and non-robust;
+and the fitted $(s,t)$ with the shrunk sample covariance.
+The kernel estimator is restricted to the exponential family in this check, while the truth is Mat\'ern-$3/2$, so the estimator's shape is deliberately misspecified.
+For each variant the threshold is taken from the clean-view null of that variant, power is the fraction of faulty trials above it, and the minimum detectable fault is the magnitude at which the power reaches $80\%$, interpolated between the magnitudes tested.
+The results are reported in Section~\ref{sec:toy}.
+
+\subsection{Training}
 \label{sec:training}
-Labelled views use the standard diffusion loss on normalised ground-truth depth. Unlabelled views use a scale-and-shift-invariant
-render-and-compare loss against the leave-view-out render, weighted by the render variance, plus photometric consistency to the other views.
-\TODO{Label-fraction schedule, teacher, inductive versus transductive protocols.}
+\runin{Stage 1: supervised.} The model of Section~\ref{sec:model} is first fine-tuned on labelled synthetic and rendered data only, with the masked $v$-prediction loss on the normalised ground-truth depth.
+Training data, augmentation and optimiser settings are given in Section~\ref{sec:stage1-setup}.
+
+\runin{Stage 2: semi-self-supervised (planned).} Labelled views keep the stage-1 loss.
+Unlabelled views use a scale-and-shift-invariant render-and-compare loss of the form~\eqref{eq:guide} between the decoded prediction $\mathrm{dec}(\hat x_0)$ and the stop-gradient leave-view-out render, weighted by $(\Sigma_r^{-j})^{-1}$ and restricted to pixels supported by at least two other views, plus a photometric loss that warps view $j$ into the other views with its own depth and is independent of the surface.
+Because of the invariance, the render never imposes a scale on the model.
+A slowly updated (exponential moving average) copy of the model builds the surfaces, and every batch contains labelled data.
+\TODO{Schedule of the labelled fraction; inductive (test scenes never seen) versus transductive (test scenes seen without labels) protocols; weights of the loss terms. Not yet run.}
