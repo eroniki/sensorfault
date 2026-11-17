@@ -1,7 +1,8 @@
 """Stub registrations for the design-v3 test bed: depth-supervised Gaussian splatting with a
 depth-only view gate whose uncertainty renders.
 
-None of these is implemented yet. Each registers a name so that configs can reference it and the
+no_gate, oracle_gate and view_gate are implemented in ``sensorfault.gs.fusers`` (imported at the
+bottom); the others are stubs. Each stub registers a name so that configs can reference it and the
 runner can skip it with a clear reason.
 """
 
@@ -12,21 +13,10 @@ from collections.abc import Mapping, Sequence
 from sensorfault.baselines.base import BaseFuser, register
 from sensorfault.types import DepthFrame, FusionResult
 
+# Implemented in sensorfault.gs.fusers (kept here so config coverage checks see every name).
+IMPLEMENTED = frozenset({"no_gate", "oracle_gate", "view_gate"})
+
 _STUBS: dict[str, str] = {
-    "no_gate": "Depth-supervised 2DGS surfel splatting (gsplat) with every view's depth trusted.",
-    "oracle_gate": "Upper bound: drops exactly the faulty views (manifest or laser reference).",
-    "view_gate": (
-        "The contribution: depth-only view gate. Each surfel carries a 10x10 information block over "
-        "(d_mu, d_phi, d_log_s, d_logit_alpha; opacity frozen after warm-up); views add alpha-weighted "
-        "rasteriser J^T R^-1 J; leave-view-out is a subtraction plus one Newton step; noise has one free "
-        "scene temperature; shared distance bias; the other views' surface (normal offset + tilt) is rendered into view j with its "
-        "variance and the whitened depth residuals are tested. Params: uncertainty in {rendered_9x9, "
-        "constant_sigma, fisherrf_style_diagonal_fisher, bayes_rays_style_perturbation_field}, "
-        "leave_view_out in {subtraction, none_joint}, spawn in {none, keep_view_j_only_surfels}, "
-        "information_deflation, overconfidence (jackknife_inflation), noise, shared_bias, opacity_warmup, statistic, "
-        "outer_loop (round_cap, policy, exclusion, readmission; see src/sensorfault/eval/gate_loop.py). Theory: src/sensorfault/eval/gaussian_uncertainty.py and "
-        "src/sensorfault/eval/detection_theory.py."
-    ),
     "aligned_rms_view_test": (
         "Cheap baseline: RMS of the per-view affine-aligned depth residual against the other views' "
         "render, no whitening, thresholded at the same false-alarm rate."
@@ -58,4 +48,7 @@ def _make(name: str, doc: str) -> type[BaseFuser]:
 for _n, _d in _STUBS.items():
     _make(_n, _d)
 
-GATE_TESTBED_NAMES = frozenset(_STUBS)
+import sensorfault.gs.fusers  # noqa: E402,F401  (registers no_gate, oracle_gate, view_gate)
+
+STUB_NAMES = frozenset(_STUBS)
+GATE_TESTBED_NAMES = STUB_NAMES | IMPLEMENTED
