@@ -126,6 +126,10 @@ def _ray_plane_depth(mu, R, log_s, logit, c, Rc, rays):
 class GsplatBackend:
     """gsplat 2DGS ``SurfelBackend``.
 
+    Surfel scales are frozen by default (lr_scale=0): the gate's information model has no information on
+    them, and learned scales widen the footprints, which breaks its independent-block approximation
+    (the cavity step overshoots by roughly the overlap factor).
+
     n_warmup steps train geometry + opacity, then opacity is frozen for n_steps more geometry steps
     (Adam; separate learning rates). ``sigma_fit`` is unused: a view's weight scales its squared
     depth loss (mean over its valid pixels)."""
@@ -136,7 +140,7 @@ class GsplatBackend:
         n_steps: int = 600,
         lr_mu: float = 2e-3,
         lr_rot: float = 5e-3,
-        lr_scale: float = 5e-3,
+        lr_scale: float = 0.0,
         lr_opacity: float = 5e-2,
         stride: int = 4,
         device: str = "cuda",
@@ -199,10 +203,15 @@ class GsplatBackend:
             [
                 {"params": [mu], "lr": lr_mu},
                 {"params": [phi], "lr": lr_rot},
-                {"params": [log_s], "lr": lr_scale},
                 {"params": [logit], "lr": lr_op},
             ]
         )
+        if (
+            lr_scale > 0
+        ):  # scales are not observed by depth to first order (design v3.1): frozen by default
+            opt.add_param_group({"params": [log_s], "lr": lr_scale})
+        log_s0 = log_s.detach().clone()
+        log_s.requires_grad_(lr_scale > 0)
         views = []
         for f, w in act:
             h, wd = f.depth.shape
@@ -274,6 +283,7 @@ class GsplatBackend:
             "n_iter": self.n_steps,
             "final_loss": loss_v,
             "opacity_frozen": True,
+            "log_s_rms_change": float((log_s.detach() - log_s0).pow(2).mean().sqrt()),
             "sensor_ids": [f.sensor_id for f, _ in act],
         }
         return SurfelState(
