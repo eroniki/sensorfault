@@ -136,15 +136,15 @@ band is narrowest at the centre and widens towards the rim.
 \begin{figure}[!t]
 \centering
 \input{\mfigdir/fig_surfel.tex}
-\caption{A surfel's uncertainty, in section (schematic). (\textbf{a})~The surfel's shape (black) is used for
-rendering only; its uncertainty over the normal offset $\nu$ and tilt $\tau$ (dashed: one perturbation of
-each) is a separate block. The ray of pixel $u$ meets the surfel at $\mathbf{x}$; by \eqref{eq:jac} an
-offset shifts the depth $d_k$ by $\nu/\mathbf{n}^{\top}\mathbf{w}$ and a tilt by the lever arm times $\tau$,
-so the rendered $\pm2\sigma$ band (orange) widens away from $\boldsymbol\mu_k$. (\textbf{b})~The same
-surfel in its $(\nu,\tau)$ plane, $1\sigma$ ellipses: a view that sees one end of the surfel constrains a
-mix of offset and tilt (black dashed), the block $\mathcal{B}_j$ sees the rest (red dashed); fused, they
-give the small $P_k$ (black); without the block, the cavity $P_k^{(-j)}$ (orange) is wide along the
-direction only the block resolved.}
+\caption{One surfel's uncertainty (schematic). (\textbf{a})~The surfel in section: its shape (black) is
+used for rendering only, its uncertainty over normal offset $\nu$ and tilt $\tau$ is a separate block
+(dashed: one draw of each). Bands: $\pm2\sigma$ of the surface, fused (grey) and in the cavity without
+the block $\mathcal{B}_j$ (orange), drawn $\times4$; red: the ray of one pixel. (\textbf{b})~The rendered
+depth standard deviation along the surfel, $\sqrt{J_{uk}P_kJ_{uk}^{\top}}$: an offset moves every pixel
+alike, a tilt in proportion to the lever arm, so it grows away from the pixels the remaining views
+support. (\textbf{c})~The same surfel in its $(\nu,\tau)$ plane, $1\sigma$: a view that sees one end
+constrains a mix of offset and tilt (black dashed), the block the rest (red dashed); fused, they give the
+small $P_k$ (black), without the block the cavity $P_k^{(-j)}$ (orange).}
 \label{fig:surfel}
 \end{figure}
 
@@ -194,16 +194,14 @@ strip through fuse, cavity and test.
 \begin{figure}[!t]
 \centering
 \input{\mfigdir/fig_cavity.tex}
-\caption{The cavity test along one strip (schematic, side view; one roof is glass, which view $j$ reads
-too deep). (\textbf{a})~Fuse: every view sends the surfels in its footprint its information
-$\Lambda_k^{(i)}$; the fused surfels (black bars) are tight ($\pm2\sigma$ ellipses, orange). The faulty
-view $j$ also spawned a surfel under the roof (red). (\textbf{b})~Cavity: the block $\mathcal{B}_j$ of
-$B=3$ frames is subtracted. Surfels the block saw most lose support and widen; the surfel made by the
-block fails the support rule and is dropped. The cavity is then rendered into view $j$ (red dashed
-frustum). (\textbf{c})~Along one image row of view $j$, the aligned cavity render (black) with
-$\pm2\sqrt{(\Sigma_r)_{uu}}$ (orange; wider on the roof, where support is lower) against the depth of view
-$j$ (red dots), and below the standardised residual. Each pixel of the fault is within about $4\sigma$, but
-the region statistic over $\mathcal{R}$ (shaded) under the full $\Sigma_r$ is far beyond any threshold.}
+\caption{The cavity test along one strip (schematic; one roof is glass, which view $j$ reads 4~m too
+deep). (\textbf{a})~Fused: every frame's information gives a tight surface ($\pm2\sigma$, grey, drawn
+$\times10$). (\textbf{b})~Cavity of view $j$: the block $\mathcal{B}_j$ of $B=3$ frames is subtracted;
+the roof, which the block saw most, loses support and its band widens (orange; grey outline: fused). The
+cavity is rendered into view $j$ (red dashed). (\textbf{c})~Along one image row of view $j$: the aligned
+cavity render with $\pm2\sqrt{(\Sigma_r)_{uu}}$ against the depth of view $j$. (\textbf{d})~The standardised
+residual: each pixel of the faulty region (shaded) is within about $3\sigma$, but the region statistic
+$z_{\mathcal{R}}$ under the full $\Sigma_r$ is far beyond any threshold.}
 \label{fig:cavity}
 \end{figure}
 
@@ -302,12 +300,11 @@ next round against a cavity that no longer contains it. Figure~\ref{fig:scene3d}
 \begin{figure}[!t]
 \centering
 \input{\mfigdir/fig_scene3d.tex}
-\caption{Leave-block-out in a survey (schematic, not to scale). Three strips of frames; the block
-$\mathcal{B}_j$ of $B=3$ frames around view $j$ (red; hollow: left out with $j$) is removed, and the
-cavity is rendered into view $j$'s footprint (red outline). Surfel discs are shaded by the number of views
-that support them: outside the footprint all views, inside it the views outside the block, so only the
-adjacent strips and the strip's farther frames remain. Bars: $\pm\sigma$ of the normal offset where the
-cavity widens it. Where only the block saw the roof, no support is left and the pixels are untestable.}
+\caption{Leave-block-out in a survey (schematic). Three strips of frames; the block $\mathcal{B}_j$ of
+$B=3$ frames around view $j$ is left out (hollow red), and the cavity is rendered into view $j$'s footprint
+(red). Each surfel is coloured by the number of views outside the block that still support it: lowest
+along the middle strip, where only the adjacent strips and the strip's farther frames remain. The centre of
+the roof, which only the block saw, keeps no support and its pixels are untestable (grey).}
 \label{fig:scene3d}
 \end{figure}
 
