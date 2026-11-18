@@ -75,6 +75,7 @@ The original code is MIT (see `LICENSE`). `NOTICE`: no third-party code is vendo
 | Replica dataset | Research-only, no redistribution | Never publish renderings; release generator + seeds |
 | DFC2019 / US3D | Source conflict (CC BY 4.0 listing vs contest terms banning redistribution); publication needs case-by-case approval | Optional section; obtain approval before publishing results |
 | IARPA MVS3DM | Availability to be verified | Secondary |
+| Stanford Bunny (Stanford 3D Scanning Repository) | Research use and free redistribution with acknowledgement; no commercial use | The one committed third-party data file: a ~70 KB decimated copy, `src/sensorfault/sim/assets/stanford_bunny_8mm.obj`, for offline tests (regenerate with `scripts/data/bunny.py`); not MIT |
 
 Check each upstream licence yourself before use; this table is a summary of PLAN.md section 6,
 not legal advice.
@@ -82,4 +83,4 @@ not legal advice.
 ## Data hygiene
 
 Public datasets and public sensor models only. Nothing under `data/`, `outputs/`,
-`third_party/` or checkpoints is committed.
+`third_party/` or checkpoints is committed. The one exception is the small test mesh above.
