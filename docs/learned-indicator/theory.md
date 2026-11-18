@@ -1,543 +1,519 @@
-# Theory: a Monocular Depth Prior Judged by Motion Parallax
+# Theory: a Monocular Depth Prior Judged on Surface Entities in Depth-Stabilised Video
 
-This note develops the statistical model of the fault indicator for posed aerial video. One monocular
-depth map per image is the dense prior of a 2D Gaussian surfel reconstruction. A frozen point tracker
-or optical-flow model supplies correspondences; with known poses each track is a triangulated depth
-with an error bar set by its parallax. The gap between the monocular depth and the triangulated depth
-is the evidence. A light head on frozen features is trained on that evidence without fault labels and
-carries it to pixels where tracking abstains.
+This note develops the statistical model of the fault indicator for posed aerial video, on backbones
+that are native to video and dense prediction. One monocular depth map per frame is the dense prior of
+a 2D Gaussian surfel reconstruction. A frozen video segmenter supplies *masklets*, regions followed
+through a clip; a frozen video encoder supplies spatiotemporal tokens. The unit that receives a verdict
+is the masklet, a surface entity, and the per-frame, per-pixel deviation is a second-order term.
 
-The note states the measurement model, derives what is identified without labels and under which
-assumptions, gives the estimators and their cost, analyses the two standing objections (why keep the
-monocular prior; whether the head transfers from textured to untextured surfaces), and lists what
-would refute the approach. Nothing here has been measured. Numerical examples are illustrations with
-assumed inputs and are marked as such. Attributions and statements about available models are
-collected in Section 12 with a note on what was checked.
+The note does four things. It states which parts of this conception hold as stated and which need
+repair (Section 2). It defines one test object, the depth-stabilised clip, of which explicit parallax,
+masklet motion and latent comparison are three readings (Sections 3 to 5). It gives the hierarchical
+model, what is identified without labels and the estimators (Sections 6 and 7). And it restates the
+standing difficulties, harm against detectability, transfer, reflections, in the new units (Sections 8
+to 10), ending with what would refute the approach and what was verified about the models.
+
+Nothing here has been measured. Numerical examples use assumed inputs and are marked. Statements about
+models and prior work are collected in Section 13 with what was checked.
 
 ## 1. Setting and Symbols
 
-A static scene is observed by $N$ posed frames in strips. Frame $j$ has a monocular depth map
-$\hat d_j$, aligned per view by $(a_j, b_j)$ and corrected by the shared distance bias $\beta$. A
-*fault* is a connected region where the aligned depth deviates from the truth by many $\sigma$.
-$f_j(u) \in \{0, 1\}$ is the latent fault state of pixel $u$ in view $j$, $\zeta_j(u)$ its posterior
-(the indicator), $\boldsymbol\phi_j(u)$ frozen features, $s = s(\boldsymbol\phi)$ an appearance stratum
-(a cluster of frozen features), and $\pi(\boldsymbol\phi)$ the prior fault probability produced by the
-head. The cavity residual $z_j(u)$ (the depth map of view $j$ against the surface fused from the views
-outside its block $\mathcal B_j$) remains available as depth-consensus evidence.
-
-All depth quantities in this note are expressed in **inverse depth** $\xi = 1/d$ along the ray of the
-reference pixel, because image motion is linear in it. For a depth error $\delta d$ at depth $d$,
-$\delta \xi \approx -\delta d / d^2$.
+Frames $j = 1, \dots, N$ with known poses, in strips. $\hat\xi_{M,j}(u)$ is the aligned monocular
+*inverse depth* of pixel $u$ in frame $j$ and $\epsilon_{M,j}(u) = \hat\xi_{M,j}(u) - \xi_j(u)$ its
+error. For a point on the ray of $u$, the projection into frame $i$ is $\mathbf p_i(\xi)$, with parallax
+gain $\mathbf b_i = \partial \mathbf p_i / \partial \xi$ of length $b_i$ (focal length times the
+baseline across the ray, for lateral motion), unit epipolar direction $\hat{\mathbf l}_i$ and normal
+$\hat{\mathbf n}_i$. $\mathbf k_u = K^{-1} \tilde u$ is the normalised homogeneous pixel.
 
 | Symbol | Meaning |
 | --- | --- |
-| $\xi$, $\hat\xi_M$, $\epsilon_M$ | true inverse depth, aligned monocular value, its error $\hat\xi_M - \xi$ |
-| $\mathbf q_i$, $\boldsymbol\epsilon_i$, $\sigma_i$ | tracked position in frame $i$, its error, nominal tracker noise (pixels) |
-| $\mathbf b_i$, $b_i$ | parallax gain $\partial \mathbf p_i / \partial \xi$ and its length (pixels per unit inverse depth) |
-| $e_i$, $o_i$ | track residual along and across the epipolar line |
-| $r_T$, $\epsilon_T$, $\Lambda_T$ | parallax gap, witness error, parallax information |
-| $A_\perp$, $A_\parallel$ | ancillary statistics of a track |
-| $\Lambda_M$, $\vartheta$ | information of the monocular depth $1/\sigma_M^2$, information ratio $\Lambda_T / \Lambda_M$ |
-| $r_C$, $\epsilon_C$ | consensus gap (cavity residual in inverse depth), error of the cavity depth |
-| $\varrho$ | repetition coefficient: share of a monocular error that the cavity repeats |
-| $\iota$ | label information of a pixel, in $[0, 1]$ |
-| $e(\boldsymbol\phi)$ | propensity: probability that a pixel with features $\boldsymbol\phi$ has informative parallax |
+| $m$, $\mathcal M_{mj}$, $\partial \mathcal M_{mj}$ | masklet, its mask in frame $j$, its boundary |
+| $\tilde I_{i \to j}$ | frame $i$ stabilised into frame $j$ by the monocular depth of $j$ |
+| $\boldsymbol\epsilon_{mj} \in \mathbb R^3$ | affine coefficients of the monocular error on masklet $m$ in frame $j$ |
+| $\boldsymbol\mu_m$, $\boldsymbol\alpha_{mj}$, $\eta_j(u)$ | persistent (surface) term, per-frame term, within-masklet remainder |
+| $r_T(u)$, $\Lambda_T(u)$ | pixel parallax gap and its information |
+| $\hat{\boldsymbol\epsilon}_{mj}$, $\Lambda_{mj}$ | masklet gap (3-vector) and its information matrix |
+| $A_\perp$, $A_\parallel$, $A_m$, $A_\partial$ | ancillary statistics: across-line, along-line, within-masklet, boundary |
+| $\mathcal D(\cdot)$, $D(\boldsymbol\delta)$ | latent discrepancy as a function of residual error, and as observed under an injected perturbation $\boldsymbol\delta$ |
+| $\vartheta$ | information ratio of witness to prior |
+| $\varrho$ | repetition coefficient |
+| $\iota$ | label information of a unit, in $[0,1]$ |
+| $F_m$, $\zeta_m$ | fault state of masklet $m$ and its posterior |
+| $e(\boldsymbol\phi)$ | propensity of a unit with features $\boldsymbol\phi$ to have an informative witness |
 
-## 2. The Witness: Parallax Residual of a Track Against the Monocular Depth
+## 2. The Conception, Examined
 
-### 2.1 Measurement model
+| Claim | Status | Repair |
+| --- | --- | --- |
+| The verdict belongs to a surface entity; a fault every frame repeats is a property of the surface | Holds, and has an exact statistical form: a random effect per masklet. The repeated fault is the masklet-level term, the per-frame deviation is the residual, and the repetition coefficient is an intraclass correlation (Section 6) | The unit is only right if monocular errors are *low-order within masklets*. That is a hypothesis with a label-free test and a cheap ground-truth test (Sections 6.4, 11) |
+| Masklet motion is parallax that needs no interior texture; a plane-induced homography has three unknowns | Half right. The outline gives one scalar per boundary point and frame (normal displacement), enough for three unknowns. But a boundary carries the parallax of the surface that *owns* it, which is the nearer one. A lake fringed by trees has an outline that moves with the canopy | Use only owned or co-planar boundary segments, test their mutual consistency, and prefer a weaker assumption: planarity of the *error*, not of the surface (Section 4) |
+| Evidence is violation of expectation in latent space: warp by the predicted motion and compare inside a frozen video encoder | The available encoders have no pose-conditioned predictor (Section 13), so the expectation must be imposed in pixel space. A latent distance has no unit, no sign and no error bar. And to first order it is blind without image structure: a uniform surface produces the same tokens whatever its depth | Stabilise the clip with the judged depth; the null is then "a still image". Turn the latent distance into an estimator by a sweep, and measure its information by injected perturbations (Section 5) |
+| The head is a dense probe on spatiotemporal tokens | Two different heads are being conflated: a *readout* of the witness, which must see motion, and a *prior*, which must not see the witness | Train the readout by injection, where the label is exact; train the prior on verdicts, on tokens that cannot contain the residual motion (Section 7) |
+| Survey stills at 80% overlap move too much for video models | True for the raw clip. Not true for the stabilised clip, whose motion is the residual parallax of the depth error only | Run encoder, flow and mask propagation on the stabilised clip (Section 3) |
 
-Let $\tilde u$ be the homogeneous reference pixel in frame $j$, and $(R_{ij}, \mathbf t_{ij})$ the known
-pose of frame $i$ relative to $j$. A point at inverse depth $\xi$ on the reference ray projects to
+## 3. The Test Object: the Depth-Stabilised Clip
 
-```math
-\mathbf p_i(\xi) = \operatorname{proj}\bigl( \mathbf a_i + \xi\, \mathbf c_i \bigr), \qquad
-\mathbf a_i = K_i R_{ij} K_j^{-1} \tilde u, \qquad \mathbf c_i = K_i \mathbf t_{ij} ,
-```
+### 3.1 Definition and null hypothesis
 
-which traces the epipolar line of $u$ in frame $i$ as $\xi$ varies. The tracker reports
-$\mathbf q_i = \mathbf p_i(\xi) + \boldsymbol\epsilon_i$ for the frames $i \in \mathcal T(u)$ in which it
-follows the point, $L = \lvert \mathcal T(u) \rvert$. Linearising at the monocular value,
-
-```math
-\mathbf q_i - \mathbf p_i(\hat\xi_M) \approx \mathbf b_i\, (\xi - \hat\xi_M) + \boldsymbol\epsilon_i, \qquad
-\mathbf b_i = \frac{\partial \mathbf p_i}{\partial \xi}\Big|_{\hat\xi_M}, \qquad b_i = \lVert \mathbf b_i \rVert ,
-```
-
-and with $\hat{\mathbf l}_i = \mathbf b_i / b_i$ the unit epipolar direction and $\hat{\mathbf n}_i$ its
-normal, each frame gives one scalar that depends on depth and one that does not:
+For a reference frame $j$ and a window of frames $i \in \mathcal W_j$, resample every frame into the
+reference view through the monocular depth of the reference:
 
 ```math
-e_i = \hat{\mathbf l}_i^\top \bigl( \mathbf q_i - \mathbf p_i(\hat\xi_M) \bigr) = - b_i\, \epsilon_M + \epsilon_i^{\parallel}, \qquad
-o_i = \hat{\mathbf n}_i^\top \bigl( \mathbf q_i - \mathbf p_i(\hat\xi_M) \bigr) = \epsilon_i^{\perp} .
+\tilde I_{i \to j}(u) = I_i\bigl( \mathbf p_i(\hat\xi_{M,j}(u)) \bigr) , \qquad i \in \mathcal W_j .
 ```
 
-For lateral camera motion $b_i \approx f B_i$, focal length in pixels times the baseline across the
-ray. The linearisation is exact in $\xi$ for motion parallel to the image plane, which is the nadir
-strip to first order; otherwise one or two Gauss-Newton steps from $\hat\xi_M$ remove it.
+This uses the poses and the one depth map under test, nothing else. It is a backward warp: no holes,
+and at occlusions a duplicated foreground.
 
-### 2.2 The parallax gap and its error bar
+**H0.** If the depth of $u$ is correct and the surface is static, diffuse and visible in frame $i$,
+then $\tilde I_{i \to j}(u) = I_j(u)$ up to image noise and resampling. *The stabilised clip of a
+correct depth map is a still image repeated.*
 
-Weighted least squares on the along-line residuals gives the **parallax gap**
+**Under a depth error.** Sampling at $\mathbf p_i(\hat\xi_M) = \mathbf p_i(\xi) + \mathbf b_i\, \epsilon_M$
+shows content that belongs, in the reference, to a pixel displaced by about $\mathbf b_i \epsilon_M$:
 
 ```math
-r_T = - \frac{\sum_{i} b_i\, e_i / \sigma_i^2}{\Lambda_T} = \epsilon_M - \epsilon_T, \qquad
-\Lambda_T = \sum_{i \in \mathcal T(u)} \frac{b_i^2}{\sigma_i^2}, \qquad \operatorname{Var}(\epsilon_T) = \Lambda_T^{-1} .
+\tilde I_{i \to j}(u) \approx I_j\bigl( u + \mathbf b_i\, \epsilon_{M,j}(u) \bigr) .
 ```
 
-No explicit triangulation is needed: the witness is the mean displacement of the track from where the
-monocular depth says it should be, in units of parallax. Three properties follow.
+The residual motion of the stabilised clip at $u$ is $-\mathbf b_i\, \epsilon_{M,j}(u)$: along the
+epipolar direction, proportional to the signed baseline and to the depth error. A faulty region slides
+back and forth in step with the camera, while everything correct stands still.
 
-- *The error bar is per pixel and comes from geometry.* In depth units $\sigma_{d,T} = d^2 \sigma_{\mathrm{tr}} / (f B_{\mathrm{eff}})$ with $B_{\mathrm{eff}}^2 = \sum_i B_i^2$. In aerial terms, with ground sampling distance $g = d / f$, this is $\sigma_{d,T} = \sigma_{\mathrm{tr}}\, g\, d / B_{\mathrm{eff}}$: tracker noise in ground units times the height-to-baseline ratio.
-- *Track length enters as the baseline it realises.* For $L$ frames at spacing $\Delta$ centred on the reference and independent tracker errors, $\sum_i B_i^2 \approx \Delta^2 L^3 / 12$: information grows with the cube of track length. If the tracker error is a random walk along the track (drift), with per-frame increment variance $\sigma_w^2$, the information grows only as $L^2$, and $\Lambda_T$ must be computed by generalised least squares with that covariance. Which law holds is an empirical property of the tracker.
-- *A snap offset cancels on centred tracks.* If the tracker locks onto a feature displaced by a constant $\mathbf c$ from the query point, $e_i$ gains the constant $\hat{\mathbf l}_i^\top \mathbf c$. Fitting an intercept with the slope (regressing $e_i$ on $b_i$ signed along the strip) removes it; for tracks centred on the reference the intercept is orthogonal to the slope and costs nothing.
+### 3.2 Consequences
 
-### 2.3 Ancillary statistics: the witness validates itself
-
-A track of $L$ frames supplies $2L$ scalars. One linear combination carries the depth. The remaining
-$2L - 1$ are, under the model, free of both the depth and the monocular error:
+1. **A sharp null for any instrument.** Every reading below asks one question, whether a region of the stabilised clip is static. Departures have a known direction (epipolar) and a known time course (the baseline), which separates them from illumination change and from independently moving objects.
+2. **Frame spacing stops mattering to the frozen models.** Survey stills shift by a fifth of the image per frame; dense video by a few pixels. After stabilisation both show only the residual parallax, which is small wherever the depth is roughly right. Flow networks, video encoders and mask propagation then operate in the small-motion regime they were trained in. What frame spacing still sets is the baseline per frame, hence the information per frame, and the amount of occlusion.
+3. **Perturbation is exchangeable with error.** Stabilising with $\hat\xi_M + \delta$ adds exactly $-\mathbf b_i \delta$ to the residual motion. For any statistic computed from the stabilised clip,
 
 ```math
-A_\perp = \sum_{i} \frac{o_i^2}{\sigma_i^2} \sim \chi^2_{L}, \qquad
-A_\parallel = \sum_{i} \frac{(e_i + b_i\, r_T)^2}{\sigma_i^2} \sim \chi^2_{L-1} .
+D(\delta) = \mathcal D\bigl( \epsilon_M + \delta \bigr) ,
 ```
 
-They are *ancillary* for the judged quantity: their distribution depends on the tracker and the scene
-dynamics only. This is the property that depth consensus never had, where every residual mixes the
-error of the judged depth map with the errors of the maps it is compared with. The ancillaries serve
-three purposes, none of which uses the monocular depth.
+   the observed statistic under an injected perturbation is the response function $\mathcal D$ translated by the unknown error. This identity is exact in the geometry and holds for any black-box instrument. It is what allows a frozen encoder to be calibrated without labels (Section 5).
 
-1. **Abstention.** A track with $A_\perp + A_\parallel$ above a $\chi^2_{2L-1}$ quantile has left the static rigid model: a moving object, a non-rigid reflection (rippled water, a highlight on a curved surface), an occlusion, or a tracker failure. The pixel abstains.
-2. **Noise scale.** $\hat\sigma_{\mathrm{tr}}^2 = \sigma^2 (A_\perp + A_\parallel) / (2L - 1)$, pooled per stratum, calibrates $\Lambda_T$ on the scene itself. The error bar of the witness is estimated, not assumed.
-3. **Isotropy test.** $\bigl(A_\parallel / (L-1)\bigr) / \bigl(A_\perp / L\bigr)$ is $F$-distributed under isotropic tracker noise. In a strip all epipolar lines are nearly parallel to the flight direction, so a ratio above one in a stratum says that the tracker is less certain *along* the epipolar direction there (the aperture problem on edges parallel to the flight line), which is exactly the component the depth depends on.
+### 3.3 What breaks H0 without a depth fault
 
-### 2.4 What the ancillaries cannot see
+Movers; view-dependent appearance (specular highlights, reflections, transparency); occlusion (a
+duplicated foreground next to depth edges); pose error (a smooth residual field over the frame);
+exposure change. The first three are the nuisances of every multi-view witness. They are treated by
+the ancillary statistics, by the boundary-interior comparison of Section 4.4, and by excluding a band
+at rendered depth discontinuities, which is reported as abstention.
 
-Any track error proportional to the parallax gain, $\boldsymbol\epsilon_i = \mathbf b_i\, c$, lies in the
-column space of the depth regressor. It shifts $r_T$ by $c$ and leaves $A_\perp$ and $A_\parallel$
-untouched. Such an error is, for the witness, what a fault repeated by every view is for depth
-consensus. Its physical sources are specific:
+## 4. Reading One and Two: Explicit Parallax, per Pixel and per Masklet
 
-- **Planar reflections.** The mirror image of a static scene in a plane (still water, a glass facade) is itself a static rigid scene. Tracks on it satisfy the epipolar constraint exactly and triangulate consistently, behind the reflecting surface. The epipolar check does not flag them. If the monocular depth places the surface correctly, the witness accuses a correct prior.
-- **Motion along the epipolar direction at constant speed.** With constant camera speed, an object moving along the flight direction produces a displacement proportional to the baseline: a wrong depth that fits perfectly. Traffic on a road parallel to the strip is the aerial case.
-- **Borrowed parallax.** On a texture-free patch, or on an edge parallel to the epipolar line, a learned tracker fills in the motion from its surroundings. The track then carries the parallax of the neighbouring surface, consistently across frames. At an occlusion edge this is foreground fattening; inside a uniform roof it is a planar interpolation of the border depth, which is often right and is in any case a prior, not a measurement.
-- **Pose error with a depth-like pattern.** A baseline scale error rescales all inverse depths of a view and is absorbed by the per-view alignment; other pose errors appear in $A_\perp$ as a smooth field and are removed by a low-order fit per frame pair before the ancillaries are formed.
+### 4.1 Pixel parallax gap
 
-Two partial remedies exist without labels. A cross strip changes the epipolar direction and the time
-gap: borrowed parallax along one direction and constant-speed movers become inconsistent between the
-two strips' gaps, and are flagged; a planar reflection passes this test too. And the sign: a virtual
-image always lies *behind* the reflecting surface, $r_T > 0$ in inverse depth for every view, so on
-strata with reflective appearance a one-sided fault model discounts exactly that sign. Whether the
-remaining false accusations are tolerable is an empirical question; they are the first thing a small
-labelled set should measure (Section 9).
-
-### 2.5 Assumptions
-
-- **T1** The scene is static and rigid and the poses are correct up to their stated covariance.
-- **T2** Tracker errors have a known covariance structure up to scale (independent across frames, or a random walk), isotropic in the image.
-- **T3** No tracker error is proportional to the parallax gain (no source of Section 2.4).
-- **T4** The witness error $\epsilon_T$ is independent of the monocular error $\epsilon_M$ given the stratum.
-
-T1 and T2 are tested per track and per stratum by the ancillaries. T3 is tested only across strips and
-not at all for planar reflections. T4 is an assumption about two different frozen networks (a depth
-network and a tracker) with different inputs and training; it is violated to the extent that both fail
-on the same appearance in a correlated *direction*, and it would be violated strongly if the judged
-depth came from a multi-view network that uses the same parallax.
-
-## 3. What Is Identified Without Labels
-
-### 3.1 The requirement of three independent views is met inside the track
-
-A latent quantity observed through noisy channels is identified, in general, when at least three
-channels have mutually independent errors. For binary detectors this is the latent-class result (the
-covariance of two detectors' votes is the product of their loadings, $C_{gh} = u_g u_h$, and three
-detectors give $u_1^2 = C_{12} C_{13} / C_{23}$); for continuous measurements it is the three-cornered
-hat. A formulation with two evidence groups of unknown accuracy fails this requirement, and no
-label-free estimate exists for it: only the product of the two accuracies is identified.
-
-The video supplies the missing channel through temporal redundancy. Split the track at the reference
-frame into its forward and backward halves, with gaps $r_T^{+}$, $r_T^{-}$ and informations
-$\Lambda_T^{+}$, $\Lambda_T^{-}$. Under T2 to T4,
+A frozen flow or tracking model applied to the stabilised clip returns residual displacements
+$\mathbf q_i(u)$. Along and across the epipolar line,
 
 ```math
-r_T^{+} = \epsilon_M - \epsilon_T^{+}, \qquad r_T^{-} = \epsilon_M - \epsilon_T^{-}, \qquad
-\epsilon_M,\ \epsilon_T^{+},\ \epsilon_T^{-}\ \text{mutually independent} .
+e_i = \hat{\mathbf l}_i^\top \mathbf q_i = - b_i\, \epsilon_M + \epsilon_i^{\parallel}, \qquad o_i = \hat{\mathbf n}_i^\top \mathbf q_i = \epsilon_i^{\perp} ,
 ```
 
-The monocular depth, the forward half-track and the backward half-track are three measurements of
-$\xi$ with independent errors. Consequences:
+and weighted least squares gives the pixel gap with a geometric error bar,
 
 ```math
-\operatorname{Cov}\bigl(r_T^{+}, r_T^{-}\bigr) = \operatorname{Var}(\epsilon_M), \qquad
-\operatorname{Var}\bigl(r_T^{+} - r_T^{-}\bigr) = \operatorname{Var}(\epsilon_T^{+}) + \operatorname{Var}(\epsilon_T^{-}) .
+r_T = - \frac{\sum_i b_i\, e_i / \sigma_i^2}{\Lambda_T} = \epsilon_M - \epsilon_T, \qquad
+\Lambda_T = \sum_i \frac{b_i^2}{\sigma_i^2}, \qquad \operatorname{Var}(\epsilon_T) = \Lambda_T^{-1} .
 ```
 
-The second identity contains no monocular quantity. It checks the predicted
-$1/\Lambda_T^{+} + 1/\Lambda_T^{-}$ and is a third calibration of the witness besides the ancillaries.
-The first gives the variance of the monocular error per stratum. More is true: two measurements of one
-latent variable with mutually independent errors identify the *entire distribution* of the latent
-variable and of both errors, without a shape assumption (Kotlarski's lemma; conditions: zero-mean
-errors and non-vanishing characteristic functions). Hence:
-
-**Proposition (label-free identification of the monocular error law).** Under T1 to T4, for every
-stratum $s$ with enough two-sided tracks, the distribution of the monocular depth error
-$p_s(\epsilon_M)$ is identified from the joint distribution of $(r_T^{+}, r_T^{-})$. In particular the
-fault prevalence $\pi_s = \Pr(\lvert \epsilon_M \rvert > \tau \mid s)$ is identified for any threshold
-$\tau$, with no fault labels, no assumed inlier shape and no assumed outlier density.
-
-This replaces the two things the contamination model had to assume (a Gaussian core and a flat
-outlier density) and the thing the two-group model could not supply (a third independent channel).
-The fault class also has a fixed meaning: it is an event of the signed depth error, not "whatever
-binary variable makes the cues independent".
-
-### 3.2 The practical version: deconvolution with a known kernel
-
-Kotlarski's construction is statistically inefficient. In practice the witness noise is treated as
-known, $\epsilon_T \sim \mathcal N(0, \Lambda_T^{-1})$ with the scale calibrated by Section 2.3, and
-the full-track gap is modelled as the monocular error law convolved with a known, per-pixel kernel:
+A track of $L$ frames supplies $2L$ scalars, of which one carries depth. The others are ancillary, free
+of the depth and of the monocular error under a static rigid scene:
 
 ```math
-p\bigl(r_T \mid s, \Lambda_T\bigr) = \int p_s(\epsilon)\, \mathcal N\bigl(r_T;\ \epsilon,\ \Lambda_T^{-1}\bigr)\, d\epsilon .
+A_\perp = \sum_i \frac{o_i^2}{\sigma_i^2} \sim \chi^2_L, \qquad A_\parallel = \sum_i \frac{(e_i + b_i r_T)^2}{\sigma_i^2} \sim \chi^2_{L-1} .
 ```
 
-With the contamination form $p_s(\epsilon) = (1 - \pi_s)\, \mathcal N(0, \varsigma_s^2) + \pi_s\, p_{\mathrm{out}}(\epsilon)$
-the two class-conditional densities of the gap are
+They give abstention (a pixel that left the static rigid model), the noise scale of the instrument per
+stratum, and an anisotropy test along the flight direction. The forward and backward halves of the
+window give two gaps $r_T^{+}$, $r_T^{-}$ with independent witness errors, and
+$\operatorname{Var}(r_T^{+} - r_T^{-})$ checks the predicted error bar without any monocular quantity.
+A witness error proportional to the parallax gain passes all of these: planar reflections, motion along
+the strip at constant speed, parallax borrowed from a neighbouring surface.
+
+### 4.2 The masklet-affine error model
+
+The inverse depth of a plane is affine in the pixel: for a plane $\mathbf N^\top X = 1$,
+$\xi(u) = \mathbf N^\top \mathbf k_u$. Monocular networks tend to get the shape of an object roughly
+right and its placement wrong. The working hypothesis is therefore stated for the *error*, not for the
+surface:
 
 ```math
-g^{0}(r_T \mid s, \Lambda_T) = \mathcal N\bigl(r_T;\ 0,\ \varsigma_s^2 + \Lambda_T^{-1}\bigr), \qquad
-g^{1}(r_T \mid s, \Lambda_T) = \bigl(p_{\mathrm{out}} * \mathcal N(0, \Lambda_T^{-1})\bigr)(r_T) ,
+\epsilon_{M,j}(u) = \mathbf k_u^\top \boldsymbol\epsilon_{mj} + \eta_j(u), \qquad u \in \mathcal M_{mj} ,
 ```
 
-where $\varsigma_s$ is the inlier spread of the monocular depth in stratum $s$. The difference from a
-contamination mixture on a consensus residual is that the heteroscedastic part of the null,
-$\Lambda_T^{-1}(u)$, is known pixel by pixel. A mixture with a known, varying noise level is identified
-by that variation: pixels with large $\Lambda_T$ show the monocular error law almost directly, pixels
-with small $\Lambda_T$ show it blurred, and both must be explained by the same $p_s$. The split-track
-identities are kept as the test of the kernel.
+three coefficients per masklet and frame (an offset and two tilts in inverse depth) and a remainder
+$\eta$. The surface itself may be curved. Under this model a few informative locations anywhere in the
+masklet determine the error of all its pixels, textured or not.
 
-### 3.3 The continuous latent, and why binary conditional independence is the wrong model here
+### 4.3 The masklet gap
 
-The consensus gap and the parallax gap are both residuals of the same monocular depth, so they share
-its error as a continuous quantity. Given only the binary fault state they remain correlated; given
-the signed error they are independent. The correct latent variable is $\epsilon_M$:
+**Interior.** Pooling the pixel gaps with the affine basis,
 
 ```math
-p(r_T, r_C \mid s) = \int p_s(\epsilon)\ \mathcal N\bigl(r_T;\ \epsilon,\ \Lambda_T^{-1}\bigr)\ p\bigl(r_C \mid \epsilon\bigr)\ d\epsilon ,
+\hat{\boldsymbol\epsilon}_{mj} = \Lambda_{mj}^{-1} \sum_{u \in \mathcal M_{mj}} \Lambda_T(u)\, \mathbf k_u\, r_T(u), \qquad
+\Lambda_{mj}^{\mathrm{int}} = \omega \sum_{u \in \mathcal M_{mj}} \Lambda_T(u)\, \mathbf k_u \mathbf k_u^\top ,
 ```
 
-and the indicator is a functional of the posterior of $\epsilon_M$,
-$\zeta = \Pr(\lvert \epsilon_M \rvert > \tau \mid r_T, r_C, \boldsymbol\phi)$, or the posterior weight
-of the outlier component. The latent-class formulas are recovered when each residual is reduced to a
-vote, at the price of a class-conditional dependence that is then built in by construction.
+with $\omega$ a deflation for the spatial correlation of the flow errors.
 
-### 3.4 The repetition coefficient is identified
-
-Write the consensus gap in inverse depth as $r_C = \hat\xi_M - \hat\xi_C = \epsilon_M - \epsilon_C$,
-with $\hat\xi_C$ the cavity depth. Define the repetition coefficient by projection,
+**Boundary.** In the stabilised clip the mask of a faulty masklet moves with its content. Segmenting
+each stabilised frame (or propagating the mask through the stabilised clip) gives, for a boundary point
+$u$ with outward normal $\hat{\boldsymbol\nu}(u)$, a normal displacement
 
 ```math
-\epsilon_C = \varrho\, \epsilon_M + \eta_C, \qquad \varrho = \frac{\operatorname{Cov}(\epsilon_C, \epsilon_M)}{\operatorname{Var}(\epsilon_M)}, \qquad \eta_C \perp \epsilon_M .
+c_i(u) = - \bigl( \hat{\boldsymbol\nu}(u)^\top \mathbf b_i \bigr)\, \mathbf k_u^\top \boldsymbol\epsilon_{mj} + \text{noise}, \qquad
+\Lambda_{mj}^{\partial} = \sum_{i} \sum_{u \in \partial^{\mathrm{own}} \mathcal M_{mj}} \frac{(\hat{\boldsymbol\nu}^\top \mathbf b_i)^2}{\sigma_\partial^2}\, \mathbf k_u \mathbf k_u^\top .
 ```
 
-$\varrho = 0$ means the other views do not share the error of view $j$; $\varrho = 1$ means that the
-surface fused from the other views carries the same error, and consensus sees nothing:
-$r_C = (1 - \varrho)\, \epsilon_M - \eta_C$. With $\epsilon_T$ independent of $\epsilon_M$ and $\eta_C$,
+Only the component of the boundary normal along the epipolar direction counts: in a strip, the leading
+and trailing edges of a region carry the information and edges parallel to the flight line carry none.
+A closed outline always has both. The total information is
+$\Lambda_{mj} = \Lambda_{mj}^{\mathrm{int}} + \Lambda_{mj}^{\partial}$, and the gap is identified when it
+has rank three: three informative, non-collinear locations. A horizontal water surface needs one.
+
+*Illustration, assumed inputs.* A 30 m region at 5 cm ground sampling has a perimeter of about 2400
+pixels. If half of it has a usable normal component, boundary errors are correlated over 20 pixels and
+are 2 pixels in size, one frame gives about 60 effective points, a mean boundary displacement known to
+about 0.26 pixel, and with a height-to-baseline ratio of 1.6 an offset known to about 2 cm in depth.
+The noise is not the limit. The limit is systematic: whether the segmenter draws the boundary of a
+water surface or a glass pane at the same physical place in every view.
+
+**Ownership.** A boundary segment between two regions belongs to the nearer one. For the farther region
+it is an occlusion edge that moves with the occluder's parallax, and using it yields the occluder's
+depth. Segments are therefore classified as *attached* (a marking or a crease: both sides at the same
+depth, usable by both), *owned* (this masklet is the nearer side) or *foreign* (excluded). The
+classification needs only depth order across the boundary, which the monocular depth supplies
+reliably where its metric value does not, and it is checked by the boundary ancillary below. Curved
+occluders, whose rim slides over the surface with the viewpoint, are a remaining bias.
+
+### 4.4 Masklet ancillaries and the layer test
+
+With $n$ informative locations and three unknowns, a masklet has redundancy of its own.
+
+- **Within-masklet scatter.** $A_m = \sum_u \Lambda_T(u)\,(r_T(u) - \mathbf k_u^\top \hat{\boldsymbol\epsilon}_{mj})^2$ measures the remainder $\eta$: the part of the monocular error that does not follow the masklet. Pooled over a stratum it yields the share of error energy that is masklet-affine, the label-free test of the unit itself.
+- **Boundary consistency.** $A_\partial$, the weighted residual of the boundary displacements about the fitted three parameters. A masklet whose boundary segments do not agree with one affine error has mixed ownership or is not one surface; it abstains or is split.
+- **Boundary against interior.** The two estimates $\hat{\boldsymbol\epsilon}^{\partial}$ and $\hat{\boldsymbol\epsilon}^{\mathrm{int}}$ use different image evidence. Their difference, a three-degree-of-freedom $\chi^2$, is zero for an opaque diffuse surface. A static outline with a moving interior, the interior lying *behind*, is the signature of a reflecting or transparent surface: the outline is attached to the pane or the shoreline, the interior content is a virtual image or a view through. This is layered motion, and it is identified per masklet without labels.
+
+The third statistic settles the main open problem of pixel-level parallax for bounded reflectors. The
+verdict about the *surface* is taken from the boundary; the interior is recorded as a material
+attribute ("second layer present") and removed as a judge. What remains unresolved is a reflector with
+no attached boundary inside the view.
+
+## 5. Reading Three: the Latent Witness
+
+### 5.1 What the encoder is asked
+
+A frozen video encoder $E$ maps a clip to tokens on a grid of patches and tubelets. The latent
+discrepancy of a token $\tau$ is the distance between the tokens of the stabilised clip and those of
+the reference frame repeated over the same length,
 
 ```math
-\operatorname{Cov}(r_C, r_T) = (1 - \varrho) \operatorname{Var}(\epsilon_M), \qquad
-\operatorname{Var}(r_T) = \operatorname{Var}(\epsilon_M) + \overline{\Lambda_T^{-1}} ,
+D_\tau = \bigl\lVert E\bigl( \tilde I_{\mathcal W_j \to j} \bigr)_\tau - E\bigl( I_j, \dots, I_j \bigr)_\tau \bigr\rVert ,
 ```
+
+pooled over the tokens of a masklet for the masklet statistic. The repeated-still reference cancels
+what the encoder does to any clip of that content (positional structure, temporal attention) and
+leaves what the residual motion adds. No tracker and no triangulation are involved.
+
+### 5.2 What the latent distance is not
+
+- *Not a measurement.* It has no unit, no sign and no error bar.
+- *Not texture-free.* To first order $D \propto \lVert J_E\, \nabla I^\top \mathbf b_i\, \epsilon_M \rVert$: without image structure inside the receptive field the stabilised clip is static whatever the depth, for any encoder. What a learned encoder adds over patch correlation is tolerance to exposure and resampling, use of weak and large-scale structure, and sensitivity to a moving *outline*, which is the boundary term of Section 4.3 seen natively.
+- *Not free of the reflection problem.* A virtual image wobbles in the stabilised clip of a correct depth exactly as a fault does.
+- *Not fine.* Tokens cover 16 by 16 pixels and two frames. A residual motion well below a patch barely moves a token, and a masklet narrower than two tokens has no interior tokens.
+
+### 5.3 From distance to estimator: the latent sweep
+
+By the exchange identity of Section 3.2, $D(\boldsymbol\delta) = \mathcal D(\boldsymbol\epsilon_{mj} + \boldsymbol\delta)$
+for a perturbation $\boldsymbol\delta$ of the three masklet coefficients (or of the offset alone). If
+the response $\mathcal D$ is minimal at zero residual motion, which is H0 itself, then
 
 ```math
-1 - \hat\varrho = \frac{\widehat{\operatorname{Cov}}(r_C, r_T)}{\widehat{\operatorname{Var}}(r_T) - \overline{\Lambda_T^{-1}}} ,
+\hat{\boldsymbol\epsilon}_{mj}^{\,\mathrm{lat}} = - \arg\min_{\boldsymbol\delta} D(\boldsymbol\delta)
 ```
 
-an errors-in-variables slope with known error variance. For a single region $\mathcal R$ with a
-significant mean parallax gap, $1 - \hat\varrho_{\mathcal R} = \bar r_{C, \mathcal R} / \bar r_{T, \mathcal R}$.
+is a consistent estimate of the masklet error: a plane sweep in latent space with three parameters per
+masklet. It returns sign and size in metric units, because the perturbation is metric. No calibration
+of the encoder is needed for the location of the minimum; only the noise of the minimiser has to be
+estimated.
 
-This turns the premise of the work into a measurable quantity. "Depth consensus is blind to faults
-that every view repeats" becomes: the share $\varrho$ of each fault, as a function of the left-out
-block size $B$, estimated on real data without ground truth. A curve $\hat\varrho(B)$ that falls to
-zero once the block exceeds a few frames says that repetition is local to a strip and that a longer
-block cures it. A plateau above zero is the fault that every view repeats, and its height is the
-fraction of the error that no consensus method can see. On a scene with exact depth the same curve is
-computed from true errors and checks the estimator.
+### 5.4 Information by injection
 
-### 3.5 Summary of identification
+The curvature of $D$ at its minimum, obtained from the same sweep by finite differences, is the
+observed sensitivity of the instrument at this masklet:
+
+```math
+\mathcal I_{mj} = \frac{D(+\boldsymbol\delta_0) + D(-\boldsymbol\delta_0) - 2 D(\mathbf 0)}{\lVert \boldsymbol\delta_0 \rVert^2} \quad \text{(at the minimiser; one direction shown)} .
+```
+
+A masklet on which an injected fault of the size of interest does not move the statistic has
+$\mathcal I \approx 0$, and the latent witness abstains there *by its own measurement*. This replaces
+the geometric $\Lambda_T$ for an instrument that has no noise model. It also disposes of the hope that
+the latent version sees what explicit parallax cannot: if it does, the curvature will show it; if it
+does not, the curvature is zero and the unit is reported as unwitnessed.
+
+The noise of the minimiser is calibrated in two label-free ways: the scatter between the forward and
+backward half-windows, $\hat{\boldsymbol\epsilon}^{\mathrm{lat},+} - \hat{\boldsymbol\epsilon}^{\mathrm{lat},-}$,
+and the regression of the latent estimate on the explicit gap where both exist. The explicit gap, with
+its error bar and ancillaries, is the calibrated special case; the test of honesty for the latent
+witness is that its estimate agrees with the explicit one within the stated errors where both are
+informative, and that its claimed information vanishes where the injected response does.
+
+### 5.5 Cost
+
+One stabilised clip per reference frame and window; one encoder pass for the statistic and, for a
+sweep, two passes per swept direction (offset only: three passes in all; offset and tilts: seven). All
+masklets of a tile are perturbed in the same pass with independent signs. Survey frames must be tiled
+at native resolution, because downsampling a frame to the encoder's input size divides the residual
+motion by the same factor. A cheaper variant warps token grids of independently encoded frames instead
+of pixels and saves the re-encoding, at the price of position-dependent tokens that are not
+equivariant to sub-patch shifts; it is an ablation.
+
+## 6. Hierarchical Model and What Is Identified
+
+### 6.1 Variance components
+
+After transport to a common frame by the known poses,
+
+```math
+\boldsymbol\epsilon_{mj} = \boldsymbol\mu_m + \boldsymbol\alpha_{mj}, \qquad
+\boldsymbol\mu_m \mid s \sim (1 - \pi_s)\, \mathcal N(\mathbf 0, \Sigma_{0s}) + \pi_s\, p_{\mathrm{out}}, \qquad
+\boldsymbol\alpha_{mj} \sim (\mathbf 0, \Sigma_{\alpha s}) ,
+```
+
+with $s$ the stratum of the masklet. $\boldsymbol\mu_m$ is the error that every frame makes on this
+surface; $\boldsymbol\alpha_{mj}$ is what frame $j$ adds; $\eta_j(u)$ is what does not follow the
+masklet. The masklet fault state $F_m$ is the outlier component of $\boldsymbol\mu_m$.
+
+### 6.2 Repetition is an intraclass correlation
+
+The cavity depth of frame $j$ is fused from the other frames' depth maps, so on masklet $m$ its error
+is $\boldsymbol\mu_m$ plus an average of other frames' $\boldsymbol\alpha$. The consensus gap of frame
+$j$ is therefore $\boldsymbol\alpha_{mj} - \bar{\boldsymbol\alpha}_{m,-\mathcal B_j}$ plus noise, with
+no $\boldsymbol\mu_m$ in it:
+
+**Depth consensus observes the per-frame term. Only parallax observes the surface term.**
+
+The repetition coefficient, defined as the share of a frame's error that the cavity repeats, is
+
+```math
+\varrho = \frac{\operatorname{tr} \Sigma_\mu + \operatorname{tr} \operatorname{Cov}(\boldsymbol\alpha_{mj}, \bar{\boldsymbol\alpha}_{m,-\mathcal B_j})}{\operatorname{tr} \Sigma_\mu + \operatorname{tr} \Sigma_\alpha} ,
+```
+
+which for per-frame terms independent beyond the block is the intraclass correlation
+$\operatorname{tr}\Sigma_\mu / (\operatorname{tr}\Sigma_\mu + \operatorname{tr}\Sigma_\alpha)$. Its
+dependence on the block size $B$ is the temporal correlation of $\boldsymbol\alpha$; its plateau is the
+surface term. As before it is estimated without labels as an errors-in-variables slope,
+$1 - \hat\varrho = \widehat{\operatorname{Cov}}(r_C, r_T) / (\widehat{\operatorname{Var}}(r_T) - \overline{\Lambda_T^{-1}})$,
+now with masklet gaps in place of pixel gaps, or directly from the two variance components below.
+
+### 6.3 Identification chain
 
 | Quantity | Identified from | Rests on |
 | --- | --- | --- |
-| tracker noise scale, per stratum | ancillaries $A_\perp$, $A_\parallel$ | T1, covariance structure of T2 |
-| anisotropy along the epipolar direction | ratio $A_\parallel / A_\perp$ | T1 |
-| witness error variance | $\operatorname{Var}(r_T^{+} - r_T^{-})$ | T2 |
-| monocular error law $p_s(\epsilon_M)$, prevalence $\pi_s$ | $(r_T^{+}, r_T^{-})$, or $r_T$ with known kernel | T2, T3, T4 |
-| repetition coefficient $\varrho(B)$ | $\operatorname{Cov}(r_C, r_T)$ | T3, T4 |
-| fault posterior on tracked pixels | Bayes' rule with the above | all |
-| epipolar-consistent witness bias (Section 2.4) | not identified within a strip; partly across strips | |
-| anything on pixels with no track and no feature overlap | not identified | |
+| instrument noise, per stratum | $A_\perp$, $A_\parallel$; half-window scatter | static rigid scene, poses |
+| witness information $\Lambda_{mj}$, or $\mathcal I_{mj}$ for the latent witness | geometry and noise scale; injected response | exchange identity |
+| per-frame component $\Sigma_{\alpha s}$ | scatter of the monocular masklet coefficients across frames, $\sum_j (\hat{\boldsymbol\epsilon}_{mj} - \bar{\boldsymbol\epsilon}_m)(\cdot)^\top$, in which the witness of the masklet cancels when it is formed once per masklet | masklet association |
+| law of the surface term $\boldsymbol\mu_m$, prevalence $\pi_s$ | deconvolution of $\bar{\boldsymbol\epsilon}_m$ over the masklets of a stratum with the known kernel $\Lambda_m^{-1} + \Sigma_\alpha / J_m$; forward and backward half-windows as two independent channels | witness error independent of monocular error; no witness error proportional to parallax |
+| share of error that follows masklets | $A_m$ | none beyond the above |
+| second layer (reflection, transparency) | boundary against interior | attached boundary in view |
+| repetition $\varrho(B)$ | variance components, or the slope against the consensus gap | as above |
+| anything on a masklet with rank-deficient $\Lambda_m$ and no feature overlap | not identified | |
 
-## 4. Indicator and Estimators
+The exchangeable units of the deconvolution are masklets, not pixels. The sample size of every
+per-stratum estimate is the number of masklets in the stratum, which is the honest count: faults are
+regional, and pixel counts overstated the evidence by the area of a region.
 
-### 4.1 Per-pixel sufficient statistics and cost
+### 6.4 The unit hypothesis and its test
 
-The witness needs five numbers per reference pixel, accumulated in one pass over the frames of its
-track: $\sum b_i^2/\sigma_i^2$, $\sum b_i e_i/\sigma_i^2$, $\sum e_i^2/\sigma_i^2$,
-$\sum o_i^2/\sigma_i^2$ and $L$ (ten if forward and backward halves are kept apart, plus the sums for
-an intercept). Tracks need not be stored. The geometry costs one projection Jacobian per pixel and
-frame. The tracker's forward passes dominate; everything else is linear in pixels times track length.
+Everything above uses the hypothesis that monocular error is low-order within masklets. If faults cut
+across masklets, or cover a small part of one, a masklet verdict dilutes them: a shift $\delta$ on a
+fraction $a$ of the masklet has a mean shift $a\delta$ and a non-centrality reduced by the factor $a$
+relative to a test on the right region. Three safeguards:
 
-### 4.2 Indicator on tracked pixels
+- the remainder statistic $A_m$ flags masklets whose interior does not follow the affine model, and the pixel-level posterior is kept as the second-order term, $\operatorname{logit} \zeta_j(u) = \operatorname{logit} \Pr(f \mid \zeta_m) + \log \bigl( g^1 / g^0 \bigr)(r_T(u) - \mathbf k_u^\top \hat{\boldsymbol\epsilon}_{mj})$;
+- the segmenter's nested masks give a tree, and the verdict is placed at the coarsest node whose children's gaps are homogeneous;
+- the share of true error energy that is masklet-affine is measured once on a scene with exact depth (Section 11). If it is low, the masklet is the wrong unit and the pixel formulation stands.
 
-```math
-\operatorname{logit} \zeta = \operatorname{logit} \pi(\boldsymbol\phi)
-+ \log \frac{g^{1}(r_T \mid s, \Lambda_T)}{g^{0}(r_T \mid s, \Lambda_T)} \quad \text{(parallax, where a track exists and passes the ancillary test)} ,
-```
+A fixed segmentation has one more consequence: the number of tests is the number of masklets. A scan
+over all connected regions pays a multiplicity price that a given partition does not.
 
-optionally with the consensus residual through the joint density of Section 3.3 and the estimated
-$\varrho$. As $\Lambda_T \to 0$ the likelihood ratio tends to one and $\zeta \to \pi(\boldsymbol\phi)$:
-there is no hard boundary between tested and untested pixels, and an abstaining pixel is the limit of
-an uninformative one.
+## 7. Verdict, Readout and Prior
 
-### 4.3 Self-supervised fit of the head: pseudo-labels with known noise
-
-The head on frozen features is fitted by maximising the marginal likelihood of the gaps,
+### 7.1 Masklet verdict
 
 ```math
-\mathcal J(\theta, \varsigma) = - \sum_{n} \omega\, \log \Bigl[ \bigl(1 - \pi_\theta(\boldsymbol\phi_n)\bigr)\, g^{0}(r_{T,n} \mid s_n, \Lambda_{T,n}) + \pi_\theta(\boldsymbol\phi_n)\, g^{1}(r_{T,n} \mid s_n, \Lambda_{T,n}) \Bigr] ,
+\bar{\boldsymbol\epsilon}_m = \Bigl( \sum_j \Lambda_{mj} \Bigr)^{-1} \sum_j \Lambda_{mj}\, \hat{\boldsymbol\epsilon}_{mj}, \qquad
+\operatorname{logit} \zeta_m = \operatorname{logit} \pi(\boldsymbol\phi_m)
++ \log \frac{\bigl( p_{\mathrm{out}} * \mathcal N(\mathbf 0, V_m) \bigr)(\bar{\boldsymbol\epsilon}_m)}{\mathcal N\bigl( \bar{\boldsymbol\epsilon}_m;\ \mathbf 0,\ \Sigma_{0s} + V_m \bigr)} ,
 ```
 
-with $\omega$ a deflation for spatial correlation. Its gradient with respect to the head's logit is
-$\zeta_n - \pi_n$: the head is regressed onto the posterior. Three remarks.
+with $V_m = \Lambda_m^{-1} + \Sigma_{\alpha s} / J_m$. The verdict is one number per surface entity and
+is the same in every frame by construction. As the information of the witness goes to zero the
+likelihood ratio goes to one and $\zeta_m \to \pi(\boldsymbol\phi_m)$. The three coefficients are also
+reported separately: an offset fault, a tilt fault and, through $A_m$, a shape fault are different
+failures of the prior and call for different handling in the surface fit.
 
-- *This is learning from noisy labels whose noise is known per instance.* A thresholded gap is a label with miss and false-alarm rates that depend on $\Lambda_T$ through $g^0$, $g^1$. Because those rates are known, the marginal likelihood is the consistent (forward-corrected) objective; no clean subset has to be selected by hand.
-- *Selection is soft and automatic.* The Fisher information of pixel $n$ about its prior logit is $\mathbb E(\zeta_n - \pi_n)^2$. Define the label information
+### 7.2 Readout head: supervised by injection
+
+A light head $w_\theta$ on the tokens of the stabilised clip (or on their difference to the repeated
+still) regresses the masklet error. Its training signal is exact and free: perturb the monocular depth
+of random masklets by known $\boldsymbol\delta$, stabilise, and require
 
 ```math
-\iota_n = \frac{\mathbb E\,(\zeta_n - \pi_n)^2}{\pi_n (1 - \pi_n)} \in [0, 1] ,
+w_\theta\bigl( \mathrm{stab}(\hat\xi_M + \boldsymbol\delta) \bigr) - w_\theta\bigl( \mathrm{stab}(\hat\xi_M) \bigr) = \boldsymbol\delta ,
 ```
 
-  zero for an uninformative witness and one for a perfect one. A pixel contributes to the fit in proportion to $\iota_n$. "Well-conditioned triangulation" is $\iota_n$ near one; no threshold on parallax is needed, and the question of selection bias is the question of how $\iota$ depends on the features (Section 6).
-- *The head cannot copy its target.* It receives frozen features only, never the gap. The degenerate solution of an amortised mixture, in which the prior reproduces the pixel's own residual, requires the features to encode the *noise* of the witness. This is excluded when the features come from a model that does not share the tracker's computation, and it must be re-examined for video or multi-view features (Section 7). Cross-fitting by ground tile remains necessary for per-scene fitting, because all views of a tile share its faults.
+an equivariance constraint that does not need the true error. By the exchange identity an injected
+perturbation produces the same residual motion as a real error of that size, so there is no domain gap
+in the signal; only the spatial pattern of real faults can differ, and perturbations are drawn on
+masklets for that reason. The constraint fixes $w_\theta$ up to its value at zero perturbation, which
+is anchored by the explicit gap where that is informative. The readout amortises the sweep to one
+pass. It is a learned *witness*, and it inherits every limit of the witness, reflections included.
 
-The inlier spread $\varsigma_s$ is fitted jointly per stratum. A nonparametric $p_s$ (a histogram
-deconvolved with the known kernel) is the check on the contamination form.
+### 7.3 Prior head: what it may see
 
-### 4.4 Optional labels
+The prior $\pi(\boldsymbol\phi_m)$ says which surfaces fail, from what they look like, and it is what
+reaches masklets without a witness. It is fitted by the marginal likelihood of the masklet gaps (the
+regression of the prior logit onto $\zeta_m$), which is learning from labels whose noise is known per
+unit through $V_m$. The label information of a masklet,
+$\iota_m = \mathbb E(\zeta_m - \pi_m)^2 / (\pi_m (1 - \pi_m))$, weights it automatically.
 
-A small labelled set from a scene with exact depth is not needed for identification under T1 to T4. It
-is needed to test T3 and T4 themselves: the false-accusation rate of the witness per stratum
-(reflective strata above all), the dependence between witness and monocular errors, and the
-calibration of $\zeta$. In the semi-supervised likelihood the labelled pixels enter with $\zeta$
-clamped; their weight is chosen on held-out labelled likelihood.
+Its input must not contain the residual motion. Tokens of the stabilised clip do, by construction.
+Tokens of the *raw* clip contain the parallax but not the depth under test, so the gap cannot be
+computed from them; they do let the head learn motion signatures of surfaces (rippling, flicker,
+layered motion) and are admissible. The risk that remains is not copying noise but learning the
+witness's *bias*: if reflective masklets are labelled faulty because their interior is a virtual
+image, a head on motion-aware tokens will learn that layered motion means fault. The remedy is in the
+labels, not in the head: verdicts on masklets with a detected second layer come from the boundary
+only. The check is that held-out likelihood does not improve when the head is additionally given the
+masklet's own witness statistics. Pooling tokens over the masklet's mask and frames gives one feature
+per surface entity; cross-fitting is by ground tile.
 
-## 5. Why Keep the Monocular Prior: the Leverage-Power Relation
+**Strata from concept prompts.** A promptable segmenter that accepts noun phrases returns the masklets
+of "water", "glass roof" or "solar panel" without labels. Used as covariates of prevalence and of the
+instrument's noise, wrong strata cost efficiency only. Used to switch the model, for example the
+one-sided fault model on reflective material, they must be confirmed by the layer test, which is
+geometric and does not depend on the segmenter's vocabulary. Whether noun-phrase prompts work on nadir
+aerial imagery is not known.
 
-The objection is that a witness good enough to judge the prior is good enough to replace it. The model
-gives a quantitative answer, and it is not entirely comfortable.
+## 8. Harm Against Detectability, in Masklets
 
-**How good the witness is.** Illustration with assumed inputs: ground sampling distance $g = 5$ cm,
-tracker noise $\sigma_{\mathrm{tr}} = 1$ px, a point visible in five frames with baselines
-$\pm 0.2, \pm 0.4$ of the flying height, so $B_{\mathrm{eff}} \approx 0.63\, d$. Then
-$\sigma_{d,T} = \sigma_{\mathrm{tr}}\, g\, d / B_{\mathrm{eff}} \approx 8$ cm. An aligned monocular depth
-with an inlier error of one percent of a 100 m flying height has $\sigma_{d,M} = 1$ m. The information
-ratio is $\vartheta = \Lambda_T / \Lambda_M \approx 160$. On a tracked, static, diffuse pixel of a
-normal aerial block the witness is two orders of magnitude more informative than the prior. The
-statement that triangulation is "noisy at small baseline" applies to short tracks, far range and strip
-ends, not to the typical tracked pixel.
+Let $\vartheta_m$ be the ratio of witness information to the information of the prior on the masklet's
+coefficients. If both are fused, a fault of size $\Delta$ in the prior moves the surface by
+$\Delta / (1 + \vartheta_m)$, while the non-centrality of the comparison is
+$\Delta^2 \Lambda_M\, \vartheta_m / (1 + \vartheta_m)$. Direct testing pays where the two are of the
+same order (for small faults the expected gain is proportional to
+$\vartheta / (1 + \vartheta)^3$, largest at $\vartheta = \tfrac12$; for a fault of ten inlier standard
+deviations the useful band is roughly $0.2 \le \vartheta \le 3$). The three regimes remain, and the
+masklet formulation moves surfaces between them.
 
-**Where a fault in the prior matters.** If the triangulated depth is fused with the prior, a fault of
-size $\delta$ in the prior that goes undetected biases the fused depth by $\delta / (1 + \vartheta)$:
-the prior's leverage is $1 / (1 + \vartheta)$.
+| Regime | Pixel formulation | Masklet formulation |
+| --- | --- | --- |
+| replace, $\vartheta \gg 1$ | tracked, diffuse, good baseline | textured masklets; their verdicts are the training labels |
+| judge, $\vartheta \approx 1$ | short tracks, far range, strip ends | in addition: untextured masklets with a few interior anchors or an attached boundary, since three coefficients are estimated from all the evidence of the region |
+| blind | texture-free, reflective, occluded | masklets with rank-deficient information: untextured with foreign or missing boundaries, unbounded surfaces cut by the frame, and masklets whose error is not low-order |
 
-**Where the witness can detect it.** The non-centrality of the gap is
-$\delta^2 / (\Lambda_T^{-1} + \Lambda_M^{-1}) = \delta^2 \Lambda_M\, \vartheta / (1 + \vartheta)$.
+The reason to keep the monocular prior is the same as before and is now narrower: it is the only dense
+depth inside masklets whose witness has rank three but little information per pixel, and on blind
+masklets. On textured masklets the witness replaces it. The gain of the masklet unit is that water
+with a shoreline, glazing with frames and flat roofs with parapets move from blind to judged, which
+are the surfaces where monocular depth fails most. Evaluation is stratified by $\vartheta_m$ and
+weighted by harm; detection on textured masklets measures the regime in which the answer does not
+matter.
 
-**The product.** The squared error avoided by detecting the fault is $\delta^2 / (1 + \vartheta)^2$.
-For small faults, where power is proportional to non-centrality, the expected gain of direct testing is
-proportional to
+## 9. Transfer, in Masklets
 
-```math
-\frac{\vartheta}{(1 + \vartheta)^3} , \qquad \text{maximal at } \vartheta = \tfrac12 .
-```
+Training on witnessed masklets and applying to unwitnessed ones is learning from selectively observed
+labels. With $o_m = \mathbb 1[\iota_m > \iota_0]$ and propensity $e(\boldsymbol\phi) = \Pr(o = 1 \mid \boldsymbol\phi)$,
+the transfer is valid if (S1) among masklets that look alike to the encoder, the witnessed ones are
+faulty as often as the others, and (S2) $e(\boldsymbol\phi) > 0$ where the prior is applied. A second
+head predicts $o$ from the same features, needs no fault label, and divides unwitnessed masklets into
+an interpolation zone and an extrapolation zone; in the latter the output is reported as unsupported,
+not as a probability.
 
-For a large fault of $k$ inlier standard deviations, detection at non-centrality $n_\alpha$ needs
-$\vartheta \ge n_\alpha / (k^2 - n_\alpha)$, and the gain $\delta^2/(1+\vartheta)^2$ decays above
-$\vartheta \approx 1$. With $k = 10$ and $n_\alpha = 16$ the useful band is roughly
-$0.2 \le \vartheta \le 3$. **Direct testing of the prior by the witness pays only where the two are
-about equally informative.** Below the band the witness has no power; above it the prior has no
-leverage.
+Two things change with the unit. Overlap improves: a material that is never tracked pixel by pixel is
+often witnessed as a region, so water and glass can enter the interpolation zone through their bounded
+instances and be transferred to their unbounded ones, which is transfer within a material instead of
+from textured to untextured surface. And S1 acquires a specific failure: bounded and unbounded
+instances of a material differ in size and context (a pond against the sea, a skylight against a
+curtain wall), and monocular error may depend on exactly that.
 
-This sorts pixels into three regimes, and it locates the contribution.
-
-| Regime | Where | Role of the witness | Role of the prior |
-| --- | --- | --- | --- |
-| $\vartheta \gg 1$ | tracked, diffuse, good baseline | supplies labels at almost no noise ($\iota \approx 1$) | nearly irrelevant if the witness is fused |
-| $\vartheta \approx 1$ | short tracks, far range, strip ends, low overlap | tests the prior directly | matters, and can be tested |
-| $\vartheta \ll 1$ or no track | texture-free, reflective, occluded, single coverage | none | the only depth evidence |
-
-The prior is kept because of the third row: it is the only dense depth where tracking abstains, and
-those are also the surfaces where monocular models fail most. The witness is strongest in the first
-row, where the prior is least needed. The method therefore stands or falls with *transfer*: learning
-in the first row where to distrust the prior, and applying it in the third. A paper that reports
-detection quality on tracked pixels has measured the regime in which the answer does not matter. The
-evaluation has to be stratified by $\vartheta$, and the headline number is the one for $\vartheta \ll 1$.
-
-**Judge or data.** Estimation theory says to fuse the triangulated depth as a sparse heteroscedastic
-observation and to gate the prior with leverage $1/(1+\vartheta)$. The case for using the witness as a
-judge only rests on its error structure, not on its variance: the errors of Section 2.4 are gross,
-systematic and pass the witness's own checks. As a judge, a false witness costs a gated prior, which
-is a loss of constraint; as data, it costs a wrong surface. That argument justifies caution on
-reflective strata. It does not justify discarding centimetre-level depth on diffuse texture, and a
-design that does so should expect the objection to stand. The consistent position is: fuse the witness
-where its ancillaries pass and the stratum is not reflective, judge everywhere, and report the
-reconstruction gain separately for the regions the witness does not reach.
-
-## 6. Transfer from Tracked to Untracked Pixels
-
-### 6.1 A selective-labels problem
-
-The head is trained where $\iota$ is large and used where it is small. Let $o = \mathbb 1[\iota > \iota_0]$
-and $e(\boldsymbol\phi) = \Pr(o = 1 \mid \boldsymbol\phi)$ the propensity. The target
-$\Pr(f = 1 \mid \boldsymbol\phi)$ learned on $o = 1$ equals the one needed on $o = 0$ under two
-conditions.
-
-- **S1 (labels missing at random given features).** $f \perp o \mid \boldsymbol\phi$: among pixels that look the same to the frozen encoder, those the tracker can follow are faulty as often as those it cannot.
-- **S2 (overlap).** $e(\boldsymbol\phi) > 0$ wherever the head is applied.
-
-Under S1 and S2 the risk on untracked pixels is an importance-weighted risk on tracked ones, with
-weights $(1 - e(\boldsymbol\phi)) / e(\boldsymbol\phi)$, and held-out likelihood can be reported for the
-untracked distribution without labels.
-
-### 6.2 A label-free map of where the head extrapolates
-
-The propensity is estimated by a second head on the same frozen features, trained to predict $o$. It
-needs no fault labels. It partitions the untracked pixels:
-
-- *interpolation zone,* $e(\boldsymbol\phi) \ge e_{\min}$: appearances that are sometimes tracked. Transfer is supported by data, conditional on S1.
-- *extrapolation zone,* $e(\boldsymbol\phi) < e_{\min}$: appearances that are essentially never tracked. The head's output there is determined by the geometry of the frozen feature space and by nothing in the training signal.
-
-The effective sample size of the importance weights, $(\sum w)^2 / \sum w^2$, states how many tracked
-pixels stand behind the prediction for the untracked ones. The method can thus report, per scene and
-without ground truth, what fraction of its untracked area is interpolation. Open water and large glass
-are expected in the extrapolation zone; weakly textured roofs and asphalt, where a learned tracker
-follows some pixels and not others, in the interpolation zone. Results must be reported per zone, and
-a claim for the extrapolation zone can only be empirical.
-
-### 6.3 Where S1 fails
-
-S1 fails when trackability and faultiness are linked beyond what the features encode.
-
-- *Trackable pixels inside an untrackable material are atypical.* On a glass facade the tracker holds on frames, dirt and reflections. The first are not glass, the last are virtual images (Section 2.4). The pseudo-labels of the stratum are then drawn from the wrong population, in the direction of accusing the prior.
-- *Occlusion.* Short tracks cluster at depth edges, where monocular depth is also worst. Distance to the nearest edge of the monocular depth map is available on every pixel and should be a covariate of the head for this reason.
-- *Feature resolution.* Patch features mix a textured and an untextured surface inside one patch; the stratum then contains both, and labels come from the textured part.
-
-### 6.4 Depth consensus as the examiner of the transferred head
-
-The two kinds of evidence abstain in different places. Parallax abstains without texture; consensus
-needs no texture and is blind only to the repeated share $\varrho$ of a fault. On untracked pixels the
-cavity residual still exists. This gives a label-free test of the transfer where it is most in doubt:
-
-- among untracked pixels, the rate of consensus outliers must increase with the head's score;
-- quantitatively, with $\varrho$ transported from tracked pixels of neighbouring strata, the expected rate is the head's probability times the consensus detection rate $p_1(\varrho)$ plus the false-alarm rate; a head that scores untracked surfaces at random fails this check.
-
-The head is trained by the witness that sees repeated faults and examined by the witness that works
-without texture. What stays beyond any label-free check is the intersection: a fault that is repeated
-by all views *and* lies on a surface that is never tracked. For that case the claim rests on the
-transfer assumption and on labelled evaluation alone.
-
-## 7. Frozen Features: Which, and What They May See
-
-**Image features for the prior head.** Frozen self-supervised patch features of the reference frame.
-They encode surface type and are computed by a network unrelated to both the depth model and the
-tracker, so they satisfy the no-copy condition of Section 4.3.
-
-**Video or multi-view features.** A video encoder, or the encoder of a feed-forward multi-view geometry
-model, has parallax inside its features. Two different uses must be kept apart.
-
-- As input to the *prior head* $\pi(\boldsymbol\phi)$, such features let the head recognise motion patterns that go with tracker or depth failure (non-rigid water, specular flicker). The risk is that they also encode the tracker-like displacement of the pixel, and with it a correlate of the witness noise; then the head can partially copy its target. The test is the usual one: cross-fitted held-out likelihood must not improve when the head is given the pixel's own track statistics.
-- As input to a *gap head* that also receives the monocular depth and regresses the signed gap, $\hat r_\theta(u) \approx \mathbb E[\epsilon_M \mid \text{features}]$, trained with the heteroscedastic loss $\sum_n \Lambda_{T,n}\, (r_{T,n} - \hat r_\theta)^2$ plus the outlier component. This predicts sign and size of the error, not only its presence, and extends the witness itself to untracked pixels. It is also, in effect, a depth head on a multi-view model. If it works well, the honest conclusion is that the feed-forward multi-view depth should replace the monocular prior, and T4 fails for that prior because witness and judged depth then use the same parallax.
-
-**The depth model's own encoder.** A strong predictor of that model's failures and admissible for the
-prior head, since the tracker does not share its computation.
-
-**Strata.** Clusters of the image features, fixed before any gap is seen, carry $\pi_s$,
-$\varsigma_s$, the tracker noise scale and the anisotropy ratio. Frozen features cannot adapt their
-strata to the evidence, which is what keeps per-stratum estimates honest.
-
-## 8. Is There a New Idea Here
-
-Stated plainly: checking a monocular depth against multi-view triangulation is not new, and
-confidence estimators trained on self-generated consistency labels exist for stereo and multi-view
-stereo (Section 12). What this formulation adds, in the part of the problem treated here, is the
-following; novelty is asserted relative to the literature as recalled and has not been searched
-systematically.
-
-1. **A witness with ancillary statistics, and identification that follows from them.** Per track, $2L - 1$ residuals are free of the judged quantity. They calibrate the witness on the scene, and the forward and backward half-tracks supply the third independent channel that makes the law of the monocular error, and the fault prevalence, identified without labels and without an assumed shape (Section 3.1). Robust reweighting of depth consensus has no counterpart to this: its residual has no component that is free of the hypothesis under test.
-2. **The repetition coefficient as a label-free measurement** (Section 3.4). The share of a monocular fault that the other views repeat, as a function of the left-out block, measured on real flights. It quantifies the blind spot of every consensus-based gate, including robust losses and distractor masks, and is of interest independently of the detector.
-3. **The leverage-power relation and the complementary-abstention test** (Sections 5 and 6.4). The first says where judging a prior with a witness can matter at all and forces the evaluation onto the untracked regime. The second uses consensus to examine, without labels, the transfer that the method depends on.
-
-The first two are sharp and, to the extent recalled, not in the literature in this form. The third is
-an argument about evaluation more than a method. If the experiments show that $\varrho$ is negligible
-at practical block sizes, item 2 becomes a negative result about the premise, which is still a
-finding, and the detector loses its reason.
-
-## 9. What Would Refute the Approach, and the Cheapest Tests
-
-All tests use a scene with exact depth for evaluation; the first needs no tracker.
-
-1. **Repetition is negligible.** From exact depth, compute the monocular error of every view, associate errors of the same ground point across views, and compute $\varrho(B)$. If $\varrho(B) \approx 0$ for a block of a few frames on real depth-model errors, consensus with a longer block suffices. Cost: hours on cached depth maps. This is the first test.
-2. **Faults lie where nothing is tracked and nothing overlaps.** Synthesise ideal tracks from exact depth with added noise $\sigma_{\mathrm{tr}}$ and a texture-based visibility rule; then run a real frozen tracker on one strip. Measure the fraction of true fault area with $\iota > \iota_0$, in the interpolation zone, and in the extrapolation zone. If most fault area is in the extrapolation zone, the method reduces to an appearance probe.
-3. **Transfer fails.** Train a linear probe on frozen features with parallax pseudo-labels on tracked pixels; evaluate on untracked true faults; compare with the same probe trained on true labels (the ceiling) and with a probe on consensus pseudo-labels. No gain over consensus pseudo-labels on untracked pixels means the witness adds nothing where it matters.
-4. **The witness accuses correct priors.** Precision of gap-based flags per stratum against exact depth, with the sign of the gap; a reflective stratum dominated by one-sided false accusations refutes T3 there and requires the one-sided model or labels.
-5. **The prior adds nothing once triangulation is fused.** Reconstruct with triangulated depth alone, with the prior added ungated, and with the prior under an oracle gate. If the oracle gate does not improve the untracked regions, no indicator can.
-6. **The identification assumptions fail their own tests.** $\operatorname{Var}(r_T^{+} - r_T^{-})$ far from its prediction, an anisotropy ratio far from one, or a head whose held-out likelihood improves with the pixel's own track statistics.
-
-Tests 1 and 5 can end the project before a tracker is run.
+Depth consensus remains the examiner on unwitnessed masklets. It needs no texture and observes the
+per-frame term, so the rate of consensus outliers must rise with the prior there. By Section 6.2 this
+examines the prior only on the per-frame component. A surface-term fault on an unwitnessed masklet is
+beyond every label-free check, and the claim there rests on transfer and on labelled evaluation.
 
 ## 10. What This Theory Cannot Deliver
 
-1. **Epipolar-consistent witness errors.** Planar reflections, constant-speed motion along the strip and borrowed parallax bias the gap and pass every internal check. The blind spot moves from "repeated by all depth maps" to "repeated by all frames of a track"; it is smaller and physically specific, and it is not gone.
-2. **Evidence on untracked, never-tracked appearance.** In the extrapolation zone the indicator is an appearance prior with no supporting data. Glass and water are the expected content of that zone and also the expected content of the fault set.
-3. **Verification of S1 and T4 without labels.** Both are independence assumptions about what is not observed. Section 6.4 tests transfer only for the non-repeated share of faults.
-4. **Independence of tracker errors across frames.** Learned trackers smooth over time. The forward-backward split tolerates drift; it does not tolerate an error common to both halves, which is the case of item 1.
-5. **Calibrated probabilities.** $\zeta$ is a probability under the model; a stated false-alarm rate needs a separate calibration on labelled clean regions or conformal scores, with regions as units.
-6. **Precision per scene.** Prevalence and the tails of $p_s$ are estimated from the number of independent fault regions per stratum, not from the number of pixels.
-7. **A reason to keep a monocular prior where tracking works.** By Section 5 there is none beyond densification; the contribution has to be demonstrated where tracking fails.
-8. **Robustness to pose error beyond the stated covariance.** A wrong pose is a wrong witness for every pixel of the frame; the ancillaries detect it only through its across-line component.
+1. **Witness errors proportional to parallax, without an attached boundary.** Reflectors that fill the view, constant-speed motion along the strip, and curved occluders whose rim slides.
+2. **A verdict when the unit is wrong.** Faults that cut across masklets are diluted; masklet identity errors (a mask that covers different surfaces in different frames) corrupt the per-frame component. Lifting masks onto the surfel map gives a geometric check of identity, at the cost of using the surface under test.
+3. **Boundary placement.** The whole boundary term assumes that the segmenter draws a boundary at the same physical place in every view. For shorelines, wet margins and specular edges this is doubtful and can only be measured.
+4. **Latent evidence without image structure.** No encoder turns a uniform interior into evidence; the injected response will say so.
+5. **Calibrated probabilities and stated error rates.** $\zeta_m$ is a probability under the model; a false-alarm rate needs a separate calibration with masklets or scenes as units.
+6. **Verification of S1 and of the independence of witness and prior errors without labels.**
+7. **Small entities.** A masklet below about two tokens across has no latent interior, and below a few tens of boundary pixels no boundary term; such entities fall back to the pixel gap.
+8. **Robustness to pose error beyond its covariance,** which makes the whole stabilised frame move.
 
-## 11. Relation to the Earlier Models
+## 11. What Would Refute the Approach, and the Cheapest Tests
 
-- *Contamination mixture on the cavity residual.* Same form, with the consensus residual in place of the parallax gap. Its null is not known pixel by pixel and its identification rests on the assumed inlier shape; it is blind to the repeated share $\varrho$. It is retained as the second witness and as the examiner of Section 6.4.
-- *Two evidence groups anchored by labels.* The latent-class structure with two groups has no label-free mode because only $u_1 u_2$ is identified. Here the second group is the parallax gap, its accuracy is not a free parameter but follows from $\Lambda_T$, and the third channel is supplied by the split track; labels move from a requirement to a test of assumptions.
-- *Plane-sweep photo-consistency.* A matching cost profile gives a depth optimum with a curvature-based variance but no ancillary residuals: there is no component of the evidence that is free of depth. Tracks have $2L - 1$.
+On a scene with exact depth, used for evaluation only. The first two need no video model.
 
-## 12. Attributions and Availability
+1. **Errors do not follow masklets.** Segment single frames, fit the affine model to the *true* error of the monocular depth per mask, and report the share of error energy and of fault area explained. If small, the masklet is the wrong unit. Cost: hours.
+2. **No surface term.** From the same fits over frames, the variance components $\Sigma_\mu$ and $\Sigma_\alpha$ and the curve $\varrho(B)$. If the surface term is negligible at a block of a few frames, consensus suffices and the premise falls.
+3. **The boundary is not a measurement.** Estimate the plane of water, glazing and flat roofs from mask outlines alone, with exact poses, and compare with the true plane; count ownership errors. If the systematic error exceeds the monocular inlier error, the boundary term is dropped and untextured surfaces return to the blind regime.
+4. **The latent witness adds nothing.** Stabilise with exact depth plus injected perturbations and record the dose-response of the token distance, of residual flow and of plain photometric difference, by texture level and at both frame spacings. If the encoder's response is not stronger than residual flow anywhere, the latent reading is dropped and stabilisation, masklets and explicit parallax remain. This test also shows whether stabilised aerial clips are usable inputs for a model trained on ground-level video.
+5. **Masklets do not survive.** Propagate masks through raw and stabilised clips at survey spacing and at video rate; measure identity switches against the surfel association.
+6. **Transfer fails,** and **the prior adds nothing once the witness is fused** (oracle-gate ceiling on blind masklets), as in the pixel formulation.
 
-**Statistical results, recalled from memory and not checked against the sources.** Identification of
-the distribution of a latent variable from two measurements with independent errors: Kotlarski (1967);
-the existence of the lemma and its use in measurement-error models was confirmed by a literature
-search, its exact conditions were not. Three-cornered hat in metrology and triple collocation in
-remote sensing (Stoffelen 1998) for error variances of three systems. Latent-class identifiability
-with three conditionally independent detectors: Dawid and Skene (1979); Allman, Matias and Rhodes
-(2009). Learning with class-conditional label noise and forward loss correction: Natarajan et al.
-(2013); Patrini et al. (2017). Propensity weighting under missing-at-random selection: Rosenbaum and
-Rubin (1983). Self-supervised confidence labels for stereo from multi-view contradiction: Mostegel et
-al. (2016); Tosi et al. (2017). Triangulation uncertainty proportional to $d^2 / (f B)$ is textbook.
+Tests 1 and 2 can end the masklet formulation, and test 2 the project, before any video model is run.
 
-**Frozen models.** A search confirmed that the following exist as published work with public
-repositories; their accuracy on aerial imagery, their behaviour at the large inter-frame displacements
-of photogrammetric blocks as opposed to video, their licences and their memory cost at full resolution
-were *not* verified.
+## 12. What Is New, and the Nearest Prior Work
 
-| Role | Candidates | Checked |
+Named plainly: stabilising a sequence by a plane or a depth map and examining the residual motion is
+plane-plus-parallax; estimating one plane per segment is piecewise-planar stereo; separating a
+reflection from the surface behind it by their different motions is layered motion analysis; comparing
+warped views in a learned feature space is the feature-metric loss of self-supervised depth; reading
+surprise from a video encoder's latent prediction error has been done for intuitive physics; training
+a detector on synthetic defects is standard in anomaly detection. None of these is new.
+
+What the formulation adds, in the part treated here, and to the extent recalled without a systematic
+search:
+
+1. **The exchange identity and information by injection** (Sections 3.2, 5.3, 5.4). For a depth prior judged in a stabilised clip, a known perturbation is exchangeable with the unknown error. Any frozen, uncalibrated video model thereby becomes an estimator with sign and size, a self-reported information, and an exactly supervised readout, with no labels. This is what makes "violation of expectation in a foundation model" a measurement instead of a score, and it applies to any future encoder unchanged.
+2. **The variance-component view of repeated faults** (Section 6). The surface term is seen only by parallax, the per-frame term only by consensus, and the repetition coefficient is their intraclass correlation, measurable on real flights. The masklet is the unit that makes this decomposition, and the sample size of every estimate, explicit.
+3. **Judging with three parameters per entity under an error-planarity assumption, with the boundary-interior layer test** (Section 4). It moves bounded untextured and reflective surfaces from blind to judged and identifies the second layer per entity.
+
+Items 1 and 2 are the candidates for a contribution at the level aimed for. Item 3 is an application of
+known geometry whose value depends entirely on test 3 of Section 11.
+
+## 13. Models and Attributions: What Was Checked
+
+**Checked against the authors' paper or repository pages.**
+
+| Model | Verified | Not verified |
 | --- | --- | --- |
-| point tracker | CoTracker3; TAPNext; AllTracker (dense, high resolution) | existence confirmed by search; properties recalled |
-| optical flow | RAFT, SEA-RAFT | recalled only |
-| image features | DINOv2, DINOv3 | recalled; DINOv3 seen in search results only through secondary sources |
-| video encoder | V-JEPA 2 | repository confirmed by search; suitability of its patch features for dense heads recalled |
-| multi-view geometry encoder | VGGT; MapAnything; MASt3R | VGGT (CVPR 2025) and MapAnything confirmed by search; MASt3R recalled |
+| V-JEPA 2 (arXiv 2506.09985) | Self-supervised video encoder; tubelets of 2 by 16 by 16; pretraining at 256 pixels, one variant at 384; clips of 16 to 64 frames; ViT-L about 0.3, ViT-H 0.6, ViT-g about 1 billion parameters; objective is L1 regression of masked token representations against an averaged teacher; trained on web and instructional video plus ImageNet. Checkpoints are loadable through a public repository | Code and weight licence; memory at 64 frames and 384 pixels; behaviour on aerial imagery |
+| V-JEPA 2-AC | An action-conditioned predictor of about 0.3 billion parameters on the frozen encoder, conditioned on 7-dimensional robot end-effector actions and states, trained on about 62 hours of table-top manipulation at 4 frames per second | There is no camera-pose-conditioned predictor in this family. The conception's "expected motion given poses" is not available from the model and has to be imposed by warping |
+| V-JEPA 2.1 (arXiv 2603.14482) | Trained for dense features: a dense predictive loss on visible and masked tokens, deep self-supervision, separate image and video tokenizers; ViT-g about 1 and ViT-G about 2 billion parameters with distilled ViT-L and ViT-B; cool-down at 64 frames and 384 pixels; linear-probe depth, segmentation and video object segmentation reported; released in the same repository. This, not V-JEPA 2, is the member of the family intended for dense probes | Token quality at sub-patch motion; licence of weights; no result on aerial or wide-baseline input was seen |
+| Latent surprise as violation of expectation (arXiv 2502.11831) | Surprise is the error of the pretraining predictor on future-frame representations given past frames, used without adaptation | The distance used at evaluation |
+| SAM 3 (arXiv 2511.16719) | Promptable concept segmentation: noun phrases, image exemplars or both; returns masks with identities for all matching instances in images and video; a detector and a memory-based tracker on a shared backbone; 848 million parameters; released under its own "SAM License"; a later "SAM 3.1" checkpoint for faster multi-object tracking exists | Input resolution; memory and speed with hundreds of masklets per clip; limits on the number of tracked objects; quality of noun-phrase prompts on nadir aerial imagery; whether it yields an exhaustive partition without prompts |
+| SAM 2 (arXiv 2408.00714) | Existence and title only | Licence, architecture and behaviour at large inter-frame motion are recalled, not checked |
 
-Whether any of these trackers reports a calibrated per-point uncertainty is not known here; the theory
-does not need one, since the noise scale is estimated from the ancillaries. Whether the exact-depth
-aerial scenes available for evaluation contain physically rendered reflections on glass and water, on
-which Section 2.4 depends, was not checked.
+Two consequences for the design follow from what was verified. The encoder side is served by V-JEPA
+2.1, with the expectation supplied by stabilisation because no pose-conditioned predictor exists. The
+segmenter side is served by the SAM family for masklets and concept strata, but whether its masklets
+survive survey spacing, and whether its boundaries are view-consistent on water and glass, are open
+and are tests 3 and 5 of Section 11.
+
+**Recalled, not checked.** Plane-plus-parallax (Sawhney 1994; Irani and Anandan 1996). Piecewise-planar
+stereo (Sinha, Steedly and Szeliski 2009; Gallup, Frahm and Pollefeys 2010). Layer extraction with
+reflections and transparency (Szeliski, Avidan and Anandan 2000; Xue et al. 2015). Feature-metric loss
+for self-supervised depth (Shu et al. 2020). Synthetic-defect self-supervision for anomaly detection
+(Li et al. 2021). Identification from two measurements with independent errors (Kotlarski 1967);
+variance components and intraclass correlation are textbook. Other video-native dense backbones that
+could take the encoder's place (video masked autoencoders, multi-view geometry transformers) were not
+examined for this note. Whether the exact-depth aerial scenes available for evaluation render
+reflections on glass and water physically, on which test 3 and the layer test depend, was not checked.
