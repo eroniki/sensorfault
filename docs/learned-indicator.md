@@ -9,9 +9,9 @@ model with one scale per scene and on an exact surface model, and it fails when 
 the leave-block-out prediction of a view from its neighbours as the evidence and replace the decision
 rule by a learned indicator function. The indicator is the posterior of a per-pixel contamination model
 whose outlier prior and inlier scale are produced by a network and fitted by maximum likelihood on the
-residuals themselves, with no fault labels. Two structural constraints make the model identifiable: the
-prior at a pixel never sees that pixel's own residual, and the inlier scale sees geometry but not
-appearance. The fixed-scale, constant-prior special case is a classical pixel-wise test, so the
+residuals themselves, with no fault labels. Structural constraints make the model identifiable: the
+prior at a pixel never sees the residuals in that pixel's neighbourhood, the inlier scale sees geometry
+but not appearance, and the prior of a view is produced by a network fitted on other views. The fixed-scale, constant-prior special case is a classical pixel-wise test, so the
 statistical gate is a limit of the model. A second, image-only network is distilled from the indicator
 and supplies a fault prior where no other view observes the scene. The indicator weights the depth loss
 of the surfel fit, which turns reconstruction into an expectation-maximisation loop whose E-step is
@@ -53,13 +53,14 @@ the very scene it is applied to.
 
 1. A contamination model of leave-block-out depth residuals whose outlier prior and inlier scale are
    amortised by a network and fitted without labels (Section 4.2 to 4.4).
-2. Two structural constraints, a blind spot on the prior and a geometry-only scale, with an argument for
-   why they prevent the two degenerate solutions (Section 4.5).
+2. Three structural constraints, a blind spot on the prior that is wider than the noise correlation, a
+   geometry-only scale, and cross-fitting over frames, with an argument for why they prevent the
+   degenerate solutions of an unsupervised mixture (Section 4.5).
 3. The classical pixel-wise test and the region scan as limit cases of the model (Section 4.6).
 4. Geometry-to-appearance distillation, which extends the indicator to pixels no other view observes
    (Section 4.8).
-5. An expectation-maximisation view of gated reconstruction in which the E-step uses the leave-out
-   posterior (Section 4.10).
+5. An expectation-maximisation form of gated reconstruction in which the E-step uses the leave-out
+   posterior and the nuisance parameters are fitted with the same weights (Section 4.10).
 
 ## 2. Related Work
 
@@ -170,9 +171,17 @@ alignment being a closed-form $2 \times 2$ solve. The residual and its nominal v
 
 ```math
 r_j(u) = \hat d_j(u) - \bigl(a_j \tilde D_{-j}(u) + b_j\bigr), \qquad
-v_j(u) = \sigma_j^2(u) + a_j^2 \bigl(1 + 2\beta_{-j} \hat D_{-j}(u)\bigr)^2 V_{-j}(u) + a_j^2\, \hat D_{-j}(u)^4 \operatorname{Var}(\beta_{-j}), \qquad
-z_j(u) = \frac{r_j(u)}{\sqrt{v_j(u)}} .
+z_j(u) = \frac{r_j(u)}{\sqrt{v_j(u)}} ,
 ```
+
+```math
+v_j(u) = \sigma_j^2(u) + a_j^2 \bigl(1 + 2\beta_{-j} \hat D_{-j}(u)\bigr)^2 V_{-j}(u) + a_j^2\, \hat D_{-j}(u)^4 \operatorname{Var}(\beta_{-j}) + \mathbf j_q(u)^\top \Sigma_q\, \mathbf j_q(u) .
+```
+
+The four terms are the measurement noise, the uncertainty of the cavity surface, the uncertainty of the
+distance bias, and the uncertainty of the pose of view $j$, with $\mathbf j_q(u)$ the derivative of the
+rendered depth with respect to the pose and $\Sigma_q$ the pose covariance obtained without the depth
+of view $j$.
 
 Under the nominal model and without a fault, $z_j(u)$ has zero mean and unit variance. The statistical
 gate tests this hypothesis. The cavity is kept; the remainder of the paper replaces the test.
@@ -209,8 +218,10 @@ z_j(u) \mid f_j(u) = 1 &\sim p_{\mathrm{out}}, \qquad p_{\mathrm{out}}(z) = \fra
 \end{aligned}
 ```
 
-with residuals clipped to $[-Z, Z]$. The outlier density is fixed, has no parameters and is bounded: it
-states only that a faulty depth can be anywhere in a wide range. The two fields come from two heads,
+The outlier density is fixed, has no parameters and is bounded: it states only that a faulty depth can
+be anywhere in a wide range. A residual beyond the range, $\lvert z \rvert > Z$, is a fault by
+definition; it is assigned $\zeta = 1$ and left out of the likelihood, so no probability mass piles up
+at the bounds. $Z$ is chosen well above $s_{\max}$. The two fields come from two heads,
 
 ```math
 c_j = \operatorname{sigm}\Bigl( G_\theta\bigl[\mathbf x^{z}_j;\ \mathbf x^{g}_j,\ \mathbf x^{a}_j\bigr] \Bigr), \qquad
@@ -240,6 +251,13 @@ The mixture density of one residual is
 ```math
 p\bigl(z_j(u)\bigr) = \bigl(1 - c_j(u)\bigr)\, \mathcal N\bigl(z_j(u);\ 0,\ s_j(u)^2\bigr) + c_j(u)\, p_{\mathrm{out}}\bigl(z_j(u)\bigr) .
 ```
+
+Because the prior at $u$ depends on residuals outside the disc, this is a conditional density of
+$z_j(u)$ given its surroundings, and the product over pixels is a pseudo-likelihood, not a joint
+density of the residual field. The inlier component ignores the conditioning, which is justified by the
+choice of $R$: beyond the blind spot the noise correlation is small, so the conditional distribution of
+an inlier is close to its marginal. A fault, in contrast, is coherent over distances larger than $R$,
+and the conditioning is informative exactly for it.
 
 ### 4.4 Indicator and Objective
 
@@ -284,8 +302,8 @@ time.
 
 ### 4.5 Identifiability
 
-A two-component mixture with free, pixel-wise parameters has two degenerate solutions. The model is
-built to exclude both.
+A two-component mixture with free, pixel-wise parameters has two degenerate solutions, and fitting it
+on the scene under test adds a third. The model is built to exclude all three.
 
 **Collapse to noise.** The scale grows wherever residuals are large, and every fault is explained as an
 inlier with a large variance. This is excluded because the scale head sees only geometry. A fault caused
@@ -306,6 +324,17 @@ prior must predict
 whether a pixel is faulty from its surroundings, which is possible exactly for the faults of interest:
 regional, and correlated with appearance.
 
+**Memorisation in per-scene fitting.** The blind spot constrains the input, not the training signal.
+When the network is fitted on the scene it is applied to, a prior head with enough capacity can learn
+to recognise individual image patches and reproduce, from appearance alone, the posterior it was
+trained towards at those very pixels. The prior then again follows the pixel's own residual. We exclude
+this by cross-fitting. The views are split into $F$ folds of contiguous frames, each longer than the
+block size $B$; the prior of a view is produced by a network fitted on the other folds only. What such
+a network knows about a glass roof in view $j$, it has learned from the residuals of other views of
+glass, which is legitimate evidence. Capacity is further limited by early stopping on the
+pseudo-likelihood of the held-out fold. The scale head has a low-dimensional input and is fitted on all
+views.
+
 **Decision boundary.** The indicator exceeds one half when the outlier term exceeds the inlier term,
 that is, when
 
@@ -313,7 +342,9 @@ that is, when
 \lvert z \rvert > z^\ast(c, s) = s\, \sqrt{\, 2 \log \frac{(1 - c)\, 2Z}{c\, s \sqrt{2\pi}} \,} .
 ```
 
-The boundary is a threshold on the standardised residual that the context moves: where the prior is
+A boundary exists while the argument of the logarithm exceeds one, $(1 - c)\, 2Z > c\, s \sqrt{2\pi}$; for a
+prior beyond that, every residual is flagged, which the Beta term and $Z \gg s_{\max}$ keep out of reach
+in practice. The boundary is a threshold on the standardised residual that the context moves: where the prior is
 low, a pixel needs a large residual to be flagged; inside a region whose neighbours are deviant and
 whose appearance is suspicious, the threshold drops. For $c = 0.01$, $s = 1$ and $Z = 30$ it is
 $z^\ast \approx 3.9$; for $c = 0.5$ it is $z^\ast \approx 2.5$.
@@ -354,6 +385,10 @@ largest component, relative to the testable area,
 S_j = \max_{\mathcal R \in \mathrm{cc}(M_j)}\ \frac{1}{\lvert \Omega_j \rvert} \sum_{u \in \mathcal R} \zeta_j(u) .
 ```
 
+The score is computed on testable pixels only. The output of the student of Section 4.8 on untestable
+pixels weights the reconstruction but does not enter the decision about a view, since it carries no
+geometric evidence.
+
 ### 4.8 Geometry-to-Appearance Distillation
 
 The indicator exists only on testable pixels. An image-only student $t_\phi$ extends it. It is trained
@@ -378,6 +413,9 @@ to be fault-free, set $\hat t = S_{(\lceil (n+1)(1-\alpha) \rceil)}$. If a clean
 exchangeable with the calibration views, then $\Pr(S > \hat t) \le \alpha$. Calibrating the maximum of
 $S_j$ over a scene gives a scene-level rate in the same way. The assumption of fault-free calibration
 scenes is at scene level and involves no pixel labels; violations make the threshold conservative.
+Views of one scene are not independent: neighbouring frames share ground, surface and noise. The
+calibration unit is therefore a scene or a strip, with one score per unit (its maximum or a randomly
+drawn view), and $n$ counts units, not views.
 
 **Sensitivity to shift.** The conformal guarantee is marginal over the calibration distribution. A test
 flight at another altitude, overlap or scene type is not exchangeable with the calibration scenes, and
@@ -400,21 +438,33 @@ Under the contamination model, the expected complete-data negative log-likelihoo
 the indicators, is a weighted depth loss:
 
 ```math
-\mathcal L_{\mathrm{depth}} = \sum_i \sum_u \bigl(1 - \zeta_i(u)\bigr)\, \frac{\bigl(\hat d_i(u) - a_i \tilde D_i(u) - b_i\bigr)^2}{2\, s_i(u)^2\, \sigma_i(u)^2} ,
+\mathcal L_{\mathrm{depth}} = \sum_i \sum_u \bigl(1 - \zeta_i(u)\bigr)\, \frac{\bigl(\hat d_i(u) - a_i \tilde D_i(u) - b_i\bigr)^2}{2\, \sigma_i(u)^2} ,
 ```
 
 and the information that view $i$ contributes to surfel $k$ is weighted alike,
 
 ```math
-\Lambda_k^{(i)} = \sum_u \bigl(1 - \zeta_i(u)\bigr)\, \frac{a_i^2\, \mathbf g_{uk}^\top \mathbf g_{uk}}{s_i(u)^2\, \sigma_i^2(u)} .
+\Lambda_k^{(i)} = \sum_u \bigl(1 - \zeta_i(u)\bigr)\, \frac{a_i^2\, \mathbf g_{uk}^\top \mathbf g_{uk}}{\sigma_i^2(u)} .
 ```
 
 The same weights enter the closed-form updates of $(a_i, b_i)$ and the normal equations of $\beta$, so
-no nuisance parameter is fitted to faulty pixels. Reconstruction is therefore expectation-maximisation
-on the joint model, with one deviation that is the
-point of the method: the E-step for view $j$ is computed against the cavity, not against the full
-surface. A view cannot lower its own fault posterior by having shaped the surface it is compared with.
-This is the cavity construction of expectation propagation applied to an outlier model.
+no nuisance parameter is fitted to faulty pixels. Reconstruction therefore has the form of expectation-maximisation
+on the joint model, with two deliberate deviations.
+
+*The E-step uses the cavity.* The posterior of view $j$ is computed against the surface without its
+block, not against the full surface. A view cannot lower its own fault posterior by having shaped the
+surface it is compared with. This is the cavity construction of expectation propagation applied to an
+outlier model. The price is that the iteration is no longer guaranteed to increase a single likelihood;
+we monitor the held-out pseudo-likelihood over rounds and damp the weights,
+$w^{(t+1)} = (1 - \eta)\, w^{(t)} + \eta\, (1 - \zeta^{(t+1)})$.
+
+*The learned scale stays out of the surface fit.* The scale $s$ is fitted to the standardised cavity
+residual, whose variance mixes measurement noise with the error of the cavity itself: linearisation,
+unrepresented structure, pose. Only the first belongs in the weight of a depth observation, and the
+residual alone cannot separate the two. Folding $s$ into $\Lambda_k$ would also feed back into
+$V_{-j}$ and hence into the next round's $z$, so that $s$ would chase its own effect. The surface fit
+therefore keeps the nominal $\sigma$, and $s$ acts only in the decision. Weighting by
+$1/(s^2 \sigma^2)$ is an ablation.
 
 Two variants are studied. *Soft*: the weights $1 - \zeta$ are used as above, so the clean parts of a
 faulty view still contribute. *Hard*: the view with the largest score above $\hat t$ is removed, one
@@ -427,10 +477,11 @@ fitted, so the surface fit cannot reduce its loss by raising $\zeta$.
 2. Accumulate the information blocks $\Lambda_k$ and the normal equations of $\beta$.
 3. For each view $j$: subtract the block $\mathcal B_j$ (surfels and $\beta$), take up to $K$ steps, render
    the cavity, align robustly, form $z_j$ and the feature stack.
-4. Fit $(\theta, \psi)$ by minimising $\mathcal J$ (per-scene regime), or apply the amortised network.
+4. Fit $(\theta, \psi)$ by minimising $\mathcal J$ with cross-fitting over folds of frames (per-scene
+   regime), or apply the amortised network.
 5. Compute $\zeta_j$ on testable pixels, alternating with the alignment of view $j$; take the student's
    output on untestable pixels; compute $S_j$.
-6. Soft: set $w_j(u) = 1 - \zeta_j(u)$. Hard: remove the view with the largest $S_j > \hat t$.
+6. Soft: move $w_j(u)$ towards $1 - \zeta_j(u)$ with damping $\eta$. Hard: remove the view with the largest $S_j > \hat t$.
 7. Refit the surface, warm-started. Repeat from step 2 until the weights change by less than a tolerance
    or a round limit is reached.
 
@@ -506,7 +557,8 @@ model of residual patches (normalising flow) in place of the mixture; a student 
 statistical gate's flags in place of the indicator; cross-depth-model disagreement as an additional
 input; conformal threshold against model null, with and without covariate weighting; block size
 $B \in \{1, 3, 5, 9\}$; blind-spot radius $R$ from one pixel to twice the correlation length; number of
-cavity steps $K \in \{1, 2, 3\}$; plain against reweighted alignment.
+cavity steps $K \in \{1, 2, 3\}$; plain against reweighted alignment; cross-fitting against fitting on all
+views; learned scale folded into the surface weights.
 
 ### 5.5 Metrics
 
@@ -517,7 +569,7 @@ error). Transfer across depth models and from synthetic to real scenes.
 
 ### 5.6 Protocol
 
-Hyperparameters ($Z$, $R$, $s_{\min}$, $s_{\max}$, $\alpha_0$, $\beta_0$, $\lambda_c$, $\lambda_s$,
+Hyperparameters ($Z$, $R$, $F$, $\eta$, $s_{\min}$, $s_{\max}$, $\alpha_0$, $\beta_0$, $\lambda_c$, $\lambda_s$,
 architecture) are selected by held-out pseudo-likelihood on residuals of views not used for fitting,
 never by a detection metric. The selection rule is fixed before the evaluation masks are read.
 
@@ -535,6 +587,11 @@ never by a detection metric. The selection rule is fixed before the evaluation m
 - The identifiability argument assumes that faults are a minority among pixels that share geometric
   features. A fault class that is tied to geometry (for example, every pixel beyond a certain range) is
   absorbed by the scale head and reported as noise, not as a fault.
+- The reweighted alignment has a breakdown point: when faults cover more than about half of the testable
+  pixels of a view, the alignment can lock onto the fault. Such a view is reported as untestable as a
+  whole when the two alignments, from the clean and from the flagged pixels, are both self-consistent.
+- Untestable pixels lie at image borders, behind occlusions and at the ends of strips, so the student is
+  applied where its training distribution is thinnest.
 - The student learns only the failure classes that occur on testable pixels of the fitted scenes.
 
 ## 7. Notation
@@ -558,6 +615,9 @@ never by a detection metric. The selection rule is fixed before the evaluation m
 | $c_j(u)$, $s_j(u)$ | contamination prior, inlier scale |
 | $G_\theta$, $h_\psi$, $t_\phi$ | prior head (blind-spot operator), scale head, image-only student |
 | $R$ | blind-spot radius on the residual channels |
+| $F$ | number of folds of frames in cross-fitting |
+| $\eta$ | damping of the reconstruction weights between rounds |
+| $\mathbf j_q$, $\Sigma_q$ | pose Jacobian of the rendered depth, pose covariance of the tested view |
 | $p_{\mathrm{out}}$, $Z$ | outlier density and its half-range |
 | $\zeta_j(u)$ | learned indicator: posterior fault probability |
 | $S_j$, $\hat t$, $\alpha$ | view score, threshold, target false-alarm rate |
