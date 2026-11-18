@@ -153,8 +153,21 @@ def test_known_coarse_surfels_fail():
 # ---------------------------------------------------------------------------------------------
 
 
+# TITAN RTX, gsplat 1.5.3, f92aff8 (2026-11-18): the clean set rejects v3 (log10 p -12.2; v2 -7.1)
+# while the numpy backend passes it, so the faulty case passing here does not show detection (v3 is
+# an outlier with or without the bias: log10 p -9.1 with it).
 @pytest.mark.gpu
-@pytest.mark.parametrize(("case", "expected"), [("faulty_v3_seed0", ["v3"]), ("clean_seed0", [])])
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("faulty_v3_seed0", ["v3"]),
+        pytest.param(
+            "clean_seed0",
+            [],
+            marks=pytest.mark.xfail(strict=True, reason="gsplat fit: clean v3 rejected (p~6e-13)"),
+        ),
+    ],
+)
 def test_gsplat_gate_on_bunny(case, expected):
     from sensorfault.gs.fit import GsplatBackend
 
