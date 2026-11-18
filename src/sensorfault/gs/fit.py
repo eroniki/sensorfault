@@ -146,13 +146,16 @@ class GsplatBackend:
         device: str = "cuda",
         chunk: int = 2048,
         depth_mode: str = "ray_plane",
-        px_stride: int = 2,
+        px_stride: int = 1,
     ):
         if depth_mode not in ("ray_plane", "gsplat"):
             raise ValueError(depth_mode)
         # ray_plane: supervise the same per-pixel ray-plane depth that render_cavity and the Jacobians
         # use (gsplat's RGB+D blends per-surfel centre depth, which never sees surfel tilt);
-        # gsplat: the stock rasteriser depth (kept for comparison)
+        # gsplat: the stock rasteriser depth (kept for comparison).
+        # px_stride: supervise every px_stride-th pixel (flat index). Keep 1: with 2 on an even image
+        # width the fit only ever sees the even columns, while the gate tests every pixel; on the bunny
+        # the odd columns were 23-47 mm off (even 5-7 mm) and the clean view v3 was rejected.
         self.depth_mode, self.px_stride = depth_mode, px_stride
         self.n_warmup, self.n_steps = n_warmup, n_steps
         self.lrs = (lr_mu, lr_rot, lr_scale, lr_opacity)

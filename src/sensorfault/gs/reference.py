@@ -141,7 +141,20 @@ def _composite_chunk(
     dD = np.take_along_axis(dD_s, inv, axis=0)
     safe_den = np.where(np.abs(den) > 1e-9, den, 1.0)
     jsub = np.stack([np.ones_like(d), -u, -v], axis=-1) / safe_den[:, :, None]
-    return {"d": d, "jsub": jsub, "w_hat": w_hat, "D": D, "W": W, "dD": dD, "g": g}
+    # footprint term of dD / d(nu, tau1, tau2): moving or tilting a surfel's plane also moves the
+    # ray's hit point inside the plane, (du, dv) = (t1^T w, t2^T w) * jsub, which changes the
+    # Gaussian g and through it the compositing weights of this surfel and of those behind it.
+    #   dD/dg_k = alpha_k * (T_k d_k - S_wd/(1-a_k) - D (T_k - S_w/(1-a_k))) / W
+    with np.errstate(divide="ignore", invalid="ignore"):
+        q_s = (
+            T * d_s - suf_wd / (1.0 - a_s) - np.where(live, D, 0.0) * (T - suf_w / (1.0 - a_s))
+        ) / Ws
+    q_s = np.where(live & (a_s < 0.999), q_s, 0.0)
+    dDdg = np.take_along_axis(q_s, inv, axis=0) * alpha[:, None]
+    s2 = s[:, :2] ** 2
+    lin = -g * (u * (w @ t1.T).T / s2[:, :1] + v * (w @ t2.T).T / s2[:, 1:2])  # (K, m)
+    jfoot = (dDdg * lin)[:, :, None] * jsub
+    return {"d": d, "jsub": jsub, "w_hat": w_hat, "D": D, "W": W, "dD": dD, "g": g, "jfoot": jfoot}
 
 
 def _chunks(P: int, chunk: int):
@@ -180,12 +193,19 @@ class NumpyReferenceBackend:
     def __init__(
         self,
         stride: int = 4,
-        n_warmup: int = 15,
-        n_iter: int = 25,
-        opacity_lr: float = 0.2,
+        n_warmup: int = 60,
+        n_iter: int = 30,
+        opacity_lr: float = 0.3,
         chunk: int = 512,
         lumped_information: bool = True,
+        full_jacobian: bool = True,
     ):
+        # n_warmup / opacity_lr: opacity needs a long warm-up; with 15 steps the bunny fit froze at
+        # median alpha 0.29 and stalled at 21-27 mm rms (60 steps at 0.3: ~14 mm, noise 5 mm).
+        # full_jacobian: the fit's Gauss-Newton Jacobian includes the footprint term (how moving a
+        # plane moves its hit point and so its compositing weight); without it LM steps are
+        # rejected on curved scenes and the fit stalls far above the noise (bunny: 25-38 mm rms)
+        self.full_jacobian = full_jacobian
         # lumped_information: Lambda_k = sum_u w_uk J^T J (majorises the Hessian, never overshoots) instead
         # of the w^2 blocks that drop the cross-surfel terms and overshoot by the overlap factor
         self.lumped_information = lumped_information
@@ -221,6 +241,8 @@ class NumpyReferenceBackend:
                 res.append(sw * (y[sl][m] - comp["D"][m]))
                 if need_jac:
                     J = comp["w_hat"][:, m, None] * comp["jsub"][:, m]  # (K, mm, 3)
+                    if self.full_jacobian:
+                        J = J + comp["jfoot"][:, m]
                     rows.append(sw * np.transpose(J, (1, 0, 2)).reshape(m.sum(), 3 * K))
                     dDs.append(sw * comp["dD"][:, m])
         r = np.concatenate(res) if res else np.zeros(0)
