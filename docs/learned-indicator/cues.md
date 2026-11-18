@@ -1,500 +1,492 @@
-# Evidence Definitions: a Depth Prior Judged in a Compensated Video, with the Masklet as Unit
+# Evidence Definitions: Depth Messages and Image Messages on the Same Primitives
 
-This note defines the evidence on which a fault indicator for monocular depth is built when the input
-is a posed aerial image sequence flown in strips, there is one monocular depth map per frame, and the
-models available are frozen backbones that are native to video and to dense prediction: a video
-segmenter that follows regions through a clip (masklets) and a video encoder with spatio-temporal
-tokens. It states, for each kind of evidence, the quantity, its nuisance, how its null is obtained,
-when it abstains and how that is detected, what it responds to, and what is identified. It then
-records what was checked about the candidate models, where the contribution lies, what would end the
-idea, and the cheapest tests.
+This note defines the evidence for a fault indicator on monocular depth when the surface is a set of
+2D Gaussian surfels fitted to posed aerial frames, with one monocular depth map per frame, and the
+differentiable renderer is used for both kinds of evidence. Every primitive, and every surface entity
+made of primitives, receives two families of messages about its placement: one from the depth maps,
+one from the pixels through the renderer. The fault test is the tension between the two families. A
+fault that every frame repeats is visible to it, because all depth messages pull one way and the
+pixels the other.
 
-The note makes one construction central that the other definitions follow from: the **compensated
-clip**. Each neighbouring frame is resampled into a reference geometry through the monocular depth and
-the known poses. If the depth is right, the compensated clip is a still image. Everything that still
-moves in it is evidence, and its motion is the depth error multiplied by a known gain. A tracker, a
-video encoder and a video segmenter are three ways of reading that residual motion.
+The note works out: the image message in information form from the rasteriser's Jacobian; why it is
+defined on groups of primitives and not on single ones; how appearance is restricted so that it cannot
+hide a misplaced surface; the tension statistic, its null and its calibration; what is identified;
+how circularity is avoided; how entities and frozen features are lifted onto primitives; what remains
+to be learned; what exists in the code; the closest prior work; and what would end the idea.
 
-Notation follows the main document: frame $j$, pixel $u$ with ray $\mathbf x = K_j^{-1} \tilde u$,
-inverse depth $\xi = 1/d$, aligned monocular value $\hat\xi_M$ with error $\epsilon_M$, projection
-$\mathbf p_i(\xi)$ into frame $i$, parallax gain $\mathbf b_i = \partial \mathbf p_i / \partial \xi$ of
-length $b_i$ along the unit epipolar direction $\hat{\mathbf l}_i$, parallax gap $r_T$ with information
-$\Lambda_T$, ancillary statistics $A_\perp$ and $A_\parallel$, information ratio
-$\vartheta = \Lambda_T / \Lambda_M$ and parallax share $\varsigma = \vartheta / (1 + \vartheta)$,
-repetition coefficient $\varrho$.
+Notation follows the main document where it exists: frame $i$, pixel $u$, surfel $k$ with centre
+$\boldsymbol\mu_k$, frame $[\mathbf t_{k1}\ \mathbf t_{k2}\ \mathbf n_k]$ and geometric perturbation
+(normal offset $\nu$, tilts $\tau_1, \tau_2$); depth information blocks $\Lambda_k^{(i)}$ and vectors
+$\boldsymbol\eta_{ik}$; compositing weight $w_{uk}$; information ratio $\vartheta$ and share
+$\varsigma$; repetition coefficient $\varrho$; minimum detectable fault $\delta_{\min}$.
 
-**Status of the statements.** Nothing here has been measured; all statements about behaviour are
-predictions. Facts about third-party models are either *checked* (read from the project page or the
-paper, listed in Section 8) or marked "(recalled)". Statements about the project's own code were
-checked against the source.
+**Status.** Nothing here has been measured, and no code was run. Statements about the project's code
+were checked against the source. Statements about third-party work are marked *checked* (read from the
+paper or project page) or "(recalled)". The rasteriser library is not installed in the environment
+that was inspected, so its interface is known only from how the project's scripts call it.
 
-## 1. The Unit: a Surface Entity
+## 1. What the Primitives Are For
 
-### 1.1 Why the pixel in a frame is the wrong unit
+A depth-only surfel map with images as an outside judge gives the primitives no role that a depth map
+per frame could not play. In the present formulation they have three, and the note should be read as a
+test of whether these are real.
 
-A fault that every frame repeats is a property of the surface as the depth model sees it, not of a
-view. Write the monocular error at surface point $X$ in frame $i$, for $X$ in a region $m$, as
+1. **A common coordinate system for evidence.** Depth messages and image messages are both expressed
+   as information about the same few placement parameters. Messages add; the comparison of the two
+   families is a comparison of two estimates of one quantity.
+2. **Visibility for free.** Which frames see a piece of surface, what occludes it, and which side owns
+   a silhouette are decided by the rasteriser, consistently for prediction, Jacobian and perturbation.
+3. **A carrier for everything lifted from frozen models.** Segment labels and features attached to
+   primitives are fused over frames and can be rendered into any view.
 
-```math
-\epsilon_{M,i}(X) = \underbrace{\mu_m + \alpha_m(X)}_{\text{repeated by all frames}} + \underbrace{\beta_{m,i}}_{\text{per-frame shift of the region}} + \underbrace{\gamma_i(X)}_{\text{residual}} ,
-```
+None of this requires Gaussians in particular. Any differentiable surface renderer with local planar
+elements would serve. Surfels are used because an element has a plane (so "offset along the normal"
+and "tilt" are its natural coordinates), because the depth information blocks already exist for them,
+and because rendering is fast enough to re-render every view under perturbation.
 
-with $\sum_X \alpha_m(X) = 0$ over the region and $\sum_i \beta_{m,i} = 0$. The first two terms do not
-depend on the frame. The repetition coefficient is their share of the error variance at the block
-length considered. The claim "the verdict belongs to the masklet, with per-frame deviations as a
-second-order term" is the claim that $\mu_m$ dominates: faults are regional, follow objects and
-materials, and repeat. That is a hypothesis about the depth model with a direct measurement, the
-variance components of this decomposition on a scene with exact depth (Section 10, test 1). If
-$\alpha_m$ dominates (faults cut through regions) or $\beta_{m,i}$ dominates (faults change from frame
-to frame), the masklet is the wrong unit, for power in the first case and for meaning in the second.
+## 2. Placement Parameters
 
-### 1.2 What only motion sees
+### 2.1 Primitive
 
-Let $r_i(X) = \epsilon_{M,i}(X) - \epsilon_T(X)$ be the parallax gap of frame $i$ at $X$, with
-$\epsilon_T$ the error of the witness, which belongs to the surface point and is common to all frames
-that are judged against the same correspondences. Then
+The code carries a ten-dimensional perturbation per surfel (position, rotation, log-scales, opacity
+logit), of which depth observes three combinations: $\nu = \mathbf n^\top \delta\boldsymbol\mu$ and the
+two tilts. Scales are frozen and opacity is frozen after a warm-up. The image message is defined on
+the same three coordinates $\boldsymbol\theta_k = (\nu, \tau_1, \tau_2)$.
 
-```math
-r_i(X) - r_{i'}(X) = \epsilon_{M,i}(X) - \epsilon_{M,i'}(X), \qquad
-\bar r(X) = \frac{1}{L} \sum_i r_i(X) = \mu_m + \alpha_m(X) + \bar\gamma(X) - \epsilon_T(X) .
-```
+### 2.2 Entity
 
-Differences between frames are free of the witness and contain no repeated term: they are depth
-consensus, expressed on the surface. The frame mean contains the repeated term and the witness error,
-and nothing else contains the repeated term. The two sources of evidence of the main document are
-therefore two contrasts of one table (surface point by frame): its within-row contrasts and its row
-means. Motion is needed for exactly one quantity per region, the mean field, and all correspondences in
-the tube of the region can be pooled into it.
-
-### 1.3 Region fault model
-
-The frame-independent part is modelled per region as an affine field in inverse depth over the rays of
-a reference frame,
+A surface entity $m$ is a set of primitives $\mathcal K_m$ (Section 9) with a mean frame and tangent
+coordinates $\mathbf y_k$ of its members. Its placement is three numbers
+$\boldsymbol\delta_m = (\nu_m, \tau_{m1}, \tau_{m2})$, acting rigidly:
 
 ```math
-\mu_m + \alpha_m(X) \approx \boldsymbol\rho_m^\top \mathbf x, \qquad \boldsymbol\rho_m \in \mathbb R^3 .
+\boldsymbol\theta_k = B_k\, \boldsymbol\delta_m, \qquad
+B_k = \begin{bmatrix} 1 & -y_{k1} & -y_{k2} \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{bmatrix}, \quad k \in \mathcal K_m ,
 ```
 
-This is the natural family: a plane $\mathbf n^\top X = d_\pi$ has inverse depth
-$\xi(\mathbf x) = \boldsymbol\pi^\top \mathbf x$ with $\boldsymbol\pi = \mathbf n / d_\pi$, so the
-difference of two planes is of this form, and a planar surface placed on a wrong plane (a lake put at
-the wrong level or tilted, a glass roof pushed inwards) is a fault with exactly three parameters. A
-constant shift is the special case $\boldsymbol\rho \propto$ the optical axis. Departure from the
-affine field inside the region is left to a per-pixel term of the second order.
+up to the rotation between the member's frame and the entity's. This is the affine fault field of a
+region (a planar surface put on a wrong plane) written on primitives. The remaining degrees of freedom
+of the members, $\boldsymbol\theta_k - B_k \boldsymbol\delta_m$, are the *shape* of the entity.
 
-### 1.4 Where masklets come from, and what a frozen segmenter does not give
+## 3. The Depth Message
 
-A masklet is a set of masks $\{M_{m,i}\}$ of one region in the frames where it is visible. Two points
-about the available models were checked and change the construction.
-
-- *No model returns an exhaustive partition of a video without prompts.* The video mode of the
-  segmenters is driven by prompts: clicks, boxes or masks on a frame, or, in the concept-promptable
-  model, a short noun phrase or an exemplar, which returns all matching instances with identities.
-  Automatic mask generation exists for single images. An exhaustive set of masklets must therefore be
-  built: generate masks on key frames, use each as a prompt, propagate, and merge duplicates. Cost
-  grows with the number of regions; the concept-promptable model is reported near real time for about
-  five concurrent objects, and an aerial frame has hundreds of regions.
-- *With poses and depth, association through time is not the segmenter's job.* A mask in frame $j$ can
-  be carried to any frame through the depth and the poses, or lifted onto the surfels it covers. The
-  segmenter is needed for something else: it follows the region by appearance, independently of the
-  depth. The disagreement between the region carried by geometry and the region followed by
-  appearance is a measurement (Section 4).
-
-The unit of the verdict is thus a pair: the appearance masklet, and the set of surfels $\mathcal K_m$
-it covers. Concept prompts ("water", "glass roof", "solar panel", "road") can name strata without
-labels; nothing checked says how the model behaves on materials or on nadir aerial imagery.
-
-## 2. The Compensated Clip
-
-### 2.1 Definition
-
-For a reference frame $j$ and a clip of frames $i \in \mathcal C_j$, resample each frame into the
-geometry of $j$ through the monocular depth of $j$,
+Unchanged. Frame $i$ contributes to surfel $k$ the block $\Lambda_k^{(i)}$ and the vector
+$\boldsymbol\eta_{ik}$ (weighted Jacobian of the composited ray-plane depth times the inverse noise
+variance, and times the residual). In the code the blocks exist in a lumped form, built from
+$\sqrt{w_{uk}}$-weighted Jacobians, which is block-diagonal and majorises the true Hessian. Projected
+on the entity,
 
 ```math
-\tilde I^{(j)}_i(u) = I_i\bigl( \mathbf p_i(\hat\xi_M(u)) \bigr), \qquad i \in \mathcal C_j ,
+\Lambda^{D}_m = \sum_i \sum_{k \in \mathcal K_m} B_k^\top \Lambda_k^{(i)} B_k, \qquad
+\boldsymbol\eta^{D}_m = \sum_i \sum_{k \in \mathcal K_m} B_k^\top \boldsymbol\eta_{ik}, \qquad
+\hat{\boldsymbol\delta}^{D}_m = \bigl(\Lambda^D_m\bigr)^{-1} \boldsymbol\eta^D_m ,
 ```
 
-with a mask where the point is occluded in $i$ or leaves the image (a depth test against the same
-depth map). The sequence $(\tilde I^{(j)}_i)_i$ is the compensated clip. For a static, diffuse scene and
-a correct depth every frame of it equals $I_j$ up to resampling and exposure: **the null hypothesis is
-stillness.** If the depth is in error by $\epsilon_M$, the content at $u$ is displaced in frame $i$ by
+with the per-frame terms $\boldsymbol\eta^D_{m,i}$ kept separately. $\hat{\boldsymbol\delta}^D_m$ is
+where the depth maps alone would put the entity, relative to the current surface.
+
+## 4. The Image Message
+
+### 4.1 Jacobian of the rendered colour for one surfel
+
+A pixel ray with origin $\mathbf c$ and direction $\mathbf w$ hits the plane of surfel $k$ at depth
+$d = \mathbf n^\top(\boldsymbol\mu - \mathbf c) / \mathbf n^\top \mathbf w$, at local coordinates
+$\mathbf s = (\mathbf t_1^\top \mathbf x, \mathbf t_2^\top \mathbf x)$ with
+$\mathbf x = \mathbf c + d\,\mathbf w - \boldsymbol\mu$. The footprint is
+$G = \exp(-\tfrac12 \mathbf s^\top L^{-2} \mathbf s)$ with $L$ the diagonal matrix of the two scales
+(a screen-space low-pass term of the published method is left out here; recalled). The pixel colour is
+$\hat C(u) = \sum_l w_{ul}\, \mathbf c_l$ with $w_{ul} = a_{ul} T_{ul}$, $a_{ul} = \alpha_l G_{ul}$ and
+$T$ the transmittance in front.
+
+Moving the surfel along its normal by $\nu$ moves the hit point within the plane:
 
 ```math
-\Delta_i(u) = - b_i\, \epsilon_M(u)\ \hat{\mathbf l}_i + O(\epsilon_M^2),
+\frac{\partial \mathbf s}{\partial \nu} = \frac{1}{\mathbf n^\top \mathbf w} \begin{bmatrix} \mathbf t_1^\top \mathbf w \\ \mathbf t_2^\top \mathbf w \end{bmatrix} =: \mathbf t_{uk} ,
 ```
 
-along the epipolar direction, proportional to the gain of that frame. This residual motion is the
-along-line residual $e_i$ of the main document, now present in the pixels of a video.
-
-A second compensation is defined on the surface. Resampling every frame onto the fused surfel surface
-(an orthographic stack per surface patch) gives a clip that is still when the *fused surface* is right.
-Its residual motion measures the error of the surface that is actually built, in which a repeated
-fault survives in full and a non-repeated one is averaged down. The frame-level clip judges a depth
-map; the surface-level clip judges the result. Both are used: the first to gate messages, the second
-to verify that gating removed the error. Checking a surface model by the consistency of images
-rectified through it is established in photogrammetry (recalled); the construction is not new, its use
-as the input of frozen video models is.
-
-### 2.2 Why this is the right input for video-native models
-
-1. **It removes the frame-spacing problem.** Survey frames at 80% forward overlap are displaced by a
-   fifth of the image, far outside what video encoders, trackers and video segmenters are trained on
-   (checked for the video encoder: clips of 16 to 64 frames of ordinary video, the longer ones spanning
-   about 16 seconds). After compensation the motion is $b_i \epsilon_M$: zero where the depth is right,
-   and a few pixels to a few tens of pixels on a fault. The compensated clip is a small-motion video
-   whatever the spacing of the flight, so one construction covers dense video and survey stills.
-2. **Its reference is in the training distribution.** The video encoder was trained with still images
-   repeated in time as clips (checked). The null clip, $I_j$ repeated, is an ordinary input, and so is
-   a clip with small residual motion.
-3. **The expectation is produced by geometry, not by a learned predictor.** No frozen video model with
-   a predictor conditioned on camera pose was found. The action-conditioned predictor released with
-   the video encoder takes seven-dimensional end-effector displacements of a robot arm, was trained on
-   about 62 hours of manipulation video from an uncalibrated camera, and is sensitive to camera
-   placement (checked). It cannot predict how tokens move under a camera motion. The unconditional
-   predictor "watches as an observer". The only way to obtain "what the depth and the poses predict"
-   from frozen parts is the explicit warp.
-
-The nearest classical idea is plane-plus-parallax: stabilise a sequence on a dominant plane, and the
-residual image motion is parallax relative to the plane, directed along epipolar lines (recalled).
-Here the reference surface is the monocular depth instead of a plane, and the residual parallax is the
-error of the prior.
-
-### 2.3 What compensation distorts
-
-Resampling changes local scale and blurs; disocclusions put wrong content where the mask fails;
-exposure differences and view-dependent appearance show as flicker without motion. These are nuisance
-responses of every reader of the clip. They are handled by the finite-difference design of Section 3.2
-(the same distortions are present in the perturbed clips and cancel to first order), by the occlusion
-mask, and by per-frame gain normalisation.
-
-## 3. Three Readers of the Compensated Clip
-
-### 3.1 Explicit reader: residual tracks
-
-A frozen point tracker or flow model is run on the compensated clip, where it works in its trained
-regime. It returns displacements $\hat\Delta_i(u)$ from the reference frame. Then
+the tangent of the angle of incidence, resolved in the surfel's axes. A tilt acts at the hit point as a
+normal offset that grows with distance from the centre, $\nu_{\mathrm{eff}} = -(\tau_1 s_1 + \tau_2 s_2)$,
+exactly as for depth. With $\kappa_{uk} = \partial \log G_{uk} / \partial \nu = - \mathbf s_{uk}^\top L_k^{-2}\, \mathbf t_{uk}$
+and the compositing derivative $\partial \hat C / \partial a_k = T_k (\mathbf c_k - \mathbf C^{>k})$,
+where $\mathbf C^{>k}_u$ is the colour composited behind $k$ at that pixel,
 
 ```math
-e_i = \hat{\mathbf l}_i^\top \hat\Delta_i, \quad o_i = \hat{\mathbf n}_i^\top \hat\Delta_i, \qquad
-r_T = - \frac{\sum_i b_i\, e_i / \sigma_i^2}{\Lambda_T}, \quad \Lambda_T = \sum_i \frac{b_i^2}{\sigma_i^2},
+\mathbf J_{uk} = \frac{\partial \hat C(u)}{\partial (\nu, \tau_1, \tau_2)_k}
+= w_{uk}\ \kappa_{uk}\ \bigl( \mathbf c_k - \mathbf C^{>k}_u \bigr)\ \bigl[\, 1,\ -s_1,\ -s_2 \,\bigr]_{uk} .
 ```
+
+Three factors: the weight of the surfel in the pixel, the rate at which its footprint slides, and the
+colour contrast with what lies behind. Three properties follow at once.
+
+- **No contrast, no information.** On blank surface $\mathbf c_k = \mathbf C^{>k}$ and the Jacobian
+  vanishes, whatever the geometric error. Abstention is automatic.
+- **No obliquity, no information.** $\kappa$ contains $\mathbf t_{uk}$: for a ray along the normal a
+  normal offset moves nothing. For a nadir strip over flat ground the information comes from off-axis
+  rays.
+- **Silhouettes are included, with ownership.** At the outline of an entity the contrast is with the
+  surface behind, and only the surfels in front have weight there. The motion of an occluding contour
+  is credited to the occluder, as it must be. Parallax of an untextured roof against the ground is
+  therefore part of the image message without a separate construction.
+
+Not differentiated: changes of depth order between surfels, which are discontinuous.
+
+### 4.2 Why a single primitive has no usable image message
+
+Moving one surfel while its neighbours stay tears the surface: it uncovers what is behind on one side
+and overlaps its neighbour on the other. The response of the image to that is real, but it is not the
+response to a displaced surface, and the Jacobian blocks of neighbouring surfels are strongly coupled
+through the pixels they share, far more than for depth. A block-diagonal (lumped) image information
+per primitive would misstate the evidence in both directions. The image message is therefore defined
+for a group moved together. For a locally opaque group moved rigidly the sum of the member Jacobians
+reduces to the brightness-constancy form,
 
 ```math
-A_\perp = \sum_i \frac{o_i^2}{\sigma_i^2} \sim \chi^2_L, \qquad A_\parallel = \sum_i \frac{(e_i + b_i r_T)^2}{\sigma_i^2} \sim \chi^2_{L-1} ,
+\mathbf J_{um} = \sum_{k \in \mathcal K_m} \mathbf J_{uk} B_k \ \approx\ - \nabla \hat C(u)^\top \mathbf M_{u}, \qquad
+\mathbf M_u = \frac{\partial \mathbf p(u)}{\partial \boldsymbol\delta_m} ,
 ```
 
-exactly the parallax gap and its ancillary statistics, with the tracker noise $\sigma_i$ estimated per
-stratum from the ancillaries (across-line and along-line separately, because of the aperture effect).
-Displacements are mapped back through the local Jacobian of the warp where the resampling is far from
-the identity. This reader is the calibrated reference: it has an error bar from geometry and
-$2L - 1$ degrees of freedom of self-check.
+the image gradient of the rendering times the image motion of the surface point under the placement
+change, inside the entity, plus the silhouette terms at its outline. The entity message has three
+unknowns and many pixels; it is the unit on which a test with a reference distribution can be built.
+Where a per-primitive map is wanted, an entity can be a small disc of neighbouring surfels.
 
-### 3.2 Latent reader: response of a frozen video encoder
+### 4.3 Restricting appearance: the reduced message
 
-A distance between the tokens of two clips is a number without a null, which is the defect that a
-correlation score without a profile has. The latent reader is defined so that it returns the same
-quantity as the explicit one, in the same units, with an error bar.
-
-Let $\Phi(\cdot)$ be the frozen video encoder, returning one token per tubelet (checked for the
-candidate: two frames by 16 by 16 pixels; at 384 pixels that is a 24 by 24 grid per pair of frames).
-Let $\mathcal V(\xi)$ denote the compensated clip built with the depth field $\xi$, and
-$\mathcal V_0$ the still clip. For a token $\tau$ covering a patch of the reference frame, form
+Appearance can explain away a misplaced surface. The effect can be stated exactly. With geometry fixed,
+the rendered colour is linear in the surfel colours, $\hat{\mathbf C} = A(\boldsymbol\delta)\, \mathbf a$,
+where $\mathbf a$ stacks all appearance parameters (a constant colour per surfel, plus a gain and
+offset per frame). Eliminating $\mathbf a$ by least squares at each geometry (variable projection) gives
+the image loss as a function of placement only, with Gauss-Newton Jacobian and information
 
 ```math
-\mathbf g_\tau = \Phi_\tau\bigl(\mathcal V(\hat\xi_M)\bigr) - \Phi_\tau(\mathcal V_0), \qquad
-\mathbf J_\tau = \frac{\Phi_\tau\bigl(\mathcal V(\hat\xi_M + \delta)\bigr) - \Phi_\tau\bigl(\mathcal V(\hat\xi_M - \delta)\bigr)}{2\delta} ,
+\mathbf J^{\mathrm{red}}_m = \bigl( I - A (A^\top A)^{-1} A^\top \bigr)\, \mathbf J_m, \qquad
+\Lambda^{I}_m = \frac{1}{\sigma_c^2}\ \mathbf J^{\mathrm{red}\,\top}_m \mathbf J^{\mathrm{red}}_m, \qquad
+\boldsymbol\eta^{I}_m = \frac{1}{\sigma_c^2}\ \mathbf J^{\mathrm{red}\,\top}_m \mathbf r ,
 ```
 
-where $\delta$ is a known perturbation of inverse depth, constant over the token's support (two more
-forward passes). $\mathbf J_\tau$ is the measured response of the encoder to a depth change at this
-place, in this clip, with this baseline. The latent gap is the one-parameter Gauss-Newton step that
-brings the compensated clip to stillness,
+with $\mathbf r$ the image residual. The image information about placement is what is left of the
+Jacobian after projecting out everything appearance can absorb.
+
+- With one colour per surfel and $L$ frames, the projection removes the mean over frames of the image
+  motion of each surface element. What remains is motion relative to the mean view,
+  $\mathbf M_{u,i} - \bar{\mathbf M}_u$: parallax. The reduced information is gradient energy times
+  $\sum_i \lVert \mathbf M_{u,i} - \bar{\mathbf M}_u \rVert^2$, the same structure as the information of
+  a track.
+- With appearance free per frame (a per-frame colour, or view-dependent colour of an order comparable
+  to the number of distinct viewing directions), the projection removes everything and
+  $\Lambda^I_m = 0$. A strip sees each point from a narrow fan of directions along one line, so even
+  low-order view dependence is close to this case. Published work reports that the energy of
+  higher-order view-dependent coefficients marks primitives whose geometry is poorly constrained or
+  whose appearance has absorbed an error (*checked*), which is the same phenomenon seen from the
+  other side.
+
+The appearance model *for the test* is therefore fixed: constant colour per surfel, per-frame gain and
+offset, opacity and scales frozen, no densification or pruning. This is a judging model, separate from
+whatever is used to render final images.
+
+**Sample splitting.** The reduced message removes absorption but still fits colour on the frames it
+judges. The alternative is to fit colour on a fold of frames and take the image message from the
+others, exchanged across folds of contiguous frames. No projection is then needed on the judging
+frames. Colour taken from a single frame and judged in the others is the hand-warped compensated clip:
+that construction is the special case of rendering one frame's texture through the surface. Both
+variants are defined; the reduced message uses all frames and is the default, the split version is the
+check on it.
+
+### 4.4 Feature-metric variant
+
+Frozen dense features of each frame, attached to surfels by the same linear fit and rendered like
+colour, give a second image message with the same algebra. It tolerates exposure and weak texture
+better and has a wider linear range; it is coarser (features live on a grid of 14 to 16 pixels,
+*checked* for the video encoder, recalled for image encoders) and features are not exactly
+view-independent, which the constant-per-surfel model then reads as residual. Whether the library
+renders more than three channels in its 2D mode was not checked.
+
+### 4.5 How it is computed
+
+A backward pass gives $\boldsymbol\eta^I$ but not $\Lambda^I$, which needs Jacobian products. For three
+parameters per entity the simplest exact route is finite differences through the renderer: perturb the
+placement of a set of entities by $\pm h$ in one parameter, re-render every view, difference. Entities
+that share no pixel in a view can be perturbed in the same render, so with a colouring of the entity
+adjacency graph into $q$ classes the cost is $6q$ renders per view; pixels near an outline respond to
+the entity in front, which the rasteriser handles. Forward-mode differentiation would give the same in
+$3q$ passes if the rasteriser supports it (not checked). The projection of Section 4.3 is a sparse
+least-squares solve per colour channel. This perturb-and-re-render loop is also the injection used for
+calibration (Section 5.3): the same code serves both.
+
+## 5. Null and Calibration
+
+### 5.1 Why the nominal information is not an error bar
+
+$\Lambda^I_m$ with independent pixel noise is far too large: residuals are spatially correlated and
+dominated by model error (resampling, unmodelled shading, small pose error), not sensor noise. Used as
+it stands, every entity would fail any test.
+
+### 5.2 Variance from the dispersion of per-frame scores
+
+Let $\mathbf g_{m,i}$ be the part of $\boldsymbol\eta^I_m$ contributed by the pixels of frame $i$,
+evaluated at the image optimum. Under the hypothesis that one placement explains all frames they
+scatter around zero, and their dispersion, not the nominal noise, estimates the variance:
 
 ```math
-r_\Phi(\tau) = \frac{\mathbf J_\tau^\top W \mathbf g_\tau}{\mathbf J_\tau^\top W \mathbf J_\tau}, \qquad
-\Lambda_\Phi(\tau) = \frac{\mathbf J_\tau^\top W \mathbf J_\tau}{s_\Phi^2}, \qquad
-A_\Phi(\tau) = \frac{\lVert \mathbf g_\tau - \mathbf J_\tau r_\Phi(\tau) \rVert_W^2}{s_\Phi^2} ,
+\widehat V_m = \sum_i \mathbf g_{m,i}\, \mathbf g_{m,i}^\top, \qquad
+\widehat{\operatorname{Var}}\bigl(\hat{\boldsymbol\delta}^I_m\bigr) = \bigl(\Lambda^I_m\bigr)^{-1} \widehat V_m \bigl(\Lambda^I_m\bigr)^{-1} ,
 ```
 
-with $W$ a fixed metric on token space (identity after whitening over the scene) and $s_\Phi$ the
-token noise, estimated from clips that the explicit reader certifies as still. This is feature-metric
-alignment restricted to the one direction that geometry allows, read from a frozen video encoder.
+the cluster-robust (sandwich) form with frames as clusters. It uses neither the depth maps nor labels.
+With five to ten frames per entity it is noisy for a single entity; it is pooled over entities of a
+stratum as a variance inflation factor $\widehat V_m \approx \phi_s \Lambda^I_m$. The depth family is
+calibrated in the same way from its per-frame terms $\boldsymbol\eta^D_{m,i}$, but there the dispersion
+only measures the non-repeated part of the monocular error: a repeated fault leaves it untouched. That
+asymmetry is the reason the image family is needed.
 
-- **Abstention is measured, not assumed.** Where the tokens do not respond to a depth perturbation
-  (no baseline, no structure the encoder uses, token dominated by occlusion mask), $\mathbf J_\tau$ is
-  small and $\Lambda_\Phi$ is small. This is the latent counterpart of the evidence fraction of a
-  track, and it does not need a separate diagnostic.
-- **Ancillaries.** The temporal token index gives replicate estimates $r_{\Phi}(\tau, t)$ of one
-  scalar, because the gain $b_i$ is already inside the warp; their dispersion plays the role of
-  $A_\parallel$. A second finite difference, perturbing the warp across the epipolar direction, gives
-  an across-line component that must be zero for a static rigid scene: the role of $A_\perp$.
-  $A_\Phi$ tests whether the token difference is explained by a depth change at all; flicker and
-  resampling artefacts fall into it.
-- **Linear range.** The step is valid while the residual motion is within the range in which the
-  encoder's response is linear, which is unknown and is measured by a response curve: inject known
-  depth perturbations on a scene with exact depth and record $r_\Phi$ against the truth. The same
-  curve can be measured on any posed video around the monocular depth, without labels, since $\delta$
-  is chosen by the experimenter. For large faults a coarse-to-fine schedule over $\delta$ is needed.
-- **Honesty check.** On tokens where both readers are informative, $r_\Phi$ regressed on the pooled
-  $r_T$ must have slope one and the residual spread predicted by $\Lambda_\Phi^{-1} + \Lambda_T^{-1}$.
-  The latent reader is used beyond the reach of the explicit one only in strata where this holds at
-  the boundary of that reach.
+### 5.3 Ancillary statistics, re-expressed
 
-What the video encoder might add over the explicit reader is response on structure too weak or too
-large-scale for a point tracker (shading gradients, texture statistics, region outlines inside the
-token), and over per-frame features compared frame by frame, sensitivity to motion smaller than a
-token. Neither is established. A per-image encoder applied to the same compensated frames is the
-necessary ablation; if it does as well, the video encoder is not needed for the witness.
+- **Along the parallax direction.** A pure placement error $\boldsymbol\epsilon$ produces per-frame
+  scores $\mathbf g_{m,i} = \Lambda^I_{m,i} \boldsymbol\epsilon$, a fixed pattern over frames set by
+  their gains. The misfit of the observed scores to that pattern,
+  $A^{\parallel}_m = \sum_i \lVert \mathbf g_{m,i} - \Lambda^I_{m,i} \hat{\boldsymbol\delta}^I_m \rVert^2_{\widehat V_{m,i}^{-1}}$,
+  tests whether a single placement explains the frames.
+- **Across it.** The placement parameters cannot produce image motion across the epipolar direction.
+  A two-parameter image shift of the rendered entity in each frame is estimated by one registration
+  step on the entity's pixels, with the rasteriser's visibility mask; its component across the epipolar
+  direction must vanish for a static rigid scene, and its component along it reproduces the explicit
+  parallax measurement with gain $b_i$. This keeps the calibrated explicit reading inside the renderer.
+- **By injection.** Moving an entity by a known placement and re-rendering must change
+  $\hat{\boldsymbol\delta}^I_m$ by exactly that amount. The slope of recovered against injected
+  placement, per stratum and as a function of injected size, gives the linear range and corrects the
+  scale of the message. It is available on any posed sequence without labels.
 
-Paired comparison is how prediction error in this model family has been validated: surprise at
-physically impossible events was shown by comparing two matched clips, not by an absolute threshold
-(checked). The finite-difference design is paired by construction.
+### 5.4 Linear range and the sweep
 
-### 3.3 Region reader: masklet drift
+Gradient and curvature describe the image loss within about a pixel or two of residual image motion
+(more for features, more on an image pyramid). A gross fault moves the surface by many pixels of
+parallax; evaluated at the depth-only surface, the gradient then has arbitrary direction and the
+curvature is not an error bar. For such entities the message is obtained from a **sweep**: the reduced
+image loss is evaluated on a grid of offsets $\nu_m$ by re-rendering, coarse to fine, and
+$\hat{\boldsymbol\delta}^I_m$ and its information are taken at the minimum of the profile. This is plane
+sweeping carried out by the renderer on an entity, with occlusion handled. An entity whose profile has
+no distinct minimum abstains. The derivative form is the cheap special case for small tension.
 
-The video segmenter is prompted with the mask of region $m$ in the reference frame and propagates it
-through the compensated clip. Under the null the masklet does not move. Its outline in frame $i$ is
-compared with the reference outline: at boundary point $u_b$ with unit normal $\mathbf n_b$ to the
-contour, the signed distance $c_{b,i}$ from the reference contour to the propagated one is observed.
-A contour reveals only the displacement component along its normal, so
+## 6. The Tension Statistic
+
+Two estimates of one placement, with calibrated covariances
+$\Sigma^D_m$ and $\Sigma^I_m$:
 
 ```math
-c_{b,i} = - b_i \bigl( \hat{\mathbf l}_i^\top \mathbf n_b \bigr)\, \boldsymbol\rho_m^\top \mathbf x_b + \epsilon^{c}_{b,i} ,
+\mathbf d_m = \hat{\boldsymbol\delta}^D_m - \hat{\boldsymbol\delta}^I_m, \qquad
+T_m = \mathbf d_m^\top \bigl( \Sigma^D_m + \Sigma^I_m \bigr)^{-1} \mathbf d_m \ \sim\ \chi^2_{3} \quad \text{under no fault.}
 ```
 
-for a region whose error is the affine field of Section 1.3. Weighted least squares over boundary
-points and frames gives the region gap and its information,
+At the joint fit $\boldsymbol\delta^\ast = (\Lambda^D + \Lambda^I)^{-1}(\boldsymbol\eta^D + \boldsymbol\eta^I)$
+the two families pull with equal and opposite force
+$\mathbf g = \boldsymbol\eta^D - \Lambda^D \boldsymbol\delta^\ast = \bigl( (\Lambda^D)^{-1} + (\Lambda^I)^{-1} \bigr)^{-1} \mathbf d$,
+so with nominal covariances $T_m = \mathbf g^\top \bigl( (\Lambda^D)^{-1} + (\Lambda^I)^{-1} \bigr) \mathbf g$:
+the squared pull, normalised by the sum of the two inverse informations. Four remarks.
 
-```math
-\hat{\boldsymbol\rho}_m = - \Lambda_m^{-1} \sum_{b, i} \frac{b_i (\hat{\mathbf l}_i^\top \mathbf n_b)\, c_{b,i}}{\sigma_c^2}\, \mathbf x_b, \qquad
-\Lambda_m = \sum_{b, i} \frac{b_i^2 (\hat{\mathbf l}_i^\top \mathbf n_b)^2}{\sigma_c^2}\, \mathbf x_b \mathbf x_b^\top ,
-```
+1. **It is the parallax gap.** $\mathbf d_m$ is the error of the prior minus the error of the image
+   estimate, pooled over the entity; the statistic is the compatibility test of two measurement groups
+   that estimation theory has long used. What the renderer adds is how the second estimate is formed:
+   with visibility, silhouettes and appearance elimination handled by one model.
+2. **The pull alone is not the statistic.** A large pull with large information on both sides is
+   expected noise. During optimisation, before either family is at a stationary point, the difference
+   form must be used, not the gradients.
+3. **Repeated faults.** If all frames share an error $\boldsymbol\epsilon$,
+   $\hat{\boldsymbol\delta}^D_m$ is displaced by $\boldsymbol\epsilon$ with a small nominal covariance,
+   and $T_m$ is large. The between-frame contrasts of the depth scores $\boldsymbol\eta^D_{m,i}$ are
+   depth consensus and contain no repeated term; only the difference of the two family means does.
+4. **Minimum detectable fault.** Along a direction $\mathbf h$ of placement,
+   $\delta_{\min}(m, \mathbf h) = (z_{1-\alpha/2} + z_{1-\beta_{\mathrm p}}) \sqrt{\mathbf h^\top (\Sigma^D_m + \Sigma^I_m) \mathbf h}$.
+   Abstention is graded by it. With $\varsigma = \Lambda^I/(\Lambda^I + \Lambda^D)$ the main document's relation
+   between harm and detectability carries over unchanged: for a fault of given harm to the fused
+   surface, detectability rises steeply with the image share and vanishes with it.
 
-with the residual sum of squares $A_m \sim \chi^2_{N_{\mathrm{eff}} - 3}$ as the self-check for
-planarity of the error, rigidity and consistent delineation. No interior texture is used. This is the
-statement "the motion of a region fixes its plane" in estimable form, and it shows where that
-statement needs qualifying.
+### 6.1 Splitting the image family: interior against outline
 
-1. **Contour segments parallel to the epipolar direction carry nothing.** Within a strip all epipolar
-   lines are nearly parallel to the flight direction, so only the leading and trailing parts of an
-   outline inform. A region elongated along the strip (a canal, a road) is constrained at its two ends
-   only, and its tilt across the strip is weakly determined; $\Lambda_m$ shows this in its smallest
-   eigenvalue. A cross strip supplies the other direction.
-2. **An outline belongs to the nearer surface.** The boundary between a roof and the ground beside it
-   is the edge of the roof. For the ground region the same contour is an occluding contour and moves
-   with the roof's depth. Each boundary segment must be assigned to the side that owns it; segments
-   owned by the neighbour are dropped for this region. Ownership is an ordinal judgement across the
-   edge, taken from the sign of the depth step in the monocular map and confirmed by the direction in
-   which the neighbouring texture is covered and uncovered in the uncompensated frames. A shoreline
-   overhung by trees is owned by the trees; using it would place the water at canopy height.
-3. **Contact boundaries are shared.** Where there is no depth step (shore at water level, a painted
-   marking) both regions own the contour.
-4. **Unbounded regions abstain.** A region that leaves the image or the clip on the informative sides
-   has an ill-conditioned $\Lambda_m$.
-5. **Boundary noise is large and partly systematic.** $\sigma_c$ is the jitter of the segmenter's
-   outline under the null, measured on clips certified still. It is expected to be pixels, not
-   fractions of a pixel. With survey baselines this still gives a sharp estimate, because the gain
-   $b_i$ is hundreds of pixels per unit relative depth. The systematic part is the danger: an outline
-   that follows a glint, a shadow that moves, or a different notion of the region's extent from frame
-   to frame shifts $\hat{\boldsymbol\rho}_m$ and is caught only as far as it breaks the affine model
-   ($A_m$).
+The pixels of an entity divide into its interior and a band along its owned outline, and the image
+message divides with them into $\hat{\boldsymbol\delta}^{I,\mathrm{int}}_m$ and
+$\hat{\boldsymbol\delta}^{I,\partial}_m$. Three pairwise tensions result.
 
-Running the segmenter on the compensated clip rather than on the raw frames has two effects: it is in
-its small-motion regime, and the measured drift is the gap itself rather than a homography from which
-the prediction has to be subtracted.
+| Depth vs outline | Depth vs interior | Interior vs outline | Reading |
+| --- | --- | --- | --- |
+| low | low | low | prior confirmed |
+| high | high | low | prior misplaced; fault |
+| low | high | high | something is seen in or through the surface: reflection, transparency, or a real recess |
+| high | low | high | outline misattributed, or prior and interior share the virtual depth |
 
-### 3.4 Pooling the pixel readers over a masklet
+The third row is the layer test: the interior texture belongs to a layer behind the surface that the
+outline defines. From geometry alone a planar mirror and an opening cannot be told apart. Two further
+checks use the same primitives: a virtual point is the reflection of a real one, so interior evidence
+reflected across the outline plane should land on reconstructed surface with matching appearance; and
+the appearance of a reflector changes with the frame while a diffuse surface does not, which shows as
+a large residual of the constant-colour model with no placement that reduces it.
 
-Interior evidence from the explicit and the latent reader is pooled into the same three parameters,
+**One-sidedness at contact outlines.** Where an entity meets its neighbour without a depth step (a
+lake and its shore), raising it would occlude the neighbour and is strongly visible; lowering it hides
+its edge behind the neighbour and is visible only where a gap opens. The outline message is then
+asymmetric and not Gaussian, and must come from the sweep, not from curvature.
 
-```math
-\Lambda^{\mathrm{int}}_m = \omega \sum_{u \in m} \Lambda(u)\, \mathbf x_u \mathbf x_u^\top, \qquad
-\hat{\boldsymbol\rho}^{\mathrm{int}}_m = \bigl(\Lambda^{\mathrm{int}}_m\bigr)^{-1} \omega \sum_{u \in m} \Lambda(u)\, r(u)\, \mathbf x_u ,
-```
+## 7. What Is Identified
 
-with $\omega$ the deflation for spatial correlation of the reader's noise. The region statistic and
-its minimum detectable fault are
-
-```math
-T_m = \hat{\boldsymbol\rho}_m^\top \Lambda_m^{\mathrm{tot}} \hat{\boldsymbol\rho}_m \sim \chi^2_3, \qquad
-\delta_{\min}(m, \mathbf x) = \bigl( z_{1-\alpha/2} + z_{1-\beta_{\mathrm p}} \bigr) \sqrt{ \mathbf x^\top \bigl(\Lambda_m^{\mathrm{tot}}\bigr)^{-1} \mathbf x } ,
-```
-
-where $\Lambda^{\mathrm{tot}}_m$ adds interior and boundary information when they agree. Abstention is
-graded by $\delta_{\min}$ as before, now per region. Per-frame deviations $\beta_{m,i}$ follow from the
-between-frame contrasts of Section 1.2 and need no witness.
-
-**Interior against boundary.** The two estimates of $\boldsymbol\rho_m$ use disjoint data. Their
-difference, standardised, is a test with a meaning of its own: if the boundary says the region is
-where the prior puts it and the interior says it is deeper, something is seen *through or in* the
-surface.
-
-## 4. The Reflection Problem at Region Level
-
-The mirror image of a static scene in a flat reflector is a rigid static scene. Its residual motion in
-the compensated clip is consistent parallax at the virtual depth; all ancillaries of the pixel readers
-pass. From interior parallax alone a mirror cannot be told from an opening, and adding the boundary
-does not settle it either: a courtyard has its rim at roof level and its floor below, a lake has its
-shore at water level and its virtual scene below. The geometry is the same. Three things do
-discriminate, in decreasing order of strength.
-
-1. **Mirror consistency.** A virtual point is the reflection of a real point across the reflector's
-   plane. With the plane $\boldsymbol\pi_m$ from the region reader, reflect each interior point that
-   lies behind the plane and test whether it lands on reconstructed surface above the plane with
-   matching appearance. If it does, the interior evidence is a reflection: it is withdrawn as a judge,
-   the region is marked reflective, and the boundary estimate stands alone. The test needs the
-   reflected object to be in the map (buildings beside the water) and fails silently for reflected sky,
-   which shows up instead as residual parallax at infinity.
-2. **Appearance that changes with viewpoint.** In the surface-level compensated clip a diffuse region
-   is still in content as well as position; a reflective one changes content with the frame.
-3. **Concept strata.** A promptable segmenter can propose "water" or "glass" regions, in which the sign
-   "deeper than the boundary plane" is discounted.
-
-Interior evidence behind the plane with no mirror counterpart and no reflective signature remains
-unattributed (a real depression, or a view through clear glass onto real geometry) and the region is
-labelled unknown.
-
-## 5. What Is Identified
-
-| Region type | Reader that identifies $\boldsymbol\rho_m$ | Regime |
+| Entity | Image message | Status |
 | --- | --- | --- |
-| Textured, diffuse | explicit and latent interior readers; boundary as a check | replace or judge, by $\vartheta$ |
-| Weak texture, bounded | boundary reader; latent reader where its response is measured non-zero | judge |
-| Untextured, planar, owned or contact boundary on the informative sides | boundary reader | judge |
-| Planar reflector with reconstructed surroundings | boundary reader; interior withdrawn by mirror consistency | judge, with material attribute |
-| Untextured and non-planar | none ($A_m$ rejects the affine model) | blind |
-| Untextured and unbounded in the clip, or elongated along a single strip | none ($\Lambda_m$ ill-conditioned) | blind |
-| Region delineated inconsistently by the segmenter | none | blind, and not detected if the inconsistency is affine |
+| Textured, diffuse | interior and outline, full rank | tension test; often $\varsigma \to 1$, prior nearly irrelevant |
+| Untextured, with owned outline crossing the flight direction | outline only | tension test on outline; rank can drop for entities elongated along the strip |
+| Planar reflector with reconstructed surroundings | outline; interior withdrawn by the layer test | tested, with a material attribute |
+| Untextured, contact outline only | one-sided | bounds from one side |
+| Untextured and unbounded in the views, or every outline owned by neighbours | none | blind |
+| Non-rigid, moving | fails the ancillaries | abstains |
 
-Not identified by any reader: a whole-frame error in the nuisance group of the depth model; a fault on
-a blind region; whether an unattributed "deeper interior" is real. The blind class is smaller than
-"untextured", which is the gain of the region reader, and it is exactly characterised by two
-statistics that are computed without labels ($A_m$ and the eigenvalues of $\Lambda_m$).
+Not identified by any message: a whole-frame error in the nuisance group of the depth model (it is
+absorbed by the per-frame alignment); the shape of a blind entity; whether an unexplained deeper
+interior is real. Shape *within* a tested entity is not tested by the three-parameter statistic;
+residual per-member tension is a second-order term with weak power.
 
-## 6. What the Head May See
+## 8. Listening to the Prior or to the Pixels
 
-The head is a probe on frozen tokens, pooled over the masklet tube, trained on region labels
-$(T_m, \delta_{\min})$ and applied to regions where the readers abstain. Two rules follow from the
-definitions.
+For each entity the placement part of the depth message receives a gate $w_m \in [0, 1]$, the
+posterior probability of no fault given $T_m$ and a prior probability $\pi_m$ from the head
+(Section 10); the shape part is kept:
 
-- **Tokens of the raw clip, never of the compensated clip.** The compensated clip contains the
-  monocular depth by construction; its tokens are the witness. The head sees the raw frames of the
-  region (video tokens, which encode how the region moves and how its appearance changes with the
-  view, and per-image tokens).
-- **Copying is a label problem before it is a feature problem.** A probe cannot subtract a depth map it
-  is not given, so it cannot reproduce the gap. What it can learn is any regularity in the labels,
-  and false labels on reflections are a regularity with a clear signature in motion-aware tokens. The
-  remedy is to correct the labels (Section 4), and to report head accuracy separately on regions whose
-  interior evidence was withdrawn.
+```math
+\Lambda_k \leftarrow \Lambda_0 + \sum_i \Bigl[ \Lambda_k^{(i)} - (1 - w_m)\, P_k^\top \Lambda_k^{(i)} P_k \Bigr] + \Lambda^I_k ,
+```
 
-Selection remains: labelled regions are those some reader can judge, and that is decided by appearance
-and shape. The propensity is now per region, and the transfer axis is $\delta_{\min}(m)$. The region
-reader moves planar water and glass from the unlabelled to the labelled side, which is what makes a
-test of transfer to those materials possible at all without reference depth.
+with $P_k$ the projector onto the entity placement at member $k$. A gated entity is placed by the
+pixels (or by its outline) and keeps the relief that the monocular map gives it. Three regimes follow
+from $\varsigma$: where the image share is near one the gate hardly matters; where the shares are
+comparable the test decides; where the image share is near zero the entity is placed by the prior, the
+test is silent, and the gate is the head's prior alone, reported with an explicit *unsupported* state
+when the entity lies outside the support of the labelled ones.
 
-## 7. Cost and Code
+## 9. Lifting Entities and Features onto Primitives
 
-| Item | Exists in the code | To add |
+**Entities.** Video segmenters have no promptless mode (*checked*); automatic mask generation exists
+for single images (*checked*). Masks are generated per frame and attached to primitives through the
+compositing weights. Two masks in different frames belong to one entity when they claim the same
+primitives; entities are the connected components of that agreement, at a chosen overlap threshold.
+Association through time is thus done by the surface, not by a tracker. The dependence is circular in
+one place: a misplaced surface projects a mask onto shifted primitives, by the fault's parallax. For
+regions large against that shift the assignment is stable; for small regions it is not, and the
+entity set should be recomputed after gating. Lifting segmenter masks onto Gaussians is established
+(*checked* that such work exists; details recalled).
+
+**Features.** Frozen dense features are fused per primitive by the same linear fit as colour. They
+serve the feature-metric message (Section 4.4) and the head's input. The difference between the fused
+feature and the per-frame feature is appearance that changes with the view, a label-free cue for
+reflective material.
+
+**A video encoder as reader.** Rendered and real frames, resampled to a common view per entity, form
+two clips whose tokens can be compared with the finite-difference response to a known placement
+change, as a third reading of the same tension. It is optional here: the renderer already supplies a
+calibrated message, and the video encoder would have to show response where the feature-metric message
+has none.
+
+## 10. What Is Learned
+
+Nothing in Sections 3 to 8 is learned; it is estimation with a renderer. Learning enters in three
+places, all light heads on frozen features, with no backbone updated.
+
+1. **Fault prior for entities the test cannot reach.** A probe on features fused per entity is fitted
+   to the outcomes $(T_m, \delta_{\min})$ of tested entities and applied where $\Lambda^I_m$ is small.
+   Labels are selective: an entity is labelled when it has texture or an owned outline. A second probe
+   predicts testability itself from the same features, without fault labels, and delimits the support.
+2. **Null calibration.** The inflation factors $\phi_s$ per stratum, with strata from frozen features
+   or concept prompts.
+3. **Material attribute.** The layer test labels reflectors; a probe carries the attribute to entities
+   without reconstructed surroundings.
+
+The head must not receive rendered-minus-real residuals or any quantity computed from the depth map;
+those are the test.
+
+## 11. Circularity
+
+| Shared element | Risk | Treatment |
 | --- | --- | --- |
-| Poses, intrinsics, projection | `types.DepthFrame`; `baselines/_common` (`project`, `project_into`, `backproject_cam`, `depth_to_normals`) | backward warp with occlusion mask; orthographic stack on surfels |
-| Images | `depthcache/datasets.View.load_rgb`; image preparation scripts under `experiments/` | an image path into the frames used by `gs/`, which carry depth only |
-| Alignment of monocular depth to sparse reference depth | `depthcache/align.align_depth` (robust scale; consensus fit affine in inverse depth) | call with the readers' depths as reference |
-| Frozen model wrappers and caches | pattern in `depthcache/` (lazy loading, on-disk cache with manifest) | wrappers for a segmenter, a video encoder, a tracker; none is installed |
-| Readers, region statistics, ownership, mirror test | nothing | array-level module |
-| Between-frame contrasts | `gs/gate.ViewGateTest` forms the leave-out residual internally | export per pixel; aggregate per region |
+| Colour fitted on the judged frames | absorbs misplacement | constant colour, elimination by projection; cross-fitted folds as check |
+| Opacity, scale, new primitives | explain misplacement by floaters or blur | frozen in the judging model |
+| Linearisation point from the depth fit | image message invalid far from it | sweep; injection slope |
+| Primitive set created from the depth maps | a faulty region has surfels only where the fault put them | entity placement moves them as a group; the sweep range is set by scene bounds, not by the prior |
+| Entity definition through projected masks | boundary members misassigned under a fault | recompute after gating; exclude a boundary band from the interior message |
+| Poses | both families | per-frame registration shift exposes pose error as a field common to all entities of a frame |
+| Per-frame depth alignment | a regional fault biases scale and offset | robust alignment; alignment re-estimated with the gate |
+| Tracks or pixels used both to fit and to judge | the judge is part of the judged surface | the test compares family estimates, each formed without the other; fusion happens after the gate |
 
-Forward passes per reference frame: the latent reader needs three passes per tile and clip (depth and
-two perturbations) plus one cached pass for the still clip, and two more for the across-line check;
-with 16-pixel tokens at 384 pixels an aerial frame of several thousand pixels on a side is of the
-order of a hundred tiles at native resolution. The region reader needs one propagation per region and
-clip. Neither cost has been timed, and memory needs of the candidate models were not found on their
-project pages.
+## 12. Code: What Exists and What Must Be Built
 
-## 8. What Was Checked about the Models
-
-Checked against the project pages and papers:
-
-| Model | Checked facts | Consequence |
+| Item | Exists | To build |
 | --- | --- | --- |
-| V-JEPA 2 (video encoder) | Tubelets of 2 frames by 16 by 16 pixels; 256 pixels, one variant at 384; clips of 16 frames, 64 in the final training phase (about 16 seconds); checkpoints of about 0.3, 0.6 and 1 billion parameters; trained on internet video and on still images repeated as clips; code under MIT with Apache 2.0 parts; the page states no licence for the weights; the standard loader returns the encoder | Tokens are coarse; still clips are in distribution; no aerial data in training |
-| V-JEPA 2-AC (predictor) | About 0.3 billion parameters on the frozen encoder; conditioned on 7-dimensional end-effector displacement and state; about 62 hours of robot video at 4 frames per second and 256 pixels; uncalibrated camera; errors when the camera placement changes | Not a camera-pose-conditioned predictor; unusable for the expectation |
-| V-JEPA 2.1 | Adds a loss on visible tokens and supervision at intermediate layers to obtain dense, temporally consistent features; 384 pixels; about 0.08 to 2 billion parameters; dense probes reported for indoor depth, semantic segmentation and video object segmentation; training mix of curated images and ground-level video | The candidate for the latent reader and for head features; sensitivity to small residual motion not reported |
-| Intuitive-physics study on V-JEPA | Surprise is the predictor's error on following frames; decisions by comparison of paired clips; short temporal context named as a limitation | Supports paired designs only |
-| SAM 2 / 2.1 (video segmenter) | Code and checkpoints under Apache 2.0; about 39 to 224 million parameters; video segmentation is prompt-driven with a streaming memory; automatic mask generation for images only | Usable as region reader; exhaustive masklets must be constructed |
-| SAM 3 / 3.1 | About 848 million parameters; a detector and a memory tracker on a shared encoder; prompts are short noun phrases, exemplars and visual prompts; returns masklets with identities for all matching instances; no promptless mode described; video cost grows with the number of objects; own licence; checkpoints behind an access request; the later release shares memory across objects for speed | Source of concept strata; behaviour on materials and on aerial imagery not documented |
+| Depth fit of surfels | `gs/fit.py`: optimiser on a ray-plane depth loss; colours are a constant placeholder; opacity frozen after warm-up, scales frozen | nothing for the depth family |
+| Depth information blocks and vectors | `eval/gaussian_uncertainty.view_information` (lumped option), closed-form depth Jacobian $[1, -s_1, -s_2]/(\mathbf n^\top \mathbf w)$, opacity Jacobian of the compositor | projection onto entity placement |
+| Compositor with per-pixel weights | numpy reference in `gs/reference.py`, torch port in `gs/fit.py` (depth only) | colour channel; the factor $\kappa$ and the contrast term of Section 4.1 are a few lines on the same quantities |
+| Photometric 2D surfel training | `experiments/rgb_train_2dgs.py`: separate script, library rasteriser with view-dependent colour, densification, structural-similarity and regulariser losses | a judging mode: constant colour, no densification, frozen opacity and scale, linear colour solve, per-frame gain |
+| Images in the data path | `depthcache/datasets.View.load_rgb`; `experiments/rgb_prepare.py` (half-resolution images of the synthetic block) | images in the frames used by `gs/` |
+| Leave-out and gate driver | `gs/gate.ViewGateTest` (depth only, per frame) | entity-level statistics; image family |
+| Entities, features | nothing | mask and feature lifting; frozen-model wrappers in the pattern of `depthcache/` |
+| Perturb-and-re-render | nothing | entity placement transform, graph colouring, finite differences, sweep |
 
-Not checked, recalled only: input resolution and memory use of the segmenters; whether the
-unconditional predictor weights of the video encoder are distributed in loadable form; every property
-of point trackers, flow models and dense matchers; the terms of the non-standard licences; all prior
-work named in Section 9. No model has been run.
+The two fitting paths do not share state: the depth fit uses its own ray-plane compositor because the
+library's blended depth does not see surfel tilt (noted in the code), while the photometric script
+uses the library rasteriser. The image Jacobian must be taken from the same footprint model as the
+depth Jacobian, or the two families refer to slightly different surfaces. The reference compositor can
+supply both on small scenes without a GPU.
 
-A model that predicts tokens under a given camera motion, which would supply the expectation directly,
-was not found among frozen video encoders. Camera-controlled video generators exist (recalled) but are
-generators, not dense encoders, and were not examined.
+## 13. Closest Prior Work
 
-## 9. Contribution and Nearest Prior Work
+*Checked* (read from the papers):
 
-Prior work (all recalled): plane-plus-parallax decomposition of image motion; feature-metric
-alignment and feature-metric losses for self-supervised depth; planar priors and plane sweeping in
-multi-view stereo; lifting of segmenter masks onto Gaussian splats; verification of surface models by
-consistency of rectified images; prediction error of a joint-embedding video model as a
-violation-of-expectation signal (checked). Multi-view supervision of monocular depth is standard.
+| Work | What it does | Difference |
+| --- | --- | --- |
+| Reliable monocular depth supervision by a depth-inconsistency mask | per-pixel mask from re-projection of rendered depth between a view and a synthetic stereo partner; depth loss applied only where rendered geometry is inconsistent | decides where geometry needs help, not whether the prior is right; no information weighting, no test, no repeated-fault case |
+| Reliability-aware depth supervision from an RGB-only baseline | per-pixel mask by thresholding photometric error of a model trained without depth | photometric evidence as a threshold on error; no placement estimate, no error bar |
+| Confidence-aware depth regularisation | per-pixel confidence from image edges, texture and depth gradients | heuristic, does not compare prior with images |
+| Fisher information for splatting | diagonal Fisher of the colour loss over all Gaussian parameters, for view selection and relative pixel uncertainty | one family only, diagonal, no depth prior, no test between terms |
+| Photometric ambiguity in splatting surface reconstruction | marks primitives by the energy of view-dependent colour coefficients; applies normal priors to them | an indicator of appearance absorbing geometry, by percentile; no curvature or test |
 
-What is put forward here, with an honest grading:
+Existence checked, content recalled: depth and normal priors in splatting with fixed or scheduled
+weights; lifting of segmenter masks onto Gaussians; distillation of 2D features into Gaussians.
+Recalled only: per-ray Laplace uncertainty for radiance fields; variable projection for separable
+least squares; feature-metric alignment; plane sweeping; compatibility tests between observation
+groups in adjustment theory.
 
-1. **The compensated clip with stillness as the null**, as the common input of frozen video models.
-   It turns any frame spacing into small motion, keeps the models in their training regime, and makes
-   the residual motion equal to the prior's error times a known gain. The decomposition is classical;
-   using the monocular prior as the reference surface and frozen video-native models as readers is,
-   to the best of recalled knowledge, not.
-2. **A calibrated latent reader**: the encoder's response to a known depth perturbation, measured in
-   place, converts token differences into a gap with information and ancillaries, and makes abstention
-   a measured quantity. This is the sharpest new element. Its worth depends entirely on the response
-   curve of Section 10.
-3. **The region reader with ownership and the interior-against-boundary test**, and mirror consistency
-   as the resolution of the reflection problem where the reflected scene is reconstructed.
-4. **Consensus and parallax as two contrasts of one surface-by-frame table**, which states precisely
-   what motion is needed for: one mean field per region.
+What remains new, to the best of this search: (i) a calibrated test between the depth family and the
+image family on shared placement parameters, with the image family's variance taken from per-frame
+score dispersion and from injection; (ii) the reduced image message, which states exactly how much
+placement information an appearance model leaves, and why view-dependent colour destroys it in a
+strip; (iii) entity-level messages with the interior-against-outline split as a layer test;
+(iv) explicit treatment of the fault that every frame repeats, which none of the checked methods
+addresses and which consistency-based masks cannot see. The search was not exhaustive, the area is
+crowded, and a per-primitive trust weight between priors and pixels may exist in work not found.
 
-Items 1 and 2 together are a plausible core for a vision venue; item 3 is what a robotics venue would
-value, because it yields a material attribute and a testable plane for water and glass. None of them
-has empirical support yet.
+## 14. What Would End the Idea, and the Cheapest Tests
 
-## 10. What Would End the Idea, and the Cheapest Tests
+1. **The image family cannot be calibrated.** $T_m$ on fault-free entities is far from $\chi^2_3$ after
+   inflation, or the inflation varies so much between entities that no stratum is stable.
+   *Test A, CPU, reference compositor:* a small synthetic textured scene with exact geometry; form the
+   reduced image message, the per-frame scores and the injection slope; check the null distribution of
+   $T$ and the recovery of injected placements as a function of their size.
+2. **Appearance elimination leaves nothing.** With constant colour and realistic strip geometry the
+   reduced information is a small fraction of the nominal one. *Computed in test A* as the ratio of the
+   two, per entity, for the actual camera fan.
+3. **The linear range is too small and the sweep has no distinct minimum** on real textures at the
+   fault sizes that occur. *Test B, CPU:* from cached monocular depth and exact depth, the residual
+   parallax of true faults in pixels at working resolution, against the range found in test A.
+4. **Per-entity image messages are dominated by neighbours** (coupling across entity boundaries),
+   so that entity statistics are not approximately independent.
+5. **Entities are unstable**: lifted masks fragment or merge under faults.
+6. **Harmful faults sit in the blind rows of Section 7.**
+7. **Prior work already contains the test.**
 
-1. **Faults are not properties of regions.** The variance components of Section 1.1 show that
-   $\mu_m$ is a small share. *Test 1, no model, CPU:* on the scene with exact depth and cached
-   monocular depth, lift a fixed over-segmentation of each frame through the exact depth to obtain
-   oracle regions, and decompose the monocular error into the four terms, for region sizes from
-   superpixels to connected components of the true fault mask.
-2. **Residual motion of real faults is outside the readers' range.** *Test 2, no model, CPU:* from the
-   same data compute $b_i \epsilon_M$ in pixels at the working resolution of each candidate. If typical
-   faults move content by much less than a pixel at token resolution, or by more than a token at the
-   resolution that fits in memory, the latent reader has no operating point.
-3. **The encoder does not respond to residual parallax.** *Test 3, one frozen model:* response curve
-   of the latent gap against injected depth perturbations on compensated clips built from exact depth:
-   slope, linear range, noise floor, against a per-image encoder on the same clips.
-4. **Masklets are not stable under the null.** *Test 4, one frozen model:* propagate masks through
-   compensated clips built from exact depth; the outline jitter is $\sigma_c$ and the rate of lost or
-   merged masklets is the coverage of the region reader on aerial imagery.
-5. **Ownership cannot be decided**, so that boundary estimates are biased towards neighbours.
-6. **The latent reader fails the honesty check** against the explicit one on their overlap.
-7. **The blind class of Section 5 still contains most harmful faults.**
+Test A needs no GPU and no data beyond a synthetic scene; it decides items 1 and 2, which are the
+premises of everything else.
 
-Tests 1 and 2 need only arrays that are already cached and decide whether tests 3 and 4 are worth a
-GPU.
+## 15. Not Known
 
-## 11. Not Known
-
-- The variance components of monocular error by region and frame, and so whether the masklet is the
-  right unit.
-- The response of any frozen video encoder to small residual motion, its linear range, and whether it
-  exceeds that of per-image features.
-- Outline jitter and identity stability of video segmenters on compensated aerial clips; behaviour of
-  concept prompts on water and glass seen from above.
-- Whether boundary ownership can be assigned reliably from an erroneous depth map.
-- How often the reflected scene is reconstructed, so that mirror consistency applies.
-- Cost and memory of all three readers on full-resolution aerial frames.
-- How the exact depth of the synthetic scene treats glass and water, and the frame spacing of that
-  scene.
+- The size of the variance inflation of the image family and its stability across strata.
+- The fraction of placement information that survives appearance elimination in strip geometry.
+- The linear range of colour and feature messages in pixels of parallax on aerial texture.
+- Whether the library rasteriser supports forward-mode differentiation or more than three channels in
+  its 2D mode; its interface was read only from the project's scripts.
+- Whether ownership as decided by the rasteriser is reliable when the depth of the occluder itself is
+  the fault.
+- How often outlines cross the flight direction with enough length for rank three.
+- Cost per view of the perturb-and-re-render loop with realistic entity counts.

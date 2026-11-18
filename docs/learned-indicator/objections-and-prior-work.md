@@ -1,555 +1,459 @@
-# Judging a Monocular Depth Prior per Surface Region through Time: Objections, Prior Work, Verdict
+# Depth Prior and Pixels Meeting on the Same Gaussian Primitives: Objections, Prior Work, Verdict
 
-Nothing in this note has been measured. Numerical examples are worked from stated assumptions and
-are labelled as such. Statements about existing models are marked *verified* (checked against the
-paper, its arXiv page or the official repository) or *recalled* (from memory, not checked).
+Nothing in this note has been measured. Numerical statements are worked from stated assumptions or
+quoted from the cited papers. Statements about prior work and software are marked *verified* (checked
+against the paper, its arXiv page, the official repository, or the code of this repository) or
+*recalled* (from memory, not checked).
 
 ## 0. The conception under examination
 
-**Setting.** A static scene is filmed from the air in strips, with known poses. The frame spacing is
-not fixed in advance: it may be dense video, or survey stills at about 80% forward overlap, where the
-image shifts by a fifth of its length per frame. One monocular depth map $\hat d_i$ per frame from one
-frozen model. A surface of 2D Gaussian surfels is fitted. A fault is a connected region whose depth
-deviates from the measurement model by many $\sigma_i$; the faults of interest are repeated by every
-view of the region.
+**Setting.** Posed aerial video in strips. One monocular depth map per frame from one frozen model. A
+surface of 2D Gaussian surfels. A fault is a connected region whose monocular depth deviates from the
+measurement model by many $\sigma$; the faults of interest are those that every frame repeats.
 
-**Four proposals.**
+**Conception.**
 
-1. *Unit.* The verdict belongs to a surface region followed through the clip (a masklet from a video
-   segmenter), not to a pixel in a frame. Per-frame deviations are a second-order term.
-2. *Witness without texture.* With known poses, the motion of a region's outline and interior between
-   frames fixes its plane, since a plane-induced homography has three unknowns.
-3. *Evidence in feature space.* The monocular depth and the poses predict how the clip should move.
-   The clip warped by that prediction is compared with the real clip inside a frozen video encoder.
-   Disagreement is the evidence. The explicit parallax gap with its error bar remains as the
-   calibrated special case.
-4. *Head.* A dense probe on spatiotemporal tokens; concept prompts of a promptable segmenter give
-   material strata without labels.
+1. Each primitive receives two families of messages about its placement
+   $\boldsymbol\xi_k = (\delta_k, \boldsymbol\omega_k)$, the offset along its normal and its tilt:
+   a *depth message* from every frame's monocular map, and an *image message* from every frame's
+   pixels, obtained from the differentiable renderer as the gradient and Gauss-Newton curvature of
+   the rendering loss with respect to $\boldsymbol\xi_k$.
+2. The fault test is the *tension* between the two families at the joint fit, normalised by
+   information. It is available per primitive or per surface entity, and it sees a fault that every
+   frame repeats.
+3. Segment masks and frozen features are lifted onto the primitives. An entity is a set of
+   primitives. An injection is "move this set by a known offset and tilt and re-render".
+4. The question for the paper: for each primitive, when should it listen to the depth prior and when
+   to the pixels?
 
-**Notation.** Masklet $m$ has mask $M_{m,i}$ in frame $i$. A plane in the camera frame of a reference
-view $r$ is written by its inverse-depth vector $\boldsymbol\theta = \mathbf n / d_\pi \in \mathbb R^3$,
-so that the inverse depth at pixel $u$ is $\rho(u) = \boldsymbol\theta^\top K^{-1} \tilde u$. For a
-second view with $X' = R_t X + \mathbf t_t$ the induced homography is
+**The tension statistic.** Let the two families give, for one primitive or one entity, independent
+estimates $\mathbf x_D \sim \mathcal N(\mathbf x, \Lambda_D^{-1})$ and
+$\mathbf x_I \sim \mathcal N(\mathbf x, \Lambda_I^{-1})$ of the same placement. The fused estimate is
+$\hat{\mathbf x} = (\Lambda_D + \Lambda_I)^{-1}(\Lambda_D \mathbf x_D + \Lambda_I \mathbf x_I)$. The
+gradients of the two terms at $\hat{\mathbf x}$ are equal and opposite,
 
 ```math
-H_t(\boldsymbol\theta) = K \bigl( R_t + \mathbf t_t\, \boldsymbol\theta^\top \bigr) K^{-1} .
+\mathbf g_D = \Lambda_D(\hat{\mathbf x} - \mathbf x_D) = \Lambda_\parallel (\mathbf x_I - \mathbf x_D) = -\,\mathbf g_I ,
+\qquad \Lambda_\parallel = \bigl(\Lambda_D^{-1} + \Lambda_I^{-1}\bigr)^{-1} ,
 ```
 
-In a straight strip ($R_t = I$, $\mathbf t_t = (b_t, 0, 0)$) this reduces to a shift along the flight
-direction, $x' = x + f b_t\, \rho(u)$, with $\rho$ affine in the pixel coordinates. A region's motion
-therefore carries three numbers: a mean disparity and two disparity gradients.
+and the statistic can be written in either form,
 
-## Part 1. What the models are
+```math
+T = (\mathbf x_I - \mathbf x_D)^\top \Lambda_\parallel\, (\mathbf x_I - \mathbf x_D)
+  = \mathbf g_D^\top \bigl(\Lambda_D^{-1} + \Lambda_I^{-1}\bigr)\, \mathbf g_D \ \sim\ \chi^2_{\dim \mathbf x} \ \text{ under no fault.}
+```
 
-This part decides which of the four proposals can be built from existing frozen models.
+Three facts follow and are used below.
 
-| Model | Verified | Recalled or not verified | Consequence |
-| --- | --- | --- | --- |
-| V-JEPA 2 (Assran et al., arXiv 2506.09985, 2025) | Self-supervised video encoder, ViT-L/H/g with patch 16; tubelets of 2 frames by 16 by 16 pixels; 256 or 384 pixel input; the ViT-g encoder gives a 16 by 16 token grid per tubelet step at 256 pixels; pretrained on about a million hours of internet video (instructional, action, egocentric) plus ImageNet; code under MIT. | Licence of the weights is not stated on the repository page. Pretraining frame rate not found. Whether the masked-prediction predictor is released was not established. | Tokens are coarse (16 pixels at 256 to 384 input) and the training motion is ground-level, small between frames. |
-| V-JEPA 2-AC | An action-conditioned predictor of about 300 M parameters on the frozen encoder, post-trained on about 62 hours of robot video (DROID); actions are 7-D changes of end-effector state; 16 frames at 256 pixels and 4 frames per second. | | **It is not conditioned on camera pose.** No released V-JEPA model predicts latent features under a given camera motion. A pose-conditioned predictor would have to be trained, and at 300 M parameters it is not a light head. |
-| V-JEPA 2.1 (Mur-Labadia et al., arXiv 2603.14482, 2026) | Adds a dense predictive loss over all tokens and deep self-supervision; models ViT-B to ViT-G at 384 pixels; reports NYUv2 depth with a linear probe and describes temporally consistent dense features. | No tracking or segmentation result with frozen features appears in the abstract; tubelet size not confirmed for this version. | The most suitable released encoder for a dense probe on video tokens. Its sensitivity to small residual motion is unknown. |
-| SAM 2 (Ravi et al., arXiv 2408.00714, 2024) | Promptable segmentation in images and video with a streaming memory; `propagate_in_video` returns masks per object and frame (masklets); code and checkpoints under Apache 2.0; **automatic mask generation is provided for images only**, video needs a prompt per object. | Input resolution of 1024 pixels. Behaviour under large inter-frame shifts not found in the sources read. | Masklets for "everything" require image-level proposals in some frame and one tracked object per proposal. Cost grows with objects times frames. |
-| SAM 3 (Carion et al., arXiv 2511.16719; listed in the ICLR 2026 proceedings) | Promptable concept segmentation: short noun phrases or image exemplars, returning masks and identities of all matching instances in images and video; a detector and a SAM 2-style tracker on a shared encoder; 848 M parameters; video latency grows with the number of objects, near real time for about five; videos of 30 seconds or less in the paper's setting; released under the "SAM License" with gated checkpoints. | Terms of the SAM License were not read. No statement on aerial imagery, water or glass was found. | Concept prompts exist. Whether "water" or "glass roof" work on nadir imagery is unknown. Dense masklets over hundreds of small aerial regions are far outside the stated operating point. |
-| SAM on glass and mirrors | SAM often fails to detect mirrors and transparent objects (Han et al., arXiv 2305.00278, 2023); SAM 2 is reported as suboptimal for video mirror detection (Jie, arXiv 2412.19293, 2024). | Whether SAM 3 with a text prompt improves this. | The segmenter is weakest on a surface class that the method most needs as a unit. |
+- "Large opposite pulls" is not a finding; the pulls are equal and opposite at every joint optimum.
+  The content is in their size relative to $\Lambda_\parallel$.
+- A fault $\boldsymbol\Delta$ in the depth family has noncentrality
+  $\boldsymbol\Delta^\top \Lambda_\parallel \boldsymbol\Delta$, bounded by the *weaker* family. It
+  moves the fused surface by $(\Lambda_D + \Lambda_I)^{-1} \Lambda_D \boldsymbol\Delta$. Harm is large
+  when the pixels are weak, and detectability is then small. This is the harm-detectability relation
+  in the present terms.
+- This is a difference-of-two-estimators test. It is the same object as solution separation in
+  integrity monitoring, the Hausman test in econometrics, and parameter-shift tension statistics
+  between data sets in cosmology (Part 4). The statistic is not new. Its two inputs are.
 
-Two findings matter for the conception.
+## Part 1. What exists in the code and in software
 
-- **Proposal 3 cannot use a released latent predictor.** It has to be built as "warp in pixel space,
-  encode both, compare", or a pose-conditioned predictor has to be trained. The first is a
-  feature-metric reprojection error, which has a long history (Part 4).
-- **Proposal 1 cannot use a video segmenter as released for all regions of an aerial frame** at
-  acceptable cost, and a memory tracker is unproven at survey spacing. With known poses there is a
-  cheaper association (W9).
+| Item | Status |
+| --- | --- |
+| `src/sensorfault/gs/fit.py` | *Verified.* Depth-only Adam fit. The rasteriser is called with constant colours. The default depth is a torch ray-plane compositor; the module's own note says that the rasteriser's RGB+D mode blends per-surfel centre depth and does not see tilt. |
+| `view_information`, `render_cavity`, `gs/gate.py` | *Verified.* Closed-form depth Jacobians and lumped depth information blocks; a view-level gate with leave-out. No image term anywhere. |
+| `experiments/rgb_train_2dgs.py` | *Verified.* A separate photometric 2DGS trainer: L1 plus 0.2 D-SSIM, normal-consistency and distortion regularisers, spherical harmonics, free opacities. No depth term. |
+| `gsplat` in the present environment | *Verified:* not installed here (import fails), so the rasteriser's interface was not inspected. *Recalled:* it renders arbitrary per-primitive channels, which is what mask and feature splatting need; its backward pass gives gradients, not per-primitive Gauss-Newton blocks, and custom CUDA autograd functions do not support forward-mode products. |
 
-Comparable backbones that do what the conception needs: for dense per-frame features with sharp
-tokens, an image-native self-supervised encoder applied per frame (DINOv3, recalled); for
-motion-aware dense features, V-JEPA 2.1; for geometry from several frames with a confidence output,
-feed-forward multi-view models such as VGGT (title and venue verified; outputs recalled), which are
-then also a baseline that the method must beat.
+To be built: a joint fit in which one set of primitives carries colour and receives both losses;
+image information for placement (Part 2, R1, says in which form); mask and feature channels; entity
+labels on primitives; the entity sweep. The two existing fits already give a first experiment with no
+new code: fit the surface from depth alone and from pixels alone and compare (Part 5).
 
 ## Part 2. Objections
 
 Each objection is given with the reason it could be fatal, a test, and the change that answers it.
 
-### W1. Where a region's plane is witnessed, the monocular prior is redundant at the region level
+### R1. Per-primitive image curvature does not vanish on blank surface
 
-**Why it may be fatal.** For a strip, each outline sample $c$ with unit normal $\mathbf n_c$ and
-localisation error $\sigma_c$ constrains the disparity along the flight direction. The mean inverse
-depth of the region has
+**Why it may be fatal.** The claim "the curvature vanishes on blank surface, so abstention is
+automatic" holds for the exact Hessian over all primitives of the surface. It fails for a
+per-primitive block. A single Gaussian of a uniformly coloured roof, moved along its normal, shifts
+its footprint against its neighbours and changes the image at its edges, so its own block
+$\Lambda^I_{kk} = \sum_u \mathbf J_{uk}^\top W \mathbf J_{uk}$ is positive. Only when all primitives
+of the roof move together do the changes cancel, and the cancellation lives in the off-diagonal
+blocks that a block-diagonal approximation deletes.
 
-```math
-\frac{\sigma_d}{d} \approx \frac{\sigma_c}{p\, \sqrt{n_{\mathrm{eff}}}}, \qquad
-n_{\mathrm{eff}} = \sum_c n_{c,x}^2 , \qquad p = \frac{f\, b}{d} ,
-```
+For the depth family, lumping majorises the Hessian and gives cautious steps. For the image family
+the same approximation overstates what the pixels know about the surface, which makes the witness
+overconfident and the test fire on blank surface.
 
-with $p$ the parallax in pixels. Worked example, not a measurement: adjacent survey frames with
-$p = 800$ pixels, boundary repeatability $\sigma_c = 4$ pixels, $n_{\mathrm{eff}} = 25$ give 0.1% of
-the flying height. A monocular depth at 2% is twenty times worse. If the witnessed planes enter the
-surface, gating the monocular message changes the region's placement by very little. The harm of a
-monocular fault is small exactly where its detectability is high.
+There is a second coupling, with appearance. Placement and colour are estimated together. The
+information about placement after colour is accounted for is the Schur complement
+$\Lambda^I_{\xi\xi} - \Lambda^I_{\xi a} (\Lambda^I_{aa})^{-1} \Lambda^I_{a \xi}$, which is smaller
+than $\Lambda^I_{\xi\xi}$.
 
-**Test.** With exact depth, surface error for: monocular only; witnessed planes only; both ungated;
-both with an oracle gate.
+**Test.** On a synthetic uniform plane and a textured plane: per-primitive block, entity-level
+curvature, and the actual loss change under a common displacement. The first is expected to be
+positive on the uniform plane and the other two near zero.
 
-**Change.** Split the monocular message of a region into two parts (S2 in Part 3): its plane, three
-numbers per masklet and frame, and its residual shape inside the region. Parallax judges and replaces
-the first. The second is what the prior is kept for: roof detail, vegetation, terrain undulation,
-which a plane does not carry. The role of the prior is then stated precisely, and the reconstruction
-gain must be shown on residual shape and on regions without a witnessed plane.
+**Change.** Define the image message for a *collective* displacement. For an entity $m$ with three
+placement parameters (offset and two tilts of its plane), the Jacobian is the directional derivative
+$\mathbf J_{u,m} = \sum_{k \in m} \mathbf J_{uk}\, \partial \boldsymbol\xi_k / \partial \boldsymbol\theta_m$,
+and $\Lambda^I_m = \sum_u \mathbf J_{u,m}^\top W \mathbf J_{u,m}$ with colour either marginalised or
+fitted on other frames (R3). In practice this is a finite difference: move the entity, re-render,
+difference the images. The image information is then the curvature of the injection sweep, and the
+two are one computation. A per-primitive statistic remains possible only inside a textured entity,
+as a second-order term.
 
-### W2. A masklet is not a fault region
+### R2. A score test at the joint fit has no power against gross faults
 
-**Why it may be fatal.** A segmenter groups by object and appearance. A fault follows the depth
-model's misreading, which may cover half a roof, or a roof together with its shadow on the ground. If
-a fraction $q$ of a masklet is faulty by $\Delta$, the plane-level statistic sees roughly
-$q \Delta$, and a region test loses power in proportion. Segmentation also has no unique scale: part,
-object and group are all valid masks.
+**Why it may be fatal.** The depth term is quadratic in placement. The rendering loss is not: it has
+a basin about as wide as the texture's correlation length in pixels of parallax, and it is flat or
+erratic outside. A fault of many $\sigma$ displaces the surface by many pixels of parallax. If the
+depth weight holds the primitive there, the image gradient is small or random, since the loss is
+outside its basin, and the Gauss-Newton curvature evaluated there says nothing about where the
+minimum is. The tension is then small for the largest faults. Small and moderate faults are detected;
+gross ones are not, which is the opposite of what is wanted.
 
-**Test.** With exact depth, decompose the true monocular error into between-masklet plane terms and
-within-masklet residual, at two or three segmentation scales. Report the share of fault harm at each
-level. If most of it is within masklets and not planar, the unit is wrong.
+**Test.** The entity sweep on real aerial frames: rendering loss against offset, for several entities
+and textures. Read off basin width in pixels of parallax and compare with the parallax of faults of
+3, 10 and 30 $\sigma$.
 
-**Change.** Keep the pixel-level parallax gap as the second-order term with a defined role: after the
-masklet plane is removed, the residual is tested per pixel where texture allows. Use a two-level
-hierarchy of masks and take the level that maximises the standardised statistic, with the multiplicity
-accounted for in calibration.
+**Change.** Use the difference-of-estimators form, not the score form. Obtain $\mathbf x_I$ by
+profiling the rendering loss over the entity's placement on a coarse-to-fine grid (a sweep with three
+unknowns), or from a pixels-only fit, and compare with $\mathbf x_D$. A feature-metric loss on
+splatted frozen features widens the basin at the cost of resolution. The score form is kept as the
+cheap monitor during fitting for small faults.
 
-### W3. Outline motion is valid only for outlines the region owns
+### R3. Appearance can explain away a misplaced surface
 
-**Why it may be fatal.** Three cases break "the outline moves with the region's plane".
+**Why it may be fatal.** With view-dependent colour, free opacity and densification, a surface at
+the wrong depth can reproduce the images: colour that varies with direction imitates parallax of
+low-frequency texture over the narrow range of directions in a strip, and semi-transparent primitives
+or floaters carry the rest. The image family then agrees with the faulty depth. This is not a corner
+case; it is how a radiance field normally absorbs geometric error.
 
-1. *Occluding contours.* Where a roof hides the ground, the shared boundary lies on the roof. The
-   ground region's outline there moves with the roof's parallax, and a plane fitted to it is biased
-   upward. In nadir views every building does this to its surroundings.
-2. *Edges parallel to the flight direction.* They have $n_{c,x} = 0$ and carry no disparity. A road
-   or canal running along the strip is constrained only at its ends, which are usually out of frame.
-3. *Unbounded regions.* A lake or field larger than the frame has no closed outline, and the frame
-   border is not a surface boundary.
+**Test.** Place an entity at a known wrong offset, refit appearance only, and record the rendering
+loss on fitted frames and on held-out frames, for diffuse colour and for spherical harmonics of
+degree three.
 
-A fourth case is not a bias but a noise term: mask boundaries flicker between frames, and at shadows,
-wet margins or glint the boundary is not a material edge at all.
+**Change.** Two measures, both needed.
 
-**Test.** Without ground truth: fit $\boldsymbol\theta$ per masklet from outlines, and measure the
-residual outline distance after the fit ($\sigma_c$), the share of image area in masklets with a
-well-conditioned fit, and the share of boundary length lost to cases 1 to 3. With ground truth: error
-of the outline plane by surface class.
+- *Restricted appearance for the test.* Diffuse colour only, opacity fixed, no densification, colour
+  marginalised by the Schur complement or refitted. View-dependent residuals then appear as lack of
+  fit, which is an ancillary statistic for specular surface.
+- *Cross-fitting over frames.* Fit colour on one half of the frames and evaluate the placement
+  profile on the other half. Colour cannot then adapt to the frames that judge. The price is half the
+  baseline for the judging set.
 
-**Change.** Resolve ownership jointly. Fit planes for all masklets, assign each shared boundary to the
-region that is nearer to the camera under the current planes, refit the other region without it, and
-iterate. Accretion and deletion of visible area along the flight direction is a second ownership cue.
-Use a second strip in another direction for case 2. Declare case 3 unwitnessed.
+The reconstruction that is delivered may use any appearance model; the restriction applies to the
+test.
 
-### W4. The outline is immune to reflections; the interior is not; and the segmenter may not see the surface
-
-**Why it may be fatal, and why it is also an opportunity.** The reflection of a static scene in a flat
-mirror is a static virtual point. Interior correspondences on calm water or glass follow the virtual
-scene and satisfy every epipolar constraint. Any interior witness, by tracks or by features, then
-testifies to the wrong surface with full confidence. The physical outline of the pane or the
-shoreline does not: it lies on the real surface. This is the strongest argument for the region as
-unit.
-
-The risk is that the segmenter does not return the pane. If it segments the reflected content
-instead, the masklets are virtual objects, their outlines move with virtual parallax, and the outline
-witness inherits the reflection problem.
-
-**Test.** On scenes with water and glazing: does the segmenter return the physical region; plane
-error of outline and of interior witness against truth; frequency of masklets whose plane lies below
-the surrounding terrain.
-
-**Change.** Use both witnesses and read their disagreement (S1 in Part 3). A masklet whose own plane
-lies well below an enclosing region's plane is treated as a virtual object and merged into its
-enclosure.
-
-### W5. Comparison in latent space adds no information where pixels carry none
+### R4. The null distribution is not $\chi^2$ without two corrections
 
 **Why it may be fatal.**
 
-1. *Texture-free interiors.* If the region's pixels are constant, every warp of it gives the same
-   image, and no encoder can tell warps apart. Latent comparison is blind in the same regime as
-   tracking. It may be more tolerant on weak texture; it cannot be informative on none.
-2. *Coarse tokens.* A depth error $\Delta d$ misplaces the warp by $p\, \Delta d / d$ pixels. Features
-   are tolerant to shifts well below a token. If the detectable shift is $s$ pixels at model
-   resolution, the detectable error is $\Delta d / d \gtrsim s / p_{\mathrm{model}}$. Worked example:
-   a whole frame reduced to 384 pixels with a fifth of the image as parallax gives
-   $p_{\mathrm{model}} \approx 77$; with $s = 4$ this is 5% of the flying height. At native resolution
-   in tiles, $p = 800$ and the same $s$ gives 0.5%. The method must run in tiles, and its cost is
-   tiles times frame pairs times an encoder of up to a billion parameters. The value of $s$ is not
-   known.
-3. *No error bar.* A feature distance has no units and no null distribution. It also has no sign and
-   no magnitude unless several depth hypotheses are compared, which is a plane sweep.
-4. *Warp artefacts.* Disocclusion holes, resampling blur and stretched pixels are themselves
-   violations of expectation for an encoder trained on natural video. The encoder may respond to the
-   warp and not to the geometry.
-5. *Reflections and view-dependent appearance.* Specular highlights violate expectation at the correct
-   depth. On a flat mirror the comparison is satisfied by the virtual depth. The reflection problem is
-   unchanged.
-6. *Frame spacing.* A tubelet that spans two survey stills contains a shift of a fifth of the image,
-   far from the motion in the encoder's training video.
+- *Depth family.* $\Lambda_D = \sum_i \Lambda_{ik}$ assumes independent errors across frames. Ordinary
+  monocular noise is correlated between neighbouring frames. With equal correlation $\varrho$ among
+  $n$ frames the variance of the mean is inflated by $1 + (n-1)\varrho$, and with the nominal
+  $\Lambda_D$ every well-observed primitive would be flagged. The repetition coefficient therefore
+  enters the null, not only the alternative.
+- *Image family.* Photometric residuals are neither white nor Gaussian. The weight $W$ has an
+  unknown scale; blur, exposure and resampling add structured misfit.
 
-**Test.** An injected-shift response curve, with no ground truth. Take pairs of real aerial frames,
-register them with the best available depth, add a known residual shift of $k$ pixels along the
-flight direction inside a region, and record the feature distance against $k$, per texture level and
-per tile scale. This gives $s$, the noise floor, and the response on texture-free regions. If the
-curve is flat below several pixels at native resolution, or flat on weak texture, the latent witness
-is dead.
+**Test and change (one design).** Split-half placebo tensions. Split the frames in two interleaved
+halves and compute four tensions per entity: depth half against depth half, image half against image
+half, and depth against image in both pairings. The first two are null by construction for the
+faults of interest (a repeated depth fault is common to both depth halves; a planar reflection is
+common to both image halves). Their empirical distributions give the scale of each family's
+covariance and the shape of the null, without labels. The cross tension is then referred to that
+null. Injection of known displacements checks the image family's scale independently, since the loss
+change under a known move must match $\tfrac12 \boldsymbol\theta^\top \Lambda^I \boldsymbol\theta$
+inside the basin.
 
-**Change.** Three changes make the latent witness a defined estimator (S3 in Part 3): stabilise the
-clip before encoding, so the encoder sees small residual motion; compare two warps with the same
-artefacts, not a warp with the raw clip; and sweep the three plane parameters per masklet, so that a
-minimum and a curvature exist. With these it is a feature-space plane sweep per region, and the
-explicit parallax gap is the same computation with pixel correlation.
+### R5. A decaying depth weight already answers "when to listen", and the test has power only where it does
 
-### W6. A head on motion-aware tokens can copy the witness
+**Why it may be fatal.** Common practice in depth-regularised splatting is a depth weight that decays
+during training (recalled), so that the prior shapes the start and the pixels decide the end. Where
+pixels are informative, this washes out a wrong prior with no test at all. Where pixels are silent,
+the prior stays, and there the tension test abstains as well, since $\Lambda_I \to 0$ gives zero
+noncentrality. On the reconstruction, the proposed method and the schedule would then differ nowhere.
 
-**Why it may be fatal.** Spatiotemporal tokens of the raw clip encode parallax, including virtual
-parallax on reflections. A head trained on labels derived from parallax and fed those tokens can
-reproduce the label computation, errors included. Its agreement with the witness is then not
-evidence.
+**Test.** Surface error for: fixed depth weight; decaying depth weight; information-weighted fusion
+without a gate; with the gate; with an oracle gate. Report separately where pixels are strong, weak
+and silent.
 
-**Test.** Train the head on tokens of the raw clip and, separately, on per-frame appearance tokens
-pooled over the masklet. Compare on masklets where the witness is known to be wrong (reflections with
-ground truth). If the motion-token head follows the witness there and the appearance head does not,
-copying is shown.
+**Change.** State where the method can differ from the schedule and show it there.
 
-**Change.** Keep the roles apart. Motion-aware tokens are evidence and enter through the witness.
-The head is a prior and reads appearance pooled over the masklet, the masklet's shape descriptors, and
-the depth model's frozen encoder. The motion-token head is an ablation.
+1. *Weak pixels, good prior.* A schedule discards a correct prior on weak texture, and floaters and
+   depth noise return. Information weighting keeps it. This is the "listen to the depth" half of the
+   question and is as important as the gate.
+2. *Silent pixels, bounded entity.* A third message family from rendered segment masks (S2 in Part 3)
+   carries outline parallax to blank surface, which no schedule uses.
+3. *The product.* A calibrated map of where the prior was wrong, with an unsupported state, which a
+   schedule does not give.
 
-### W7. Concept prompts give material classes, and a class is a propensity
+If the gain is confined to the third item, the paper is a diagnostic, not a reconstruction method.
 
-**Why it may be fatal.** "Water" and "glass" say where the depth model tends to fail. They do not say
-that it failed here. Precision on a stratum is capped at the fault rate within it. Concept prompts
-also bring an open-vocabulary detector with its own errors and an unknown domain gap to nadir views,
-and on glass the segmenter family is known to be weak (Part 1).
+### R6. Reflections become geometry behind the surface, and the test blames the depth prior
 
-**Test.** Recall of each prompted concept on nadir frames against exact classes; fault rate within
-each stratum per depth model.
+**Why it may be fatal.** A static scene seen in still water or flat glass is fitted by primitives at
+the virtual depth, consistently across frames and across both image halves. If the monocular model
+places the pane on its true surface, the two families are in strong, well-calibrated tension, and the
+depth prior, which is right, is flagged. The image family has its own repeated fault.
 
-**Change.** Use strata for three bounded purposes only: pooling the noise scale, switching the sign
-convention on reflective strata, and reporting. Do not let a stratum raise a verdict.
+**Test.** On scenes with water and glazing: sign and size of $\mathbf x_I - \mathbf x_D$ against
+truth; share of flagged entities whose depth prior is correct.
 
-### W8. Selective labels shrink, and what remains is harder
+**Change.** The layer test, now inside the renderer: an entity whose outline (from the mask family)
+lies on one plane and whose colour-fitted interior lies behind it is a reflection or a view through
+glass. On such entities the image family is discounted and the mask family judges.
 
-**Why it may be fatal.** With outlines as witness, most bounded regions get a plane label whether or
-not they have texture, so the tracked set grows and the head has less to extrapolate. The unwitnessed
-set is now: unbounded regions, non-planar untextured regions, regions whose outline is owned by
-others or runs along the flight direction, and surfaces the segmenter does not return. Membership in
-that set still shares causes with faults (large water bodies, glazing). The conditions for transfer,
-that the fault is independent of witness availability given the features and that every feature
-region has some witnessed examples, still have to be checked, and bounded lakes may not be
-informative about open water.
+### R7. Entities lifted through the geometry under judgment
 
-**Test.** Without ground truth: a classifier that separates witnessed from unwitnessed masklets on
-frozen features (an AUC near one means no support); the count of witnessed masklets per feature
-cluster. With ground truth: head accuracy on unwitnessed masklets against the stratum base rate.
+**Why it may be fatal.** Segment masks reach the primitives by rendering. A primitive at the wrong
+depth receives the labels of whatever it projects onto, consistently in the reference frame and
+inconsistently elsewhere. Entity membership is then wrong exactly where the fault is, and segmenters
+have no automatic video mode to supply an independent association.
 
-**Change.** Weight training by inverse propensity of being witnessed; return a third state,
-*unsupported*, below a propensity floor; if a few synthetic labels are used, spend them on unwitnessed
-surface types.
+**Test.** Label purity of primitives (agreement of the labels a primitive receives across frames) as
+a function of injected displacement.
 
-### W9. Association through time need not come from a memory tracker, and should not come from the judged depth
+**Change.** Use label inconsistency across frames as evidence in its own right, which is what the
+mask family does. Form entities from a first joint fit and refine once after the gate.
 
-**Why it may be fatal.** A video segmenter's tracker is unproven at survey spacing and its cost
-grows with the number of regions. The obvious alternative, lifting per-frame masks onto the surfel
-map, uses the depth under judgment: a region with wrong depth lands in the wrong place and is matched
-to the wrong region or to none.
+### R8. Cost
 
-**Test.** Association accuracy of three schemes at dense and at survey spacing: memory tracker on raw
-frames; memory tracker on stabilised frames; geometric association.
+Exact per-pixel, per-primitive Jacobians are expensive. A Levenberg-Marquardt optimiser for splatting
+needs a gradient cache averaging 53 GB and never forms $J^\top J$ (3DGS-LM, verified). Per-Gaussian
+Fisher blocks have been computed by patch-wise backward passes at reduced resolution (PUP 3D-GS,
+verified). The entity form of R1 avoids both: three placement parameters per entity, a few sweep
+steps, and entities that do not overlap in the image perturbed in the same render. The cost is of
+order (frames) times (colour classes of entities) times (steps), each a forward render. This is an
+estimate, not a measurement.
 
-**Change.** Stabilise every frame to the reference by the homography of the dominant ground plane,
-which needs poses and a mean height only. Residual motion is then proportional to height above the
-plane and is small for most of the scene, at any frame spacing. Segment frames in image mode and
-associate masks by overlap on the stabilised frames, refining with the masklet's own plane as it is
-estimated. A failed match at any plausible plane is itself a flag. The memory tracker is a fallback
-for dense video.
+### R9. What is still learned
 
-### W10. Simpler pipelines that a reviewer will ask for
+With the tension computed, little remains for a head. The learned components that survive are: the
+noise scales of both families per appearance stratum; a head on frozen features splatted onto
+primitives that predicts the fault state on entities where no family but the prior speaks, trained on
+the entities where the tension is decisive, with propensity weighting and an unsupported state; and
+possibly a smooth gate. If the title promises a learned indicator, the abstract must say that the
+evidence is computed and the learning extends it.
 
-- *Per-segment re-anchoring of the monocular depth* to sparse triangulated points, with no witness
-  theory at all.
-- *Depth completion* conditioned on triangulated points (OMNI-DC, Marigold-DC, Prior Depth Anything).
-- *Segmentation-guided multi-view stereo*, which already uses segment masks to carry depth into
-  texture-free regions (W-table in Part 4).
-- *A feed-forward multi-view model's* depth and confidence in place of the monocular prior.
-- *The trivial rule*: distrust the prior wherever no interior witness exists.
+### R10. The area is crowded
 
-Each must be in the comparison. The second and third are the closest competitors on texture-free
-planar regions.
-
-### W11. The learned part becomes small
-
-With a plane witness for most bounded regions, the verdict there is computed, not learned. The head is
-a prior for the unwitnessed remainder. A paper titled as a learned indicator would then have its
-weight in an estimator. That is acceptable if stated; it is a problem if the abstract promises
-learning.
+Depth-regularised splatting, confidence-weighted depth losses, per-Gaussian Fisher information,
+feature splatting and segment lifting all exist (Part 4). A reviewer will read the method as
+"depth-regularised 2DGS with a per-Gaussian weight". The paper must make clear that the weight is the
+outcome of a calibrated two-source test with a stated null and stated blind regions, and it must
+compare against the nearest methods on their terms.
 
 ### Summary of the attack
 
-| Objection | Fatal if | Cheapest test | Needs exact depth |
-| --- | --- | --- | --- |
-| W1 redundancy | planes-only surface matches the oracle-gated fusion everywhere | four-fit comparison | yes |
-| W2 unit | most fault harm is within masklets and non-planar | error decomposition by level | yes |
-| W3 outline validity | boundary repeatability is many pixels, or few regions own a well-conditioned outline | outline fit residual and coverage | no |
-| W4 segmenter on glass and water | the physical region is not returned | inspect masks on such scenes | partly |
-| W5 latent witness | response curve flat below several native pixels or on weak texture | injected-shift response | no |
-| W6 copying | motion-token head follows the witness on reflections | two-head comparison | yes |
-| W8 support | witnessed and unwitnessed masklets separate, with no witnessed examples in hard clusters | domain classifier, counts | no |
-| W10 alternatives | re-anchoring or completion matches the method | baseline runs | yes |
+| Objection | Fatal if | Cheapest test |
+| --- | --- | --- |
+| R1 blank surface | entity-level image curvature is not near zero on uniform surface, or only the per-primitive form is affordable | uniform against textured plane |
+| R2 basin | faults of interest lie outside the basin and no wide-basin loss recovers them | entity sweep on real frames |
+| R3 appearance | held-out frames do not penalise a misplaced entity under restricted appearance | wrong-offset refit |
+| R4 null | placebo tensions are not stable across scenes | split-half tensions |
+| R5 schedule | decaying depth weight matches the gated fusion in every regime | five-fit comparison |
+| R6 reflections | most flags on water and glass are correct priors | sign test with exact depth |
+| R7 lifting | label purity collapses under small displacement | purity curve |
 
-The three tests that need no ground truth (outline fit, injected-shift response, support) can be run
-on one posed aerial sequence with a frozen segmenter and a frozen encoder.
+## Part 3. What is sharp here
 
-## Part 3. What is sharp here, and a better form of the conception
+### S1. Two-source consistency on shared primitives, with a label-free null
 
-The conception as stated has one strong idea (outline parallax), one weak one (latent comparison as a
-new source of evidence), and one that is unbuildable from released models (a pose-aware latent
-predictor). The following is the form that survives the objections.
+The combination that was not found in prior work: an information-form depth message and an
+information-form image message on the same placement parameters, compared by a difference test whose
+null is calibrated by split-half placebo tensions and by injection. Each ingredient exists. Their
+assembly into a test for a wrong prior, with a stated blind region
+($\Lambda_\parallel \to 0$), was not found.
 
-### S1. Two witnesses with different physics: the outline and the interior
+### S2. A third message family from rendered masks
 
-For each masklet estimate the plane twice.
+Render the entity labels as channels and compare with the per-frame segment masks. The gradient of
+this mask loss with respect to an entity's placement is outline parallax, and the rasteriser's
+occlusion handling makes the nearer entity own a shared boundary without a separate ownership rule.
+The family has information on bounded blank surface, where the image family has none, and it is not
+deceived by a reflection inside the outline. With three families the pairwise tensions classify:
 
-- *Outline witness* $\hat{\boldsymbol\theta}^{\partial}_m$: from owned boundary samples only.
-- *Interior witness* $\hat{\boldsymbol\theta}^{\circ}_m$: from interior appearance (features, pixel
-  correlation or tracks).
+| Depth vs mask | Image vs mask | Reading |
+| --- | --- | --- |
+| consistent | consistent | healthy |
+| tension | consistent | depth fault on a textured surface |
+| tension | image silent | depth fault on a blank bounded surface |
+| consistent | image behind mask | reflection or transparency; the prior is right |
+| tension | image behind mask | reflection, and the prior followed the virtual scene or is otherwise wrong |
+| mask silent | tension with depth | unbounded textured surface; image judges alone |
+| mask silent | image silent | unsupported |
 
-Both come from one direct-alignment objective with three unknowns,
+The mask family depends on a frozen segmenter returning the physical region with repeatable
+boundaries, which is unverified for water and glass in nadir views and is the main risk.
 
-```math
-E_m(\boldsymbol\theta) = \sum_{t} \Biggl[ \lambda_\partial \sum_{c \in \partial M_{m,r}^{\mathrm{own}}} \frac{D_{m,t}\bigl(H_t(\boldsymbol\theta)\, c\bigr)^2}{\sigma_c^2}
-\; + \; \lambda_\circ \sum_{u \in M_{m,r}} \bigl\lVert \Phi_t\bigl(H_t(\boldsymbol\theta)\, u\bigr) - \Phi_r(u) \bigr\rVert^2 \Biggr] ,
-```
+### S3. The gate acts in the entity's placement subspace
 
-with $D_{m,t}$ the distance to the masklet's boundary in frame $t$ and $\Phi$ dense frozen features;
-the two witnesses are the minimisers with $\lambda_\circ = 0$ and $\lambda_\partial = 0$. Each has a
-covariance from the curvature of its term, rescaled by the injected-shift calibration of W5.
-
-Their comparison is a classification with physical meaning:
-
-| Outline | Interior | Reading | Verdict on the monocular plane |
-| --- | --- | --- | --- |
-| defined | agrees | opaque textured surface | test against either; most precise case |
-| defined | flat (no curvature) | untextured surface | test against the outline |
-| defined | defined, behind the outline | reflection or transparency | test against the outline; the interior is a virtual scene |
-| defined | defined, in front | outline not owned (occluder), or a mover | abstain; revisit ownership |
-| undefined | defined | unbounded textured region | test against the interior |
-| undefined | flat | unwitnessed | prior only; third state |
-
-The third row is the point. It turns the reflection problem from an undetectable error of the witness
-into a detected class, without labels and without a material classifier. The second row carries
-parallax into texture-free regions. Neither is available to a per-pixel formulation.
-
-The monocular plane of masklet $m$ in frame $i$, $\boldsymbol\theta^{\mathrm{mono}}_{m,i}$, is the
-least-squares affine fit to the aligned inverse depth over $M_{m,i}$. The masklet gap is
-
-```math
-T_{m,i} = \bigl(\boldsymbol\theta^{\mathrm{mono}}_{m,i} - \hat{\boldsymbol\theta}_m\bigr)^{\!\top}
-\bigl(\Sigma_{\hat\theta, m} + \Sigma_{\mathrm{mono}, m, i}\bigr)^{-1}
-\bigl(\boldsymbol\theta^{\mathrm{mono}}_{m,i} - \hat{\boldsymbol\theta}_m\bigr) ,
-```
-
-referred to $\chi^2_3$ only after the covariances are calibrated. The repetition of a fault is read
-from the same quantities: with $\bar{\boldsymbol\theta}^{\mathrm{mono}}_m$ the mean over frames,
-
-```math
-\varrho_m = \frac{\lVert \bar{\boldsymbol\theta}^{\mathrm{mono}}_m - \hat{\boldsymbol\theta}_m \rVert^2_{\Sigma}}
-{\lVert \bar{\boldsymbol\theta}^{\mathrm{mono}}_m - \hat{\boldsymbol\theta}_m \rVert^2_{\Sigma} + \tfrac{1}{n_m} \sum_i \lVert \boldsymbol\theta^{\mathrm{mono}}_{m,i} - \bar{\boldsymbol\theta}^{\mathrm{mono}}_m \rVert^2_{\Sigma}} ,
-```
-
-the share of the monocular plane error that all frames have in common. Depth consensus sees the
-second term of the denominator and is blind to the numerator.
-
-What is identified: three plane parameters per masklet with at least two frames and enough owned
-boundary not parallel to the flight direction, or enough interior texture. What is not: anything
-about a masklet in the last row; the interior shape of an untextured non-planar region; a reflection
-whose pane the segmenter does not return and whose virtual depth is plausible.
-
-### S2. Judge three numbers, keep the shape
-
-Write the aligned monocular inverse depth on a masklet as plane plus residual shape,
-$\rho^{\mathrm{mono}}_i(u) = \boldsymbol\theta^{\mathrm{mono}\top}_{m,i} K^{-1} \tilde u + g_{m,i}(u)$.
-The message of view $i$ to the surfels of the masklet splits accordingly: a component along the
-three-dimensional subspace of common plane displacements, and the remainder. The gate acts on the
-first component only, and the witnessed plane replaces it:
-
-```math
-\rho^{\mathrm{fused}}_i(u) = \bigl[(1 - \zeta_{m,i})\, \boldsymbol\theta^{\mathrm{mono}}_{m,i} + \zeta_{m,i}\, \hat{\boldsymbol\theta}_m\bigr]^{\!\top} K^{-1} \tilde u + g_{m,i}(u) ,
-```
-
-or the information-weighted equivalent. A flagged region keeps its internal relief and loses only its
-placement. This answers three objections at once: gating no longer removes the only constraint on a
-region; the prior's role is stated (shape within regions, everything on unwitnessed regions); and
-detection and repair are one operation with one statistic. The residual $g$ is tested per pixel
-where interior texture allows, which is the second-order term of proposal 1 with a definition.
-
-Re-anchoring monocular depth per segment is not new in itself (Part 4). What is new is doing it in
-the three-parameter plane subspace against a texture-free witness, with a calibrated test deciding
-whether to do it.
-
-### S3. The latent witness as a calibrated plane sweep on a stabilised clip
-
-Stabilise all frames to the reference by the dominant ground plane. For a masklet and a candidate
-$\boldsymbol\theta$, warp its region by $H_t(\boldsymbol\theta)$, encode, and compare with the
-reference tokens; this is the interior term of $E_m$. Evaluate at the monocular plane, at the outline
-plane, and on a small grid between and beyond. The two endpoints share warp artefacts, so their
-difference isolates geometry. The injected-shift curve converts feature distance into pixels and
-supplies the noise floor. With these three steps the latent comparison has a minimum, a curvature
-and a unit, and the frame-spacing problem is removed because the encoder only ever sees residual
-motion.
-
-Whether a video encoder is better here than an image encoder applied per frame is open. Image tokens
-are spatially sharper; tubelet tokens see sub-token motion in their first layer. The response curve
-decides. No argument from first principles favours the video encoder for alignment; its natural role
-is the stabilised-clip variant, in which "anything still moving" is the evidence.
+The depth message of an entity is split into its component along the three collective placement
+parameters and the remainder. The gate removes or down-weights the first and keeps the second, so a
+flagged entity keeps the monocular relief and loses only its placement. In the joint fit this is a
+projection of the depth gradient, which the renderer makes straightforward.
 
 ### What is not a contribution
 
-- Latent comparison as an independent source of evidence. It sees what pixels carry, with coarser
-  resolution and no native error bar.
-- A learned latent predictor conditioned on camera pose. None exists frozen, and training one is
-  outside a light head.
-- Concept prompts as a detector of faults.
-- The masklet from a video tracker as such. With poses, association is geometric.
+- The tension statistic as such.
+- Per-primitive image Fisher information as such.
+- Lifting masks or features onto Gaussians.
+- "Large opposite gradients" as a criterion; unnormalised gradient conflict is a multi-task
+  optimisation notion and carries no error rate.
 
 ## Part 4. Prior work
 
-### 4.1 Regions, planes and layers from motion
+### 4.1 Per-primitive information in splatting
 
 | Work | What it does | Relation |
 | --- | --- | --- |
-| Plane-plus-parallax and layered motion (Irani and Anandan; Sawhney; Wang and Adelson, 1990s). *Recalled; no citation details verified.* | Register a dominant plane, read residual motion as height; describe a scene as moving layers with ownership of boundaries. | The stabilised clip, residual parallax and boundary ownership used here are these ideas. A paper must cite them and not present them as new. |
-| "MSP-MVS: Multi-Granularity Segmentation Prior Guided Multi-View Stereo", arXiv 2407.19323. *Title verified from a search listing; content recalled only in outline.* | Uses segment masks at several scales to guide patch-match stereo into texture-free regions. | The closest existing use of foundation segmentation to carry multi-view depth across untextured regions. It reconstructs; it does not judge a prior, and it does not separate outline from interior. |
-| "SuperPrimitive: Scene Reconstruction at a Primitive Level", arXiv 2312.05889; planar splatting methods (Planar Gaussian Splatting, WACV 2025; PlanarSplatting, arXiv 2412.03451). *Titles from search listings only.* | Reconstruction with segment-level or planar primitives, some using monocular normals or depth per segment. | Region-level primitives with monocular cues exist. None was verified to test the monocular cue against region parallax. |
-| Zhang et al., "MonoInstance", arXiv 2503.18363, 2025. *Verified (arXiv).* | Aligns per-instance monocular depth across views and derives uncertainty from the spread. | Region-level treatment of monocular depth, by consensus of the depth maps. Blind to errors that all views repeat. |
-| Ye et al., "Gaussian Grouping: Segment and Edit Anything in 3D Scenes", ECCV 2024. *Verified (title, venue).* | Lifts 2D masks to Gaussians with consistent identities. | Mechanism for carrying masklet identity on surfels; relies on the fitted geometry (W9). |
+| Hanson, Tu, Singla, Jayawardhana, Zwicker, Goldstein, "PUP 3D-GS: Principled Uncertainty Pruning", arXiv 2406.10219. *Verified.* | Per-Gaussian Fisher block of an L2 reconstruction loss with respect to mean and scale, block-diagonal, computed patch-wise; used to prune. | The image information block on position already exists. It is block-diagonal (R1) and is not compared with any other source. |
+| Jiang, Lei, Daniilidis, "FisherRF". *Title verified; details recalled.* Wilson et al., "POp-GS: Next Best View in 3D-Gaussian Splatting with P-Optimality", arXiv 2503.07819. *Verified.* | Diagonal or per-ellipsoid block information $J^\top J$ of rendered colour with respect to Gaussian parameters; used for view selection. | Same quantity, used for acquisition. POp-GS reports that geometric parameters dominate the information. |
+| Höllein, Božič, Zollhöfer, Nießner, "3DGS-LM: Faster Gaussian-Splatting Optimization with Levenberg-Marquardt", ICCV 2025. *Verified.* | Gauss-Newton normal equations for splatting solved by preconditioned conjugate gradients with a per-pixel, per-splat gradient cache. | Shows the cost of exact Jacobians (53 GB average cache) and that $J^\top J$ products are feasible only matrix-free. |
+| Goli et al., "Bayes' Rays", CVPR 2024. *Verified (title, venue).* | Post-hoc Laplace uncertainty of a radiance field on a spatial perturbation field. | Collective spatial perturbations, close in spirit to the entity displacement of R1; no second source. |
 
-### 4.2 Feature-space reprojection and expectation violation
-
-| Work | What it does | Relation |
-| --- | --- | --- |
-| Shu et al., "Feature-metric Loss for Self-supervised Learning of Depth and Egomotion", ECCV 2020. *Verified (title, venue).* | Replaces photometric reprojection error with error in a learned feature space. | Proposal 3 is this error with a frozen encoder, used for testing and not training. |
-| Feature-metric refinement in structure-from-motion and feature-metric bundle adjustment. *Recalled.* | Align views by minimising differences of deep features. | Same computation as the interior term of $E_m$. |
-| Kulhanek et al., "WildGaussians", arXiv 2407.08447. *Verified (arXiv).* | Uncertainty from similarity of frozen features between render and image. | Feature-space comparison of prediction and observation for masking, on colour. |
-| Garrido et al., "Intuitive physics understanding emerges from self-supervised pretraining on natural videos", arXiv 2502.11831, 2025. *Verified (arXiv abstract).* | Measures surprise of latent video prediction models on physically impossible clips; representation-space predictors score above chance. | The precedent for "violation of expectation" with this model family. It uses the model's own predictor on ordinary video; nothing shows sensitivity to small geometric inconsistency. |
-| Assran et al., V-JEPA 2; Mur-Labadia et al., V-JEPA 2.1. *Verified as in Part 1.* | Video encoders; an action-conditioned predictor for robot arms. | No camera-pose conditioning. |
-
-### 4.3 Segmentation foundation models
-
-SAM 2 and SAM 3 as in Part 1. Han et al. (arXiv 2305.00278) and Jie (arXiv 2412.19293) on glass and
-mirrors, verified. No evaluation of SAM 2 or SAM 3 masklets on nadir aerial sequences, or at survey
-frame spacing, was found; the search was brief.
-
-### 4.4 Witnesses and labels from multi-view geometry
+### 4.2 Depth priors in splatting and their reliability
 
 | Work | What it does | Relation |
 | --- | --- | --- |
-| Mostegel et al., CVPR 2016; Tosi et al., BMVC 2017. *Titles and venues verified.* | Train stereo confidence from geometric self-contradiction without ground truth. | Ancestor of "a geometric contradiction is a free label". |
-| Pataki, Sarlin, Schönberger, Pollefeys, "MP-SfM", arXiv 2504.20040, 2025. *Verified (arXiv).* | Monocular depth and normal priors inside structure-from-motion with uncertainty propagation. | Same pairing of prior and parallax. How its prior uncertainty is obtained was not read and must be before a novelty claim. |
-| Bae, Budvytis, Cipolla, MaGNet, CVPR 2022; Guo et al., Murre, CVPR 2025. *Verified.* | Fuse or condition monocular depth with multi-view geometry. | The "repair" alternative. |
-| OMNI-DC (arXiv 2411.19278), Marigold-DC (arXiv 2412.13389), Prior Depth Anything (arXiv 2505.10565). *Titles verified.* | Zero-shot depth completion from sparse metric depth. | Baselines of W10. |
-| Karaev et al., CoTracker3, arXiv 2410.11831; Harley et al., AllTracker, ICCV 2025. *Verified.* | Frozen point and dense trackers. | The interior witness by tracks; kept as the calibrated special case. |
-| Goli et al., RoMo, ICCV 2025. *Title and venue verified.* | Motion masks from flow and epipolar cues. | Epipolar violation as a mover flag; silent on reflections that satisfy the constraint. |
+| Turkulainen et al., "DN-Splatter", WACV 2025. *Verified.* | Depth and normal priors with a depth loss adapted by image gradients. | Fixed heuristic weighting; no test of the prior. |
+| Sun et al., "Uncertainty-guided Optimal Transport in Depth Supervised Sparse-View 3D Gaussian", arXiv 2405.19657. *Verified (abstract).* | Depth priors with uncertainty and a patch-wise transport loss. | Uncertainty comes with the prior, not from the images. |
+| Zhang et al., CDGS, arXiv 2502.14684; Xiao et al., "In Depth We Trust", arXiv 2604.05715; Chu et al., arXiv 2607.02554; Dufera and Cai, ConfidentSplat, arXiv 2509.16863. *Verified (arXiv pages).* | Confidence maps from fixed cues; depth applied only where rendered geometry is self-inconsistent; photometric masks from an RGB-only model; multi-view consistency weights. | The nearest neighbours in purpose. All are per-pixel masks or weights from one cue, with no information-form comparison and no error rate. The RGB-only-model mask is the closest to "pixels judge depth" and is the first baseline. |
+| Song et al., "EnerGS: Energy-Based Gaussian Splatting with Partial Geometric Priors", arXiv 2604.26238. *Verified.* | LiDAR prior as an energy; positions move only under the geometric gradient, appearance only under the photometric loss. | Decouples the two gradients instead of comparing them; defines no conflict measure and does not detect wrong priors. |
+| Decaying depth-regularisation weight in standard splatting pipelines. *Recalled.* | Prior early, pixels late. | The baseline of R5. |
+| Pataki et al., MP-SfM, arXiv 2504.20040. *Verified (abstract).* | Monocular priors with uncertainty propagation inside structure-from-motion. | Same pairing of prior and multi-view evidence at the level of points; its uncertainty model was not read. |
 
-### 4.5 Residual-supervised heads and depth-prior reliability in splatting
+### 4.3 Gradient conflict
 
-NeRF On-the-go (CVPR 2024), SpotLessSplats (arXiv 2406.20055) and WildGaussians supervise small heads
-on frozen features by a photometric residual; verified. CDGS (arXiv 2502.14684), "In Depth We Trust"
-(arXiv 2604.05715), a photometric-mask method (arXiv 2607.02554) and ConfidentSplat
-(arXiv 2509.16863) weight or restrict monocular depth supervision by fixed cues or by agreement of
-depth maps; verified at the level of their arXiv pages. None was found to use region outlines as a
-witness or to separate a region's plane from its shape.
+Yu et al., "Gradient Surgery for Multi-Task Learning", NeurIPS 2020 (title and venue verified),
+projects conflicting task gradients. A search for gradient conflict between depth and photometric
+losses in splatting returned one item that could not be opened ("Depth-Gradient-Guided Decoupled
+Optimization in 3D Gaussian Splatting for Sparse-View Reconstruction", title only) and optimiser
+papers that do not concern priors (Ding et al., "A Step to Decouple Optimization in 3DGS",
+arXiv 2601.16736, verified). No work was found that normalises the conflict by information and
+reads it as a test. The unopened item is the most likely overlap and must be read.
 
-### 4.6 Fault detection by redundancy
+### 4.4 Lifting masks and features onto primitives
 
-Data snooping and solution separation (Baarda 1968, recalled; Blanch et al., ION GNSS 2012 and IEEE
-TAES 2015, titles and venues verified) state that a fault common to all redundant observations needs
-an independent source, and that the independent source protects only where it observes. The outline
-witness enlarges where it observes.
+Ye et al., "Gaussian Grouping", ECCV 2024 (verified): identity encodings on Gaussians supervised by
+rendered masks. Kobayashi, Matsumoto, Sitzmann, "Decomposing NeRF for Editing via Feature Field
+Distillation", NeurIPS 2022 (verified); Zhou et al., "Feature 3DGS", arXiv 2312.03203 (title
+verified): frozen features rendered from the field. Kulhanek et al., WildGaussians (verified):
+uncertainty from frozen-feature similarity of render and image. These supply the mechanisms of
+conception point 3. None uses the mask loss's gradient with respect to placement as geometric
+evidence, as far as was checked.
 
-**Summary of the gap.** No work was found that (a) estimates a region's plane from the parallax of
-its owned outline to judge a monocular prior, (b) uses disagreement between outline and interior
-parallax to detect reflection, or (c) gates a depth prior in the plane subspace of a region while
-keeping its shape. The search was not exhaustive. The segmentation-guided stereo literature and the
-planar-primitive reconstruction literature were seen only as titles and are the most likely place
-for an overlap.
+### 4.5 Reflections
+
+Mirror-aware splatting methods (for example "Mirror-3DGS", arXiv 2404.01168, title only) model a
+mirror plane and a mirrored scene, usually with mirror masks as input (recalled). They confirm that
+an unconstrained fit places reflected content behind the surface. None was checked for a label-free
+detection rule.
+
+### 4.6 The statistic
+
+Solution separation in integrity monitoring (Blanch et al., ION GNSS 2012 and IEEE TAES 2015; titles
+and venues verified) and data snooping (Baarda 1968, recalled) compare a full solution with subset
+solutions. The Hausman specification test (1978, recalled) compares two estimators of the same
+parameter, one efficient under the null. Tension statistics between data sets in cosmology use the
+parameter shift normalised by the summed covariances (surveys seen by title: "Concordance and
+Discordance in Cosmology", arXiv 1806.04649; "Tensions in cosmology: a discussion of statistical
+tools to determine inconsistencies", arXiv 2312.08542). Prior-data conflict checks in Bayesian
+statistics (Evans and Moshonov, 2006, recalled) are the same idea with a prior as one source. The
+paper should cite these and claim the application, not the test.
+
+### 4.7 Summary of the gap
+
+Not found: (a) an image message for collective placement compared in information form with a depth
+prior on the same primitives; (b) a null for that comparison calibrated by split-half placebo
+tensions; (c) a rendered-mask family used as geometric evidence with pairwise tensions that separate
+depth faults from reflections; (d) a gate confined to an entity's placement subspace. The search
+covered arXiv listings and proceedings pages through a general search engine and was not exhaustive.
+One possibly overlapping title could not be opened, and several neighbours were read as abstracts
+only.
 
 ## Part 5. Verdict
 
-**Is it a contribution at a top venue?** The outline witness with ownership, the outline-interior
-comparison, and the plane-subspace gate together are a coherent method with a clear physical argument
-and, as far as was checked, no direct precedent. That is enough for a strong robotics paper and
-plausible for a vision venue if the reflection result holds on real data. The latent comparison and
-the video encoder are not what would carry it; they are an interior witness among others and should be
-presented as such. If the paper leads with "violation of expectation in a video world model", it
-leads with its weakest part.
+**Does the primitive have a real job?** Yes, under one condition. It is the common parameter on which
+two or three independent families of evidence are expressed, with visibility and occlusion handled
+once. That job exists only for collective placement of an entity (R1) and only with appearance
+restricted or cross-fitted for the test (R3). A per-primitive tension from block-diagonal curvature
+with free appearance would be wrong in both directions.
 
-**The single claim.** *The parallax of a region's own outline judges a monocular depth prior on
-surfaces where no interior correspondence exists or where interior correspondence is deceived by
-reflection; the verdict concerns three plane parameters per region, the prior's shape within the
-region is kept, and regions without a witness are reported as such.*
+**Is it a contribution at a top venue?** The assembly of S1 to S3 is coherent, has a clear
+statistical statement, and was not found in prior work. Its weak point is R5: on reconstruction
+quality alone, a decaying depth weight may be hard to beat, and the test is silent where the prior
+matters most unless the mask family works. The paper is strong if it shows (i) a calibrated fault
+map with honest blind regions, (ii) retained good prior on weak texture, and (iii) correct handling
+of reflections through the mask family. It is weak if it reports only that gated fusion beats a fixed
+depth weight.
+
+**The single claim.** *On shared Gaussian primitives, a monocular depth prior and the images are two
+sources about the same placement; their tension, computed for surface entities and calibrated without
+labels, tells where the prior is wrong, where the pixels are deceived, and where neither can say.*
 
 **Cheapest tests, in order.**
 
-1. *No ground truth, one posed aerial sequence.* Segment frames, stabilise by the ground plane,
-   associate, fit outline planes with ownership. Report boundary repeatability, the share of area with
-   a well-conditioned outline plane, and the share of masklets in each row of the table in S1.
-2. *No ground truth.* Injected-shift response curves for one video encoder and one image encoder.
-3. *Exact depth.* Outline-plane error by surface class; whether water and glazing are returned as
-   regions; decomposition of fault harm into plane and shape; the four-fit comparison of W1; the
-   baselines of W10.
+1. *With the two existing fits.* Fit the surface from depth alone and from pixels alone on one
+   block; compare rendered depths; with exact depth, check whether the difference localises true
+   monocular faults and what it does on water and glazing. This needs no new code.
+2. *Entity sweep on a few entities.* Basin width, curvature against texture, and the wrong-offset
+   refit under diffuse and view-dependent appearance, on fitted and held-out frames (R2, R3).
+3. *Uniform against textured plane*, per-primitive against entity curvature (R1).
+4. *Split-half placebo tensions* on a scene without known faults (R4).
+5. *Five-fit comparison* against the decaying schedule and the oracle gate (R5).
 
-**Kill criteria.** Abandon the region formulation if any of the following holds:
+**Kill criteria.** Abandon the formulation if any of the following holds:
 
-- boundary repeatability after the plane fit is so poor that outline planes are no more precise than
-  the monocular depth, or fewer than a small share of regions own a well-conditioned outline;
-- the segmenter does not return water and glazing as regions on nadir imagery, by image mode or by
-  concept prompt;
-- most fault harm lies in shape within regions and not in their planes;
-- per-segment re-anchoring to sparse triangulated points, or zero-shot completion, matches the method
-  on texture-free regions.
+- under restricted, cross-fitted appearance, held-out frames do not penalise a misplaced entity on
+  ordinary textured surface;
+- the basin is narrower than the parallax of the faults of interest and neither a coarse-to-fine
+  sweep nor a feature-metric loss recovers them;
+- placebo tensions vary so much between scenes that no null can be fixed;
+- a decaying depth weight matches the gated fusion on every regime and the oracle gate adds little.
 
-Abandon the latent witness alone, keeping the rest, if the response curve is flat below several
-native pixels or on weak texture.
+Drop the mask family alone, keeping the rest, if a frozen segmenter does not return repeatable
+physical regions on nadir frames; the method then abstains on blank surface and cannot separate
+reflections from depth faults.
 
-**Parts to drop.**
+**Parts to drop now.**
 
-- A pose-conditioned latent predictor.
-- A head fed motion-aware tokens as the main head.
-- Concept strata as evidence.
-- Masklets from a memory tracker at survey spacing as the default association.
+- Per-primitive tension from block-diagonal image curvature.
+- The score form as the main test.
+- Free appearance in the judging step.
+- "Opposite gradients" as the description of the criterion.
 
-**What stays unknown.** Whether a frozen segmenter returns the physical extent of water and glass in
-nadir aerial frames with boundaries repeatable to a few pixels. The outline witness, the reflection
-test and the plane-subspace gate all rest on that, and it can be checked without ground truth on the
-first sequence available.
+**What stays unknown.** Whether the image family, once appearance is restricted and colour
+cross-fitted, still carries enough information about entity placement at the frame spacing and
+texture of real aerial strips to give the test useful power, and whether the mask family works on
+water and glass. Both are settled by the first three tests.
 
 ## Sources consulted
 
-- https://arxiv.org/abs/2506.09985 and https://arxiv.org/html/2506.09985
-- https://arxiv.org/abs/2603.14482
-- https://cdn.jsdelivr.net/gh/facebookresearch/vjepa2@main/README.md
-- https://arxiv.org/abs/2408.00714 and https://github.com/facebookresearch/sam2
-- https://arxiv.org/html/2511.16719v2 and https://github.com/facebookresearch/sam3
-- https://proceedings.iclr.cc/paper_files/paper/2026/hash/e0982cbc81401df3430ee1ff780dc7a2-Abstract-Conference.html
-- https://arxiv.org/abs/2305.00278
-- https://arxiv.org/abs/2412.19293v1
-- https://arxiv.org/abs/2502.11831
-- https://www.ecva.net/papers/eccv_2020/papers_ECCV/html/3301_ECCV_2020_paper.php
-- https://arxiv.org/abs/2312.00732
-- https://arxiv.org/html/2407.19323v6
-- https://arxiv.org/html/2312.05889v2
-- https://arxiv.org/abs/2503.18363
-- https://arxiv.org/abs/2407.08447v2
-- https://openaccess.thecvf.com/content_cvpr_2016/html/Mostegel_Using_Self-Contradiction_to_CVPR_2016_paper.html
-- https://bmva-archive.org.uk/bmvc/2017/papers/paper133/index.html
+- Repository code: `src/sensorfault/gs/fit.py`, `src/sensorfault/gs/gate.py`, `experiments/rgb_train_2dgs.py`
+- https://arxiv.org/html/2406.10219v3
+- https://arxiv.org/html/2503.07819v2
+- https://arxiv.org/html/2409.12892v2 and https://mlanthology.org/iccv/2025/hollein2025iccv-3dgslm
+- https://jiangwenpl.github.io/FisherRF
+- https://openaccess.thecvf.com/content/CVPR2024/html/Goli_Bayes_Rays_Uncertainty_Quantification_for_Neural_Radiance_Fields_CVPR_2024_paper.html
+- https://arxiv.org/abs/2403.17822 and https://openaccess.thecvf.com/content/WACV2025/papers/Turkulainen_DN-Splatter_Depth_and_Normal_Priors_for_Gaussian_Splatting_and_Meshing_WACV_2025_paper.pdf
+- https://arxiv.org/abs/2405.19657
+- https://arxiv.org/abs/2502.14684, https://arxiv.org/abs/2604.05715, https://arxiv.org/abs/2607.02554, https://arxiv.org/abs/2509.16863v1
+- https://arxiv.org/html/2604.26238
 - https://arxiv.org/abs/2504.20040
-- https://openaccess.thecvf.com/content/CVPR2022/html/Bae_Multi-View_Depth_Estimation_by_Fusing_Single-View_Depth_Probability_With_Multi-View_CVPR_2022_paper.html
-- https://openaccess.thecvf.com/content/CVPR2025/html/Guo_Multi-view_Reconstruction_via_SfM-guided_Monocular_Depth_Estimation_CVPR_2025_paper.html
-- https://arxiv.org/pdf/2411.19278, https://arxiv.org/abs/2412.13389, https://arxiv.org/abs/2505.10565
-- https://arxiv.org/abs/2410.11831v1 and https://arxiv.org/abs/2506.07310
-- https://openaccess.thecvf.com/content/CVPR2025/html/Wang_VGGT_Visual_Geometry_Grounded_Transformer_CVPR_2025_paper.html
-- https://openaccess.thecvf.com/content/ICCV2025/html/Goli_RoMo_Robust_Motion_Segmentation_Improves_Structure_from_Motion_ICCV_2025_paper.html
-- https://openaccess.thecvf.com/content/CVPR2024/html/Ren_NeRF_On-the-go_Exploiting_Uncertainty_for_Distractor-free_NeRFs_in_the_Wild_CVPR_2024_paper.html
-- https://arxiv.org/abs/2406.20055, https://arxiv.org/abs/2502.14684, https://arxiv.org/abs/2604.05715, https://arxiv.org/abs/2607.02554, https://arxiv.org/abs/2509.16863v1
+- https://proceedings.neurips.cc/paper/2020/file/3fe78a8acf5fda99de95303940a2420c-Paper.pdf
+- https://arxiv.org/abs/2601.16736
+- https://www.researchgate.net/publication/404047818_Depth-Gradient-Guided_Decoupled_Optimization_in_3D_Gaussian_Splatting_for_Sparse-View_Reconstruction (listing only)
+- https://arxiv.org/abs/2312.00732, https://mlanthology.org/neurips/2022/kobayashi2022neurips-decomposing, https://arxiv.org/abs/2312.03203, https://arxiv.org/abs/2407.08447v2
+- https://arxiv.org/abs/2404.01168v2 (listing only)
+- https://arxiv.org/abs/2403.17888
+- https://arxiv.org/pdf/1806.04649 and https://arxiv.org/pdf/2312.08542 (listings only)
 - https://web.stanford.edu/group/scpnt/gpslab/pubs/papers/Blanch_et_al_IONGNSS_2012_v2.pdf and https://dblp.uni-trier.de/rec/journals/taes/BlanchWELPRSK15.html
