@@ -1,4 +1,4 @@
-# Listen to the Depth Prior or to the Pixels? A Rendering-Based Consistency Test on Gaussian Surfels
+# Information-Theoretic Gaussian Splatting: a Map That Stores What It Knows, for Correspondence-Free Large-Area Mapping with Monocular Depth
 
 Supporting derivations are in `docs/learned-indicator/`: the statistical theory (`theory.md`), the
 definition of the evidence (`cues.md`), the surfel-space formulation (`surfel.md`), objections and
@@ -6,126 +6,158 @@ prior work (`objections-and-prior-work.md`), and the experiment design (`experim
 
 ## Abstract
 
-Gaussian surfel reconstruction from posed aerial video is commonly regularised by one monocular depth
-map per frame. These maps fail on whole surfaces and repeat the failure in every frame, which hides
-it from any gate built on agreement between depth maps. We place the depth prior and the images on
-the same primitives and test them against each other through the differentiable renderer. For a
-planar surfel, the Jacobian of the rendered image with respect to the surfel's placement factors
-through the Jacobian of its depth: both kinds of evidence are quadratic forms on the same three
-coordinates, offset and two tilts, and differ by a scalar weight per pixel. The unit of the test is a
-surface entity, a set of surfels onto which per-frame segment masks have been fused. The total misfit
-of an entity splits exactly into disagreement among depth maps, disagreement among images, and a
-tension between the two families. A fault that every frame repeats is, exactly, a between-family
-effect, which is why no reweighting of depth maps against each other can see it. The tension is
-computed as a score test at the surface placed by depth alone, with appearance projected from source
-frames and judged on disjoint frames, so that nothing in the model can explain a misplacement away.
-Outline parallax needs no interior texture and arises from rendering the entity's label, with
-boundary ownership decided by occlusion in the rasteriser; outline against interior identifies
-reflecting and transparent surfaces. Moving an entity's surfels by a known amount and re-rendering
-calibrates every instrument, including a frozen video encoder, and measures how honest the image
-evidence is where it claims to be informative. Light heads on frozen features say which surfaces make
-the depth model fail and which mislead the pixels, and carry the verdict to entities the pixels
-cannot judge. Nothing in this document has been measured; a staged test with thresholds fixed in
-advance decides whether the approach holds.
+A map built from posed aerial video and one monocular depth map per frame looks complete, yet it can
+be confidently wrong over whole surfaces, identically in every frame. Gaussian splatting cannot say
+so, because it stores geometry and appearance and nothing about how well either is known. We add a
+third quantity to the same primitives: information, the stiffness with which each source of evidence
+holds a surface in place, kept separately for the depth prior and for the pixels. For a planar
+Gaussian surfel the derivative of the rendered image with respect to the surfel's placement factors
+through the derivative of its depth, so prior and pixels are quadratic forms on the same three
+coordinates. Their disagreement is then a stored energy with units and a null distribution: the
+alignment of geometry and appearance becomes measurable. Cross-view evidence enters only by rendering
+the shared primitives into each frame and comparing; no features are matched, no tracks kept, no
+points triangulated. The monocular prior brings every surface within the short capture range of that
+comparison, and the pixels audit the prior in return. Stored per source, information splits the
+misfit of a surface exactly into disagreement among depth maps, disagreement among images, and
+disagreement between the two; a depth error that every frame repeats is the last term and is
+invisible to any consensus among depth maps. Nuisance is given a place in the same model: pose,
+per-frame depth scale and offset, and exposure are absorbed at a stated cost in information;
+rendering misfit and ordinary prior error deflate the stated stiffness; regional faults and
+reflections can be neither and are detected. The information is calibrated on the scene from frame
+replicates and from displacements injected through the renderer. Light heads on frozen foundation
+features speak only where the pixels have no stiffness, and the map says so. Nothing in this document
+has been measured; the first experiment asks whether a depth-only map is overconfident by the amount
+the theory predicts.
 
 ## 1. Introduction
 
-A static scene is observed by a posed aerial video flown in strips. An off-the-shelf monocular model
-gives one depth map per frame, and a surface of 2D Gaussian surfels is fitted with those maps as
-supervision. Most depth pixels are accurate up to a per-frame scale and offset. A minority, grouped in
-regions that follow objects and materials (water, glass, texture-free roofs), are wrong by many
-standard deviations.
+### 1.1 The argument
 
-The usual defence is consistency between depth maps. Every such *consensus gate* shares a blind spot:
-if the frames that observe a surface make the same error, their residuals against each other are
-small and the error is fused. Images are the independent evidence, and in splatting they are already
-present as the rendering loss. Current practice combines the two by a fixed or decaying weight on the
-depth term, or by masks derived from one of them. That leaves the question this work is about:
+Each step is a premise, its consequence, and what it means for the design. The equations follow in
+Sections 3 and 4.
 
-*For each part of the surface, when should the primitives listen to the depth prior, and when to the
-pixels?*
+1. **A map is geometry, appearance and information.** Geometry and appearance describe the scene.
+   Information describes what the data said about it. Gaussian splatting stores the first two.
+   Opacity is not confidence: an opaque surfel on a blank roof is drawn with the same certainty as one
+   on a textured wall, although the images hardly constrain the first. A large-area map that is used
+   for measurement or change detection must say where the surface is determined, and by what.
+2. **Pixels inform geometry only through a coupling.** An image says where a surface is only if
+   moving the surface would change the image. That needs texture contrast and views from different
+   directions. The strength of the coupling is a stiffness. It is zero on blank surface and zero from
+   one viewpoint, and it can only be computed from the renderer, which is where geometry and
+   appearance meet.
+3. **The monocular depth is a second spring on the same surface.** It pulls each surface towards
+   where the depth network put it. For a planar surfel both springs act on the same three
+   coordinates, an offset and two tilts, and this is exact, not an analogy (Section 3.2).
+4. **Two springs on one body store energy when they disagree.** The stretch is the misfit, in metres
+   and radians. The energy is dimensionless, in nats, and has a null distribution. Alignment of
+   geometry and appearance is therefore measurable. This is what the representation is for.
+5. **The energy can only be read if the springs are kept apart.** A single summed confidence cannot
+   say which source put it there. A fault that every depth map repeats is invisible in the
+   disagreement among depth maps and visible only between depth and pixels. Information must be stored
+   per source.
+6. **Information must be honest.** A stiffness is a claim about scatter. Rendering residuals are
+   model misfit, not sensor noise, and counting pixels as independent overstates stiffness by orders
+   of magnitude. The same holds for the prior: frames that share an error do not average it out, so
+   adding their information without limit lets the prior outvote the pixels. Both must be corrected
+   on the scene itself.
+7. **Evidence enters by rendering, not by matching.** Each frame is compared with a rendering of the
+   shared primitives. Weak texture lowers stiffness smoothly instead of breaking a matcher, every
+   pixel contributes, and occlusion is decided once. The price is a short capture range: the
+   comparison works only if the surface is already nearly in place.
+8. **The monocular prior is what makes step 7 possible.** It puts every surface within reach of the
+   pixels, including where nothing could be matched. The pixels refine it where they are stiff and
+   audit it where both are comparable. Each covers the other's weakness, and the information field
+   says, direction by direction, which one is speaking.
+9. **Nuisance has three fates.** A disturbance with a known low-dimensional form (a frame's pose
+   error, a depth map's scale and offset, exposure) is *absorbed*: its directions are removed from the
+   evidence and the map stops claiming knowledge in them. A disturbance with a level but no form
+   (discretisation, resampling) is *deflated*: stiffness is reduced by a measured factor. A
+   disturbance that is structured and local (a region of wrong depth, a reflection) can be neither and
+   must be *detected*. Absorbing an error never makes it vanish; it converts it into a stated loss of
+   information.
+10. **What follows.** Store, per surface entity and per source, an information matrix and a pull on
+    three placement coordinates, additive over frames and map tiles. Compute them from the
+    differentiable renderer. Calibrate them. Read alignment as energy. Gate a source where the energy
+    says the two disagree and the attribution says which is wrong. Use learned heads only where the
+    pixels have no stiffness, and say so in the map.
 
-The answer by default is: in proportion to information, direction by direction. That default is wrong
-in two cases, when the depth prior is faulty and when the pixels are misled (a reflection, a moving
-object), and it must be changed there and only there. This requires three things that the fusion of
-two loss terms does not provide: the information each family really has about a surface, a test of
-whether they are compatible, and an attribution of which one is wrong.
+### 1.2 Claim, scope, contributions
 
-The differentiable renderer supplies all three on the primitives themselves. It also gives the
-primitives a definite role. A per-frame pipeline that warps images through depth maps can test one
-frame at a time; it cannot hold both families as forms on the same coordinates with occlusion
-resolved, fuse segments and features in the same place, or move a surface and see the consequence in
-every view.
+**Claim.** (i) A depth-only map of this kind is overconfident by an amount set by the share of the
+monocular error that all frames repeat. (ii) Storing calibrated information per source on shared
+Gaussian surfels makes geometry-appearance alignment a statistic with a usable null, and a repeated
+fault exactly a between-source effect. (iii) A map built this way, by rendering alone, is better
+calibrated and more accurate than depth-only, image-only and loss-weighted alternatives, and stays
+calibrated under pose and prior errors, with its stated information falling as predicted.
 
-**Claim.** (i) On a surface entity the misfit decomposes into within-depth, within-image and
-between-family parts, and a fault repeated by every frame appears only in the last. (ii) The
-between-family tension, computed in a model where appearance cannot absorb misplacement and
-calibrated by injection, is a test with a usable null and an honest error bar, including on
-untextured entities through their outline. (iii) Gating placement on the attributed verdict, with
-heads on frozen features for entities the pixels cannot judge, improves the surface where
-information-weighted fusion, a decaying depth weight, a consensus gate and a robust loss do not.
-
-**Scope of the learning.** Self-supervised on frozen models: a frozen segmenter, frozen dense image
-features, a frozen video encoder and the frozen monocular depth model. The test is a statistic. What
-is learned are light heads on frozen features and a few dispersion parameters per appearance stratum.
-No fault labels are needed for training; a small labelled set from a scene with exact depth is
-optional, for testing assumptions and for calibration on entities the pixels cannot judge.
+**Scope of the learning.** Self-supervised on frozen models: the monocular depth model, a frozen
+segmenter, frozen dense image features and a frozen video encoder. The representation and the test
+are statistics computed through the renderer. What is learned are light heads on frozen features and
+a few dispersion parameters per appearance stratum. No fault labels are needed; a small labelled set
+from a scene with exact depth is optional, for checking assumptions and for calibration where the
+pixels are blind.
 
 **Contributions.**
 
-1. The factorisation of the image Jacobian through the depth Jacobian for planar surfels, which makes
-   depth and image evidence comparable on three placement coordinates per entity (Section 3).
-2. The exact decomposition of entity misfit, identifying the repeated fault with the between-family
-   term, and the repetition coefficient estimable without ground truth (Section 4.2).
-3. A test that cannot be explained away: a score test at the depth-placed surface with projective
-   appearance and disjoint judging frames, and the retained-information fraction as the measure of
-   what any appearance model leaves of the test (Section 4.3).
-4. Outline parallax as the label channel of the same renderer, with ownership by occlusion, and the
-   outline-against-interior test for a second layer (Section 4.4).
-5. Calibration by injection through the renderer: capture range, honesty of stated information, and
-   the fraction of a fault that appearance absorbs, as measured quantities (Section 4.5).
-6. Attribution with two gates, acting on placement and keeping the monocular shape, and the transfer
-   to pixel-blind entities with an explicit unsupported state (Sections 4.6 to 4.8).
-7. A staged decision protocol that includes the outcomes "fusion already answers the question" and
-   "the prior is not worth keeping" (Section 5).
+1. A scene representation: Gaussian surfels carrying, per surface entity and per evidence source, a
+   calibrated information record on placement, additive over frames and tiles (Section 3).
+2. The factorisation that puts depth prior and pixels on the same coordinates, and the alignment
+   measure built on it: stretch, energy, null (Sections 3.2 and 4.2).
+3. The exact three-way split of misfit, the repetition coefficient, and the consequence that honest
+   prior information saturates (Sections 4.2 and 4.6).
+4. A reading of the energy that the model cannot hide: a score test at the depth-placed surface with
+   projective appearance, and the retained-information fraction (Section 4.3).
+5. A ledger of nuisance, absorbed, deflated or detected, each with its cost (Section 4.6).
+6. Correspondence-free mapping stated exactly, with its gain and its price, including outline
+   parallax from the rendered label and the layer test for reflections (Sections 4.4 and 4.7).
+7. An evaluation by a proper score of the true surface under the map, and a staged protocol whose
+   first stage is nearly free (Section 5).
+
+**On the name.** The content is Fisher information in information form. Information-theoretic and
+Fisher-information methods for view selection, pruning and exploration with Gaussian splats exist, as
+do Bayesian and variational splatting; a short search found no method with this exact name, which is
+weak evidence that it is free. The distinguishing content is information about placement, per entity,
+per source, calibrated, and used to compare sources.
 
 ## 2. Related Work
 
-Statements about specific papers are from reading where marked *(read)* in the supporting notes and
-otherwise recalled; the search was not exhaustive.
+Statements about specific papers are marked as read or recalled in the supporting notes; the search
+was not exhaustive.
 
-**Depth-regularised splatting and neural surfaces.** Monocular depth with scale alignment is a
-standard regulariser, usually with a fixed or decaying weight. Recent work makes the supervision
-selective: masks from a virtual-stereo check on rendered depth, masks from the photometric error,
-heuristic confidence sums, and uncertainty from the consistency of monocular depth across views. These
-are the nearest systems. None of those read tests the prior against the pixels with an error bar,
-separates the repeated part of a fault, or attributes a disagreement.
+**Uncertainty and information in Gaussian splatting.** Per-Gaussian Fisher information from the
+rendering loss is used for view selection, pruning and active mapping; Bayesian and variational
+formulations keep a posterior over Gaussian parameters; SLAM systems with Gaussian maps carry
+uncertainty for tracking and keyframe selection. These keep one posterior or one score per primitive,
+for the image loss. None found keeps information per evidence source in order to compare sources, or
+calibrates it against realised scatter.
 
-**Information and uncertainty in splatting.** Per-Gaussian Fisher information from the rendering loss
-is used for view selection, pruning and uncertainty; second-order optimisers build Gauss-Newton
-systems on Gaussians. They provide the machinery for image information on primitives. They use the
-diagonal or the per-primitive block, for the image loss alone.
+**Depth-regularised splatting and selective depth supervision.** Monocular depth with scale alignment
+is a standard regulariser with a fixed or decaying weight. Recent work masks or weights it by a
+virtual-stereo check on rendered depth, by photometric error, by heuristic confidence, or by
+cross-view consistency of the depth itself. These are the nearest systems for the fault side. None of
+those read tests the prior against the pixels with an error bar or separates the repeated part.
 
-**Lifting segments and features onto Gaussians.** Segment identities and frozen features are fused
-onto primitives by rendering weights, in closed form or by optimisation. Entities and features here
-are lifted in that way.
+**Pose-free and pose-refining splatting; direct methods.** Splatting without structure-from-motion
+poses already uses monocular depth to initialise, and direct methods in visual odometry align images
+without features. "Correspondence-free" here is in their tradition and inherits their capture-range
+limit. What differs is that the evidence is stored in information form on a shared map and that the
+prior is audited.
 
-**Fault detection by redundancy.** The tension between two independent estimates of the same quantity
-is solution separation in navigation integrity and a Hausman-type specification test in statistics.
-The statistic is not new; its construction for depth against pixels on surfels, its null and its
-attribution are the work.
+**Large-scale aerial splatting.** Tiled and hierarchical systems reconstruct city-scale scenes from
+structure-from-motion inputs. They are baselines for accuracy and completeness and do not store or
+evaluate what the map knows.
 
-**Plane plus parallax, layered motion and feature-metric reprojection.** Stabilising by a reference
-geometry and reading the residual motion is classical, as are motion layers and losses that compare
-warped and real images or features. The stabilised clip of one frame is the single-message special
-case of the test.
+**Fault detection by redundancy.** Data snooping, solution separation and specification tests compare
+estimates of one quantity from different evidence. The energy between two sources is of this family;
+the statistic is classical and its construction on surfels is the work.
 
-**Video foundation models.** Joint-embedding predictive video encoders provide spatiotemporal tokens;
-promptable segmenters provide regions. No released video predictor is conditioned on camera pose, and
-the segmenters have no promptless video mode, so the expectation is formed by rendering and entities
-by lifting.
+**Lifting segments and features; video foundation models.** Segment identities and frozen features
+are fused onto Gaussians by rendering weights. No released video predictor is conditioned on camera
+pose and promptable segmenters have no promptless video mode, so expectations are formed by rendering
+and entities by lifting.
 
-## 3. Two Messages on One Primitive
+## 3. The Representation
 
 ### 3.1 Depth message
 
@@ -209,6 +241,33 @@ The working hypothesis, stated for the error of the prior and not for the surfac
 error on an entity is low-order: an offset and two tilts, with a remainder. The surface itself may be
 curved. Whether this holds is the first thing to measure.
 
+### 3.4 The record
+
+Per entity $m$ and per source $s$ (the depth family; the colour, frozen-feature and label channels of
+the image family; a weak regulariser) the map stores
+
+```math
+\bigl( \Lambda^s_m,\ \boldsymbol\eta^s_m,\ \hat\varphi^s \bigr), \qquad
+\Lambda^s_m = \sum_i \Lambda^s_{im}, \quad \boldsymbol\eta^s_m = \sum_i \boldsymbol\eta^s_{im} ,
+```
+
+a symmetric $3 \times 3$ matrix, a 3-vector and a dispersion: ten numbers per source. Three properties
+make this a representation for large areas.
+
+- *Additive.* Frames add. Tiles add. Leaving out a block of frames is a subtraction. Two maps of the
+  same ground merge by adding records, source by source.
+- *Local.* An entity is coupled to its neighbours through shared pixels and to other entities only
+  through shared per-frame nuisance. The structure is the sparse entity-by-frame pattern of bundle
+  adjustment, and its size grows linearly with area at fixed overlap.
+- *Separable.* Because sources are not summed, any source can be removed, reweighted or tested
+  afterwards without revisiting the images.
+
+Derived fields per entity: *knowledge*, $\tfrac12 \log\det \Lambda_m$ in nats; *what appearance says
+about geometry*, the mutual information
+$\tfrac12 \log\det(\mathbf I + (\Lambda^{D}_m + \Lambda^0_m)^{-1} \Lambda^I_m)$ in nats; *who is speaking*,
+the generalised eigenvalues $\vartheta$ of $(\Lambda^I_m, \Lambda^D_m)$ per placement direction; and
+*surprise*, the energy of Section 4.2.
+
 ## 4. Method
 
 ### 4.1 Entities, features and labels on the primitives
@@ -262,6 +321,11 @@ $\varrho = \operatorname{tr}\Sigma_\mu / (\operatorname{tr}\Sigma_\mu + \operato
 the share of monocular error variance in the surface term, is estimated from the first and third
 components without ground truth, as a function of the left-out block. A plateau above zero is what no
 consensus method can see.
+
+**Units.** The stretch $\mathbf t_m$ is in metres of offset and radians of tilt; the stiffness in
+their inverse squares; the energy $E_m = T_m / 2$ is dimensionless, in nats, and is the
+log-likelihood ratio of "the two sources see one surface" against "they see two". Over $M$ tested
+entities, $\sum_m T_m / (3M)$ is one number that should be one.
 
 **Null distribution.** Image residuals at a fit are model misfit, not sensor noise, and are spatially
 correlated, so the nominal image information is far too large. The within-image term supplies the
@@ -345,7 +409,7 @@ depth. A reflector with no attached outline in view, and an object moving along 
 speed, remain image-consistent and unresolved: they are to the image family what the repeated fault
 is to the depth family.
 
-### 4.5 Injection through the renderer
+### 4.5 Honest information: injection through the renderer
 
 Move the surfels of an entity by a known $\boldsymbol\delta$ and re-render every frame. With
 projective appearance, any statistic $S$ of rendered against real frames satisfies the exchange
@@ -375,7 +439,82 @@ is as blind as any matcher where the image has no structure. It is admitted only
 estimate agrees with the photometric and feature channels where both are informative, and it is of
 interest where it has a larger capture range.
 
-### 4.6 Attribution and when to listen
+### 4.6 Nuisance: absorbed, deflated or detected
+
+A nuisance that spans a known low-dimensional subspace of the evidence is projected out, and the map
+loses exactly the information in that subspace. For a nuisance block $\mathbf q$ with prior
+information $\Sigma_q^{-1}$,
+
+```math
+\Lambda^{\mathrm{marg}}_{\theta\theta} = \Lambda_{\theta\theta} - \Lambda_{\theta q} \bigl( \Lambda_{qq} + \Sigma_q^{-1} \bigr)^{-1} \Lambda_{q\theta} ,
+```
+
+and the retained fraction $\operatorname{tr}\Lambda^{\mathrm{marg}} / \operatorname{tr}\Lambda$ is the
+stated cost.
+
+| Nuisance | Fate | What is lost or assumed |
+| --- | --- | --- |
+| Pose of a frame, with a prior from navigation or an earlier adjustment | absorbed in the image family | a pose error moves all entities of a frame together; projecting it out removes the image evidence about that common mode. Absolute placement is known no better than the poses; relative placement between entities is kept. An entity that fills the frame retains almost nothing |
+| Scale and offset of a depth map, shared distance bias | absorbed in the depth family | the prior says nothing about a frame-wide affine error; only shape and relative placement within a frame remain |
+| Exposure per frame; appearance | absorbed in the image family | cost measured by $\kappa_m$ |
+| Rendering misfit: surfel resolution, resampling, residual view dependence | deflated by the dispersion $\hat\varphi$ | all stiffness of the source is reduced by a measured factor, and with it the power of every test |
+| Per-frame term of the prior error | deflated: variance $\Sigma_\alpha$ | assumed independent beyond the left-out block |
+| Ordinary surface term of the prior error | deflated: variance $\Sigma_\mu$ | the prior's information saturates (below) |
+| Segmentation into entities, depth order, surfel scales | assumed | flagged in part by the within-entity remainder and outline consistency |
+| Surface term in the tail: a regional fault | detected by the between-source energy | cannot be absorbed: it has no global form |
+| Planar reflection, object moving along the strip | detected in part, by outline against interior and by cross strips | not detected without an attached outline |
+| Gross pose blunder, scene change between passes | outside the model | shows as inflated dispersion of a frame or pass |
+
+**Honest prior information saturates.** With a surface term of covariance $\Sigma_\mu$ shared by all
+frames and per-frame terms of covariance $\Sigma_\alpha$, the information that $n$ frames of
+monocular depth carry about an entity's placement is
+
+```math
+\Lambda^{D,\mathrm{honest}}_m = \bigl( \Sigma_\mu + \Sigma_\alpha / n \bigr)^{-1} \ \le\ \Sigma_\mu^{-1} ,
+```
+
+however many frames repeat. Nominal blocks added per frame grow without bound and silence the pixels;
+the saturated form lets the pixels speak at the right rate with no gate at all. The fused error
+variance of a depth-only map is about $\varrho + (1 - \varrho)/n$ of a single frame's, where the
+nominal map states $1/n$: this is the predicted overconfidence, and it is measurable before any image
+evidence is used. The gate is needed only for the tail beyond that law.
+
+Two limits follow. A fault that lies in an absorbed subspace is invisible by construction, so a fault
+filling most of a frame cannot be told from a pose or scale error. And the fates compete: every
+nuisance absorbed lowers the stiffness available for detection, so each must earn its place by a
+measured retained fraction.
+
+### 4.7 Correspondence-free: the exact sense, the gain, the price
+
+**The sense.** No discrete association between image points is estimated, stored or trusted. A pixel
+is associated with the primitives it renders, softly, by the compositing weights, and the association
+is recomputed whenever the map changes. The primitive is the correspondence. If the input poses come
+from a feature-based adjustment, the claim covers the mapping stage; it covers the pipeline only when
+poses come from navigation sensors and are corrected inside the model.
+
+**The gain.** Weak texture lowers stiffness continuously instead of breaking a matcher, so abstention
+is a value of the stored field and not a missing datum. Every pixel contributes, including outlines
+of untextured regions through the label channel. Occlusion is consistent across all evidence. Cost is
+linear in pixels with no track management, and the evidence arrives in information form.
+
+**The price.** The comparison is local. The pull is a valid estimate only while the misplacement
+shifts the image by less than the correlation length of the texture, a few pixels, or of a feature
+channel, a few patches. Beyond that the gradient has no direction: detection survives, because a
+decorrelated region has a large saturated misfit, but estimation does not. Three things widen the
+range: coarse channels, a one-dimensional sweep of an entity's offset through the renderer, and above
+all the prior, which starts every surface near its place. Explicit matching has a far larger capture
+range and remains the better tool where the prior is absent or grossly wrong.
+
+**Cross view.** Evidence is cross-view in that every frame speaks about the same primitives. Views
+from other strips, cameras or passes (nadir and oblique, crossing lines, repeated flights) enter the
+same way. They stiffen the placement directions one strip leaves soft and expose objects moving along
+a strip. They also strain the assumptions, since diffuse appearance fails sooner under large changes
+of viewing angle and illumination changes between passes; the model carries a dispersion and an
+exposure term per pass, and the within-image misfit splits into within-pass and between-pass parts.
+Under strong appearance change the label channel, outline parallax, is the evidence that survives.
+Ground-to-aerial matching is outside what is claimed.
+
+### 4.8 Attribution and when to listen
 
 Tension is symmetric. Three hypotheses per entity:
 
@@ -407,7 +546,7 @@ direction. For a fault of given harm, detectability rises with the pixels' share
 so the indicator's own contribution is confined to the second and third rows, and evaluation is
 weighted by harm.
 
-### 4.7 What is learned, and transfer to pixel-blind entities
+### 4.9 What is learned, and transfer to pixel-blind entities
 
 No backbone is trained. The learned parts are:
 
@@ -436,25 +575,29 @@ pixel-blind entity.
 Material strata can come from noun-phrase prompts of a promptable segmenter. As covariates they cost
 only efficiency if wrong; where they switch the model they must be confirmed by the layer test.
 
-### 4.8 Use in reconstruction
+### 4.10 Mapping
 
-1. **Placement gate.** The depth message of an entity is split into its component along the three
-   placement directions and the remainder. The gate acts on the placement component only, so a faulty
-   entity keeps the shape of its monocular depth and takes its placement from the pixels, or, if
-   pixel-blind, is left free in placement and reported as such. Detection and repair are one
-   operation.
-2. **Image gate.** The interior image messages of an entity attributed to a second layer are removed;
-   its outline messages are kept.
-3. **Nuisance parameters.** Per-frame scale and offset and the distance bias are estimated with the
-   gates applied, against image-witnessed placement where the pixels dominate, so that no nuisance
-   parameter absorbs a fault.
-4. **The reconstruction is a separate fit.** After the verdict, geometry and appearance are fitted to
-   both families under the gates, with the indicator held fixed. The test model with projective
-   appearance is not the final model.
-5. **Fits compared.** Pixels only; depth only; both with a fixed weight; both with a decaying depth
-   weight; both by information without gates; both with gates.
+1. **Initial placement** from the monocular depth maps alone, with per-frame scale and offset and the
+   shared distance bias absorbed. This is the step that needs no pixels and brings every surface
+   within the capture range.
+2. **Records.** Depth and image records are accumulated per entity through the renderer, with
+   projective appearance from source frames and disjoint judging frames, and calibrated.
+3. **Fusion by information.** With honest records the fused placement weights the pixels by
+   $\vartheta / (1 + \vartheta)$ per direction. No schedule or hand-set weight between depth and
+   photometric terms is involved.
+4. **Gates.** Where the energy is in the tail, the attribution gates the placement component of the
+   depth record, keeping the monocular shape, or the interior image record of a second-layer entity.
+   Detection and repair are one operation. Pixel-blind entities are governed by the prior heads or
+   reported as unsupported.
+5. **Refit.** Geometry and appearance are fitted to both sources under the gates with the indicator
+   held fixed. The test model with projective appearance is not the final model.
+6. **Large area.** Records add across tiles; a tile is processed with its frames, and overlapping
+   tiles merge by adding records source by source. Per-frame nuisance couples the tiles a frame sees.
 
-### 4.9 Why primitives
+Maps compared: pixels only; depth only; both with a fixed weight; both with a decaying depth weight;
+both by information without gates; both with gates.
+
+### 4.11 Why primitives
 
 The primitives have a job if, and only if, these are used: both families as quadratic forms on the
 same placement coordinates with occlusion resolved, so that information ratios, tension and gates are
@@ -463,7 +606,7 @@ place by the same weights; and injection as a move of a group with correct occlu
 surface with a differentiable renderer would serve. The planar surfel is the one for which placement
 is three numbers and the factorisation is exact.
 
-### 4.10 What exists and what must be built
+### 4.12 What exists and what must be built
 
 *Exists in the code:* a depth-only surfel fit with placeholder colour and its own ray-plane depth; a
 reference renderer giving per-pixel, per-surfel weights and depth Jacobians, with the lumped depth
@@ -480,59 +623,69 @@ products; memory and speed of the foundation models; their behaviour on nadir ae
 
 ## 5. Experiments
 
-### 5.1 Evaluation targets
+### 5.1 What must be shown, and how it is scored
 
-On data with exact depth: the true placement error of every entity per frame and its split into
-surface and per-frame terms; the true-fault mask; surface classes; the information ratio $\vartheta$
-per entity and direction; and true second-layer entities (water, glazing).
+A stored information is a forecast of error, so the primary experiment is calibration against exact
+geometry. The headline metric is the **surface log-score**: the negative log density of the true
+surface under the map, in nats per square metre. It is a proper scoring rule over geometry and
+information jointly: it cannot be improved by inflating or deflating the stated information, and it
+falls when either the geometry or its error bar improves. Reported with it: the robust scale of the
+standardised placement error (one if honest, above one if overconfident), coverage of the 68% and 95%
+regions, accuracy and completeness, each per surface class and per provenance.
 
-### 5.2 The deciding measurement, in stages
+### 5.2 Stages, cheapest decisive first
 
 **Stage 0, on a CPU.** A synthetic entity with known offset and tilt on the reference renderer: does
-the image message recover the injected placement, and how large and how stable is its variance
-inflation? On exact depth of a synthetic aerial block, with single-image masks: how much monocular
-fault energy is an offset and tilt per mask, against tiles of equal count; and the variance components
-$\Sigma_\mu$, $\Sigma_\alpha$ and $\varrho(B)$ from true errors.
+the image record recover the injected placement, and how large and how stable is its dispersion?
 
-**Stage A: is the image message a measurement?** On an existing photometric model and the
-depth-placed surface, by injection: capture range per image scale and channel; the honesty ratio per
-surface class; the fraction of an injected fault absorbed under four appearance regimes (projective;
-diffuse fitted; view-dependent; view-dependent with densification).
+**Stage A. Is a depth-only information map dishonest, and by how much?** The existing depth-only
+pipeline with real monocular depth on a synthetic aerial block with exact depth. Scale of the
+standardised error and log-score per class; the same after the consensus gate; the repetition
+coefficient against the left-out block, and the overconfidence it predicts,
+$\varrho + (1 - \varrho)/n$ against the stated $1/n$. One depth pass and CPU work.
 
-**Stage B: the tension against real monocular faults.** Null calibration from placebo tensions;
-detection of true placement faults, overall and for the surface term; attribution on water and
-glazing; the gated fit against the alternatives of Section 4.8; transfer of the prior heads to
-pixel-blind entities.
+**Stage B. Is the pixel stiffness honest, and how far does it reach?** By injection on the
+depth-placed surface: capture range per channel and image scale; stated against realised information
+per surface class; the fraction of an injected fault that each appearance regime absorbs; the same
+against the residual parallax the prior actually leaves.
 
-**The approach is abandoned if any of:**
+**Stage C. Does the two-source map win?** The maps of Section 4.10 on the log-score, calibration,
+accuracy and completeness. Distribution of the energy on healthy entities; detection of true
+placement faults by repetition coefficient; attribution on water and glazing.
 
-- K1, wrong unit: masks explain no more fault energy than tiles of equal count.
-- K2, nothing repeated: $\varrho(B)$ falls to zero within a few frames.
-- K3, not a measurement: on textured land no scale or channel recovers injected faults of realistic
-  size; or on blank and water classes stated information exceeds realised information by more than a
-  factor of three for every estimator and no correction is stable.
-- K4, always explained away: no appearance regime absorbs less than half of an injected fault while
-  rendering healthy surface nearly as well as the unrestricted model.
-- K5, no usable null: healthy entities have a tension whose robust scale is far from nominal after
-  the label-free corrections.
-- K6, rendering adds nothing: the tension matches a hand-warped per-frame parallax gap.
-- K7, fusion already answers the question: the gated fit does not beat information-weighted fusion
-  without gates, or a decaying depth weight, on the harm-weighted metric.
-- K8, not better than existing selective supervision on repeated faults.
-- K9, no transfer, or the prior is not worth keeping: on pixel-blind entities the heads do not exceed
-  the per-stratum fault rate, or reconstruction without the prior does as well as with a perfect gate.
+**Stage D. Nuisance.** Ladders of injected pose noise, depth scale and offset error, and exposure
+change: calibration must stay flat and stated information must fall as the retained fraction
+predicts. Regional faults and reflections must not be absorbed; they must be detected.
+
+**Stage E. Large area.** Additivity of records across tiles; completeness on weak texture against
+matching pipelines; cost against area.
+
+**The line stops if any of:**
+
+- S1. The depth-only map is already honest: no overconfidence, or none that the repetition
+  coefficient explains. The problem does not exist on that data.
+- S2. The image record is not a measurement: no channel or scale recovers injected displacements of
+  the size the prior leaves, or its dispersion is so large that realistic faults carry no energy.
+- S3. Always explained away: no appearance regime keeps most of an injected fault while rendering
+  healthy surface nearly as well as the unrestricted model.
+- S4. Stated covariance does not predict placement error after the label-free corrections.
+- S5. Fusion already answers it: gates add nothing over information-weighted fusion with saturated
+  prior information, or a decaying depth weight matches every gain.
+- S6. Matching wins at every texture level on accuracy and completeness, so being correspondence-free
+  buys nothing.
+- S7. Calibration breaks under injected pose or prior error instead of information falling.
+- S8. The entity is the wrong unit: masks explain no more fault energy than tiles of equal count.
 
 Thresholds for each are fixed in the experiment design before measurement.
 
 ### 5.3 Baselines
 
-No depth term; fixed depth weight; decaying depth weight; robust depth loss; removal of whole frames;
-the consensus gate; the depth model's own confidence; disagreement between several depth models and
-instability under input transformations; masks from a virtual-stereo check, from photometric error and
-from cross-view depth consistency; heuristic confidence sums; per-Gaussian Fisher weighting;
-information-weighted fusion without a test; the hand-warped parallax gap per frame; the per-stratum
-fault rate; a linear probe on frozen features at equal label budget; multi-view stereo and a
-feed-forward multi-view model without any monocular prior. Bounds: an oracle gate with true masks.
+Depth only; pixels only; fixed and decaying depth weights; robust depth loss; removal of whole frames;
+the consensus gate; selective depth supervision by virtual-stereo masks, photometric-error masks,
+cross-view depth consistency and heuristic confidence; per-Gaussian Fisher uncertainty and Bayesian
+splatting as alternative information fields, scored on the same log-score; structure-from-motion with
+multi-view stereo; large-scale aerial splatting on matched inputs; a feed-forward multi-view model.
+Bounds: an oracle gate with true masks.
 
 ### 5.4 Protocol
 
@@ -545,22 +698,23 @@ repeated on real scenes, which decide where the two disagree.
 
 ## 6. Limitations
 
-- **The image null is the weakest point.** Rendering residuals are model misfit. If their dispersion
-  at surfel resolution swamps real fault sizes, the renderer cannot judge.
-- **Pixel-blind entities** (blank interior and no owned outline in view) are judged by heads alone,
-  and a surface-term fault on them is beyond every label-free check.
+- **Honest image information may be small.** If dispersion from surfel-resolution misfit is large,
+  the image spring is too soft to judge, and the correct output of the map is "little is known".
+- **The capture range is short.** Mapping by rendering alone depends on the prior placing surfaces
+  within a few pixels of residual parallax; where it does not, a sweep or matching is needed.
+- **Absorbed directions are blind.** Absolute placement is no better than the poses, and a fault
+  filling most of a frame is confounded with pose and scale.
+- **Independence of the two sources is an assumption.** Both read the same image: the depth network
+  from one frame, the renderer from several.
+- **Pixel-blind entities** are judged by heads alone, and a repeated fault on them is beyond every
+  label-free check.
 - **Image-consistent wrong geometry**, a reflector without attached outline or constant-speed motion
   along the strip, passes every image test.
-- **The test is silent where pixels are silent**, so a decaying depth weight may match it; this is a
-  stated kill criterion.
 - **The entity may be the wrong unit**, and frozen segmenters may not form repeatable regions on
   water and glazing in nadir views.
-- **Gross faults are outside the linear range** and need a profile by re-rendering.
-- **Independence of the two families** is an assumption once pose error is removed; they share poses
-  and the surfel discretisation.
-- **The statistic is classical.** The contribution is its construction, null and attribution for
-  depth against pixels on surfels, and overlap with selective depth supervision in splatting must be
-  examined further.
+- **The statistic and the information are classical.** The contribution is the representation, per
+  source and calibrated, and what it makes measurable; overlap with uncertainty-aware splatting and
+  selective depth supervision must be examined further.
 
 ## 7. Notation
 
@@ -579,3 +733,6 @@ repeated on real scenes, which decide where the two disagree.
 | $\zeta^D_m$, $\zeta^I_m$; $\pi^D$, $\pi^I$; $e(\boldsymbol\phi)$ | verdicts on depth and on pixels; prior heads; support head |
 | $\boldsymbol\phi_m$ | frozen features pooled over the entity |
 | $a_i, b_i, \beta$; $\sigma_i$, $\sigma_I$ | per-frame scale and offset, distance bias; depth and image noise |
+| $\Lambda^s_m$, $\boldsymbol\eta^s_m$, $\hat\varphi^s$ | the record of source $s$ on entity $m$: information, pull, dispersion |
+| $E_m$ | stored energy $T_m / 2$, in nats |
+| $\mathbf q$, $\Sigma_q$ | nuisance block and its prior covariance |
