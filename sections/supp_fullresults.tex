@@ -95,6 +95,39 @@ for the loop without the scene temperature or without whitening.}
 \end{figure}
 
 \FloatBarrier
+\subsection{A Non-Planar Check: the Stanford Bunny}
+\label{sec:results:bunny}
+E1 places surfels on the exact geometry, and the unit tests of the fitted gate used a single tilted
+plane, where a planar surfel has no model error. To see the fitted gate on relief, six $32\times32$
+depth views of the Stanford bunny \cite{data_bunny} were rendered (decimated to 2354 triangles, scaled to
+1.5~m, cameras on a 60$^{\circ}$ arc at 3~m), with independent noise of 5~mm and, in the faulty case,
+$+5$~cm on a $16\times16$ pixel window of view v3 (186 pixels on the bunny). The surfels were fitted from
+the depth alone (numpy reference backend, about 270 surfels), and the gate ran one round with Holm over
+$M=6$ tests (Figure~\ref{fig:bunny}). With the default noise seed, the faulty view was the only one
+excluded ($p=1.4\times10^{-4}$), and no view was excluded in the clean scene; these two cases are the
+golden regression test in the code repository. The bunny also exposed three failures that the plane
+hid. First, the views at the ends of the arc are weakly constrained: with another noise seed, the clean
+end view v0 was excluded ($p=1.7\times10^{-14}$; its neighbour v1 was also below the threshold), and the same fault on the other end view, v5, was
+missed ($p=0.23$). Second, the gate needs surfels fine enough for the relief: with about 65 surfels it
+missed the fault on v3 and excluded a clean view, and stopping the fit early also produced false alarms.
+Third, with the gsplat backend the clean scene lost v3 ($p\approx6\times10^{-13}$), so the gsplat fit
+does not yet pass this scene; the faulty case still excluded v3, but that does not show detection.
+
+\begin{figure}[!htbp]
+\centering
+\input{\mfigdir/fig_bunny.tex}
+\caption{The gate on a non-planar scene, the Stanford bunny (numpy reference backend, one round).
+(\textbf{a})~The scene: the bunny (1.5~m) and the six cameras, 3~m away on a 60$^{\circ}$ arc; the
+faulty view v3 is in red. (\textbf{b})~Depth of view v3 with the $+5$~cm window (dashed red).
+(\textbf{c})~Per-view $-\log_{10}p$ in the clean scene and with the fault on v3, for the noise seed of
+the regression test. (\textbf{d})~The two failures at the ends of the arc: a false alarm on v0 in the
+clean scene with another noise seed, and a missed fault on v5. Dashed orange: the first Holm threshold,
+$\alpha/M$ with $\alpha=0.05$ and $M=6$; ``excl.'' marks an excluded view. Data: \texttt{results/bunny}.}
+\label{fig:bunny}
+\end{figure}
+
+\FloatBarrier
+
 \subsection{RGB Rendering Check}
 \label{sec:results:rgb}
 The gate uses depth only. To check that the same block also supports a photometric surfel model, one
