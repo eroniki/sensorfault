@@ -115,6 +115,12 @@ information block $\Lambda_k$ over its geometric perturbation, accumulated at th
 
 with $\mathbf g_{uk}$ the Jacobian of the rendered depth of pixel $u$ with respect to surfel $k$.
 
+**Distance bias.** The bias $\beta$ is a single scalar, estimated jointly with the surface by least
+squares over all views; it is not absorbed into the surfel geometry. Its normal equations are a sum of
+per-view terms, in which the regressor $\hat D_i^2$ is first projected against $[\hat D_i, 1]$ so that
+$\beta$ is not confounded with the per-view scale and offset. We write
+$\tilde D = \hat D + \beta \hat D^2$ for a rendered depth mapped into measurement space.
+
 **Leave-block-out.** For a tested view $j$, let $\mathcal B_j$ be a block of $B$ neighbouring frames of
 the same strip that contains $j$. The surface without the block follows from one subtraction and one
 Newton step,
@@ -124,21 +130,52 @@ Newton step,
 \boldsymbol\mu_k^{(-j)} = \boldsymbol\mu_k + \bigl(\Lambda_k^{(-j)}\bigr)^{-1} \sum_{i \in \mathcal B_j} \nabla_k \mathcal L_i ,
 ```
 
-which is exact for a linear Gaussian model. Surfels that the block created or mostly supported are
-dropped. Rendering the result into view $j$ gives the *cavity* depth $\hat D_{-j}(u)$, its variance
+which is exact for a linear Gaussian model. The distance bias is downdated in the same way: the block's
+terms are subtracted from its normal equations, giving $\beta_{-j}$ and its variance
+$\operatorname{Var}(\beta_{-j})$, so the tested view does not inform the bias it is corrected with.
+Surfels that the block created or mostly supported are dropped. Rendering the result into view $j$ gives the *cavity* depth $\hat D_{-j}(u)$, its variance
 $V_{-j}(u)$ and the accumulated opacity $O_{-j}(u)$. Pixels with $O_{-j}(u)$ below a threshold are
 *untestable*: no view outside the block observes them. Let $\Omega_j$ be the testable pixels.
 
-**Residual.** With $(a_j, b_j)$ fitted by weighted least squares on $\Omega_j$,
+**Accuracy of the one-step cavity.** The surfel parameters enter the rendered depth nonlinearly, so the
+single step is an approximation whose error grows with the share of a surfel's information that the
+block removes,
 
 ```math
-r_j(u) = \hat d_j(u) - \bigl(a_j \hat D_{-j}(u) + b_j\bigr), \qquad
-v_j(u) = \sigma_j^2(u) + a_j^2 V_{-j}(u), \qquad
+\phi_k^{(j)} = \frac{\operatorname{tr}\bigl(\sum_{i \in \mathcal B_j} \Lambda_k^{(i)}\bigr)}{\operatorname{tr}\bigl(\Lambda_k - \Lambda_0\bigr)} \in [0, 1] .
+```
+
+For large blocks and surfels seen at grazing incidence, $\phi_k^{(j)}$ approaches one, the step is long,
+and both the cavity depth and its variance can be off. We handle this in three ways. Surfels with
+$\phi_k^{(j)}$ above the support threshold are dropped, as above. For the remaining surfels touched by
+the block, the step can be replaced by up to $K$ damped Gauss-Newton iterations on the loss of the views
+outside the block, with all other surfels held fixed; $K = 1$ is the plain step. And the rendered
+removed share $\Phi_{-j}(u) = \sum_k w_{uk}\, \phi_k^{(j)}$ is passed to the learned model as a geometric
+feature, so that the residual error of the approximation is learned as part of the null rather than
+mistaken for a fault. Section 5 tests the approximation against exact refits.
+
+**Residual.** The cavity depth in measurement space is
+$\tilde D_{-j} = \hat D_{-j} + \beta_{-j} \hat D_{-j}^2$. The alignment $(a_j, b_j)$ is fitted on
+$\Omega_j$ by iteratively reweighted least squares,
+
+```math
+(a_j, b_j) = \arg\min_{a, b} \sum_{u \in \Omega_j} \rho_j(u)\, \frac{\bigl(\hat d_j(u) - a\, \tilde D_{-j}(u) - b\bigr)^2}{v_j(u)} ,
+```
+
+with robustness weights $\rho_j(u)$. Plain least squares ($\rho_j = 1$) would let a large regional
+fault pull the alignment towards itself and bias the residual on the clean remainder of the view. The
+weights are therefore Huber weights in a first pass and $\rho_j(u) = 1 - \zeta_j(u)$ once the indicator
+of Section 4.4 is available; alignment and indicator are alternated a few times per view, each
+alignment being a closed-form $2 \times 2$ solve. The residual and its nominal variance are
+
+```math
+r_j(u) = \hat d_j(u) - \bigl(a_j \tilde D_{-j}(u) + b_j\bigr), \qquad
+v_j(u) = \sigma_j^2(u) + a_j^2 \bigl(1 + 2\beta_{-j} \hat D_{-j}(u)\bigr)^2 V_{-j}(u) + a_j^2\, \hat D_{-j}(u)^4 \operatorname{Var}(\beta_{-j}), \qquad
 z_j(u) = \frac{r_j(u)}{\sqrt{v_j(u)}} .
 ```
 
 Under the nominal model and without a fault, $z_j(u)$ has zero mean and unit variance. The statistical
-gate tests this hypothesis. Everything up to here is kept; the remainder of the paper replaces the test.
+gate tests this hypothesis. The cavity is kept; the remainder of the paper replaces the test.
 
 ## 4. Method
 
@@ -157,7 +194,7 @@ The feature stack of view $j$ is split by what it may inform.
 | Group | Channels | Symbol |
 | --- | --- | --- |
 | Residual | $z_j$, and $\lvert z_j\rvert$ | $\mathbf x^{z}_j$ |
-| Geometry | $\sqrt{V_{-j}}$, $\sigma_j$, $O_{-j}$, range, incidence angle, number of supporting views | $\mathbf x^{g}_j$ |
+| Geometry | $\sqrt{V_{-j}}$, $\sigma_j$, $O_{-j}$, removed information share $\Phi_{-j}$, range, incidence angle, number of supporting views | $\mathbf x^{g}_j$ |
 | Appearance | RGB of view $j$ or frozen image features; depth-model confidence where available | $\mathbf x^{a}_j$ |
 
 ### 4.3 Contamination Model
@@ -176,13 +213,27 @@ with residuals clipped to $[-Z, Z]$. The outlier density is fixed, has no parame
 states only that a faulty depth can be anywhere in a wide range. The two fields come from two heads,
 
 ```math
-c_j(u) = \operatorname{sigm}\Bigl( g_\theta\bigl(\mathbf x^{z}_{j,\setminus u},\ \mathbf x^{g}_j,\ \mathbf x^{a}_j\bigr)(u) \Bigr), \qquad
+c_j = \operatorname{sigm}\Bigl( G_\theta\bigl[\mathbf x^{z}_j;\ \mathbf x^{g}_j,\ \mathbf x^{a}_j\bigr] \Bigr), \qquad
+\frac{\partial c_j(u)}{\partial \mathbf x^{z}_j(u')} = 0 \ \text{ for } \lVert u' - u \rVert \le R ,
+```
+
+```math
 s_j(u) = s_{\min} + (s_{\max} - s_{\min}) \operatorname{sigm}\Bigl( h_\psi\bigl(\mathbf x^{g}_j\bigr)(u) \Bigr),
 ```
 
-where $\mathbf x^{z}_{j,\setminus u}$ denotes the residual channels with a blind spot at $u$: the prior at
-a pixel is computed from the residuals of its neighbourhood, never from its own. The scale head
-receives geometry only.
+where $G_\theta$ is a convolutional operator on whole fields whose kernels on the residual channels are
+masked, so that its output at $u$ does not depend on the residuals inside a disc of radius $R$ around
+$u$: the receptive field on the residual channels is a ring. The prior at a pixel is thus computed from
+the residuals of its surroundings, never from its own. The geometry and appearance channels are not
+masked. The scale head $h_\psi$ receives geometry only.
+
+**Blind-spot radius.** Depth residuals are spatially correlated, with the calibrated correlation
+$C(\lVert u - u' \rVert)$ of length scale $\ell$. A one-pixel blind spot is not enough: the adjacent
+pixels would reveal the noise at $u$ through this correlation, and the prior could again follow the
+pixel's own residual. $R$ is therefore set to the distance at which the calibrated correlation falls
+below a small value, $C(R) \le 0.1$. It must stay well below the extent of the faults of interest, or
+the ring no longer overlaps the faulty region; with a minimum fault area of 2% of the view this leaves a
+wide admissible range, and $R$ is ablated.
 
 The mixture density of one residual is
 
@@ -249,7 +300,9 @@ poorly supported surface, both of which are visible in $\sqrt{V_{-j}}$, $O_{-j}$
 ordinary noise. Two things oppose this. First, the outlier density is fixed at $1/(2Z)$, which is lower
 than the inlier density for every moderate residual, so calling an inlier an outlier costs likelihood.
 Second, without the blind spot the prior could copy the pixel's own residual, and the mixture would
-degenerate to the pointwise maximum of the two densities. With the blind spot, the prior must predict
+degenerate to the pointwise maximum of the two densities; a blind spot narrower than the noise
+correlation length would allow the same through the neighbours. With a blind spot of radius $R$, the
+prior must predict
 whether a pixel is faulty from its surroundings, which is possible exactly for the faults of interest:
 regional, and correlated with appearance.
 
@@ -326,6 +379,16 @@ exchangeable with the calibration views, then $\Pr(S > \hat t) \le \alpha$. Cali
 $S_j$ over a scene gives a scene-level rate in the same way. The assumption of fault-free calibration
 scenes is at scene level and involves no pixel labels; violations make the threshold conservative.
 
+**Sensitivity to shift.** The conformal guarantee is marginal over the calibration distribution. A test
+flight at another altitude, overlap or scene type is not exchangeable with the calibration scenes, and
+the realised rate can then differ from $\alpha$ in either direction. Three measures limit this. The
+score is a relative area on standardised residuals, so its clean distribution depends on acquisition
+only through what the learned null fails to absorb. Calibration can be weighted for covariate shift
+(weighted conformal prediction) with acquisition covariates: ground sampling distance, number of
+supporting views, block size, and testable fraction. And the model null below is specific to the test
+view, so a large gap between the two thresholds is itself a warning of shift. Cross-dataset transfer of
+the threshold is tested directly (Section 5.2).
+
 **Model null.** Sample residual fields from the fitted inlier model, $z \sim \mathcal N(0, s_j^2)$ with
 the calibrated spatial correlation, pass them through the indicator and the pooling, and take the
 $(1-\alpha)$ quantile of the resulting scores. This needs no calibration scenes and is specific to the
@@ -337,7 +400,7 @@ Under the contamination model, the expected complete-data negative log-likelihoo
 the indicators, is a weighted depth loss:
 
 ```math
-\mathcal L_{\mathrm{depth}} = \sum_i \sum_u \bigl(1 - \zeta_i(u)\bigr)\, \frac{\bigl(\hat d_i(u) - a_i \hat D_i(u) - b_i\bigr)^2}{2\, s_i(u)^2\, \sigma_i(u)^2} ,
+\mathcal L_{\mathrm{depth}} = \sum_i \sum_u \bigl(1 - \zeta_i(u)\bigr)\, \frac{\bigl(\hat d_i(u) - a_i \tilde D_i(u) - b_i\bigr)^2}{2\, s_i(u)^2\, \sigma_i(u)^2} ,
 ```
 
 and the information that view $i$ contributes to surfel $k$ is weighted alike,
@@ -346,7 +409,9 @@ and the information that view $i$ contributes to surfel $k$ is weighted alike,
 \Lambda_k^{(i)} = \sum_u \bigl(1 - \zeta_i(u)\bigr)\, \frac{a_i^2\, \mathbf g_{uk}^\top \mathbf g_{uk}}{s_i(u)^2\, \sigma_i^2(u)} .
 ```
 
-Reconstruction is therefore expectation-maximisation on the joint model, with one deviation that is the
+The same weights enter the closed-form updates of $(a_i, b_i)$ and the normal equations of $\beta$, so
+no nuisance parameter is fitted to faulty pixels. Reconstruction is therefore expectation-maximisation
+on the joint model, with one deviation that is the
 point of the method: the E-step for view $j$ is computed against the cavity, not against the full
 surface. A view cannot lower its own fault posterior by having shaped the surface it is compared with.
 This is the cavity construction of expectation propagation applied to an outlier model.
@@ -358,21 +423,22 @@ fitted, so the surface fit cannot reduce its loss by raising $\zeta$.
 
 **Algorithm.**
 
-1. Fit the surfel surface to all depth maps with weights $w_i(u) = 1$.
-2. Accumulate the information blocks $\Lambda_k$.
-3. For each view $j$: subtract the block $\mathcal B_j$, render the cavity, form $z_j$ and the feature
-   stack.
+1. Fit the surfel surface, $(a_i, b_i)$ and $\beta$ to all depth maps with weights $w_i(u) = 1$.
+2. Accumulate the information blocks $\Lambda_k$ and the normal equations of $\beta$.
+3. For each view $j$: subtract the block $\mathcal B_j$ (surfels and $\beta$), take up to $K$ steps, render
+   the cavity, align robustly, form $z_j$ and the feature stack.
 4. Fit $(\theta, \psi)$ by minimising $\mathcal J$ (per-scene regime), or apply the amortised network.
-5. Compute $\zeta_j$ on testable pixels and the student's output on untestable ones; compute $S_j$.
+5. Compute $\zeta_j$ on testable pixels, alternating with the alignment of view $j$; take the student's
+   output on untestable pixels; compute $S_j$.
 6. Soft: set $w_j(u) = 1 - \zeta_j(u)$. Hard: remove the view with the largest $S_j > \hat t$.
 7. Refit the surface, warm-started. Repeat from step 2 until the weights change by less than a tolerance
    or a round limit is reached.
 
 ### 4.11 Architecture and Cost
 
-The prior head is a small U-Net over the concatenated channels, with the blind spot implemented by
-masked convolutions on the residual channels or by input masking with a loss restricted to masked
-pixels. The appearance channels can be frozen self-supervised image features. The scale head is a
+The prior head is a small U-Net over the concatenated channels, with the blind spot of radius $R$
+implemented by masked (ring-shaped) convolutions on the residual channels, or by masking discs of the
+input and restricting the loss to their centres. The appearance channels can be frozen self-supervised image features. The scale head is a
 shallow network on the geometry channels; because its input is low-dimensional it can also be a
 monotone lookup in range, incidence and $\sqrt{V_{-j}}$. One forward pass per tested view is negligible
 next to the $B$ backward passes that build the cavity.
@@ -411,13 +477,26 @@ by block or scene, never by view, because neighbouring frames repeat depth error
   than 2%.
 - **E7 Fitting regime.** Per-scene fitting matches or exceeds the amortised network on scenes unlike the
   training scenes (synthetic to real).
+- **E8 Cavity fidelity.** Against exact refits without the block, on a subset of views including thin
+  structures and grazing surfels and for every block size, the one-step cavity depth error stays below
+  the nominal noise and the rendered variance $V_{-j}$ matches the squared error within a factor of two.
+  Where it does not, $K \in \{2, 3\}$ steps restore it; the smallest sufficient $K$ is used throughout.
+- **E9 Robust alignment.** With a fault of $20\sigma$ over 25% of a view, the reweighted alignment keeps
+  the standardised residual on the clean remainder at zero mean and unit variance, where plain least
+  squares does not.
+- **E10 Threshold transfer.** A conformal threshold calibrated on synthetic scenes keeps the realised
+  false-alarm rate on clean views of real scenes, and across flight altitudes and overlaps, within
+  $[0.5\alpha, 1.5\alpha]$; the weighted variant and the model null are compared where it does not.
 
 ### 5.3 Baselines
 
 The statistical gate (energy statistic and region scan with a Holm step-down); aligned RMS per view; the
 depth model's confidence; a global contamination model with one prior and one scale per scene; robust
 depth losses (Huber, Geman-McClure); RobustNeRF; SpotLessSplats with depth supervision; no gate; and an
-oracle gate with true masks as an upper bound.
+oracle gate with true masks as an upper bound. All methods receive the same posed cameras, the same
+depth maps, the same per-view alignment and distance-bias model, and the same surfel initialisation,
+densification and iteration schedule, so that differences are due to the treatment of faults and not to
+the training recipe.
 
 ### 5.4 Ablations
 
@@ -425,7 +504,9 @@ No blind spot on the prior head; appearance given to the scale head; no leave-ou
 full surface); no rendered variance among the features; shifted-Gaussian outlier component; a density
 model of residual patches (normalising flow) in place of the mixture; a student trained on the
 statistical gate's flags in place of the indicator; cross-depth-model disagreement as an additional
-input; conformal threshold against model null; block size $B \in \{1, 3, 5, 9\}$.
+input; conformal threshold against model null, with and without covariate weighting; block size
+$B \in \{1, 3, 5, 9\}$; blind-spot radius $R$ from one pixel to twice the correlation length; number of
+cavity steps $K \in \{1, 2, 3\}$; plain against reweighted alignment.
 
 ### 5.5 Metrics
 
@@ -436,7 +517,7 @@ error). Transfer across depth models and from synthetic to real scenes.
 
 ### 5.6 Protocol
 
-Hyperparameters ($Z$, $s_{\min}$, $s_{\max}$, $\alpha_0$, $\beta_0$, $\lambda_c$, $\lambda_s$,
+Hyperparameters ($Z$, $R$, $s_{\min}$, $s_{\max}$, $\alpha_0$, $\beta_0$, $\lambda_c$, $\lambda_s$,
 architecture) are selected by held-out pseudo-likelihood on residuals of views not used for fitting,
 never by a detection metric. The selection rule is fixed before the evaluation masks are read.
 
@@ -447,7 +528,10 @@ never by a detection metric. The selection rule is fixed before the evaluation m
 - The pseudo-likelihood treats correlated residuals as independent up to a global deflation, so $\zeta$
   is a ranking that needs calibration before it is read as a probability.
 - Conformal control is marginal over scenes and requires exchangeability between calibration and test
-  scenes.
+  scenes; covariate weighting corrects only for shift in the covariates it is given.
+- The cavity is a linearisation. Where a block removes most of a surfel's support, the affected pixels
+  are dropped as untestable rather than tested against an unreliable prediction, which lowers coverage
+  for large blocks.
 - The identifiability argument assumes that faults are a minority among pixels that share geometric
   features. A fault class that is tied to geometry (for example, every pixel beyond a certain range) is
   absorbed by the scale head and reported as noise, not as a fault.
@@ -459,15 +543,21 @@ never by a detection metric. The selection rule is fixed before the evaluation m
 | --- | --- |
 | $\hat d_i(u)$ | depth map of view $i$ at pixel $u$ |
 | $a_i, b_i, \beta$ | per-view scale and offset, shared distance bias |
+| $\tilde D$ | rendered depth in measurement space, $\hat D + \beta \hat D^2$ |
+| $\rho_j(u)$ | robustness weight of the alignment |
 | $\sigma_i(u)$ | nominal noise standard deviation from offline calibration |
 | $\Lambda_k$, $\Lambda_k^{(i)}$ | information block of surfel $k$, and the part contributed by view $i$ |
 | $\mathcal B_j$, $B$ | block of neighbouring frames left out with view $j$, and its size |
 | $\hat D_{-j}$, $V_{-j}$, $O_{-j}$ | cavity depth, its variance, accumulated opacity |
+| $\beta_{-j}$ | distance bias estimated without the block |
+| $\phi_k^{(j)}$, $\Phi_{-j}$ | share of a surfel's information removed with the block, and its render |
+| $K$ | number of Gauss-Newton steps of the cavity |
 | $\Omega_j$ | testable pixels of view $j$ |
 | $r_j$, $v_j$, $z_j$ | residual, its nominal variance, standardised residual |
 | $f_j(u)$ | latent fault indicator |
 | $c_j(u)$, $s_j(u)$ | contamination prior, inlier scale |
-| $g_\theta$, $h_\psi$, $t_\phi$ | prior head, scale head, image-only student |
+| $G_\theta$, $h_\psi$, $t_\phi$ | prior head (blind-spot operator), scale head, image-only student |
+| $R$ | blind-spot radius on the residual channels |
 | $p_{\mathrm{out}}$, $Z$ | outlier density and its half-range |
 | $\zeta_j(u)$ | learned indicator: posterior fault probability |
 | $S_j$, $\hat t$, $\alpha$ | view score, threshold, target false-alarm rate |
