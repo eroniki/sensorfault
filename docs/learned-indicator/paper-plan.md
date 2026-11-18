@@ -142,7 +142,7 @@ The text is 1,187 characters long including spaces (counted by script; keep it u
 
 ## 6. Timeline, working backwards
 
-Today is 2026-11-18. **CVPR 2027 is closed** (registration 2026-11-10, submission 2026-11-16, supplement 2026-11-23, decisions 2027-02-25, from the official dates page). The remaining targets:
+**CVPR 2027 is closed** (registration 2026-11-10, submission 2026-11-16, supplement 2026-11-23, decisions 2027-02-25, from the official dates page). The remaining targets:
 
 | Venue | Date | Status |
 | --- | --- | --- |
