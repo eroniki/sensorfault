@@ -50,5 +50,4 @@ Original text in `sections/` and `main.tex` is the author's.
 
 ## Open items before the preprint
 AI-use declaration and the code/data statement (TODO in `main.tex`); Holm's step-down procedure is named but not cited;
-final literature pass; results, figures and tables from the experiment code; cut the letter to the RA-L page limit and
-the abstract to IEEE length; resize the TikZ generators for the 252 pt column (main-text figures span both columns for now).
+final literature pass; results, figures and tables from the experiment code; decide whether to cut to 6 pages (no page charges); resize the TikZ generators for the 252 pt column (main-text figures span both columns for now).
