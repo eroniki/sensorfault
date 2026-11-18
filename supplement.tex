@@ -1,13 +1,14 @@
 % Supplementary material, submitted as a separate PDF alongside the RA-L letter.
 \documentclass[letterpaper,journal,onecolumn]{IEEEtran}
 \input{preamble}
+\anonymousfalse % true for double-anonymous review
 \usepackage{xr}
 \externaldocument[M-]{build/main}
 
 \begin{document}
 \title{Supplementary Material for ``View-Level Fault Rejection for Monocular-Depth Reconstruction via a
 Shared Gaussian Surface''}
-\author{Murat Ambarkutuk}
+\author{\ifanonymous Anonymous Author(s)\else Murat Ambarkutuk\fi}
 \maketitle
 
 \renewcommand{\thesection}{S\arabic{section}}

@@ -15,8 +15,8 @@ matching). The tested view is compared with the other views' surface rendered in
 (a scene temperature) and a shared distance bias. Training, freezing, fusing and testing repeat in rounds that drop
 flagged views (one per round by default), with a Holm step-down schedule across rounds.
 
-**Status: pre-experiment draft.** No experiment has been run. Every result table and figure is a placeholder marked
-`TODO` in red; hypotheses H1-H6 (Sec. 4) are pre-registered predictions, not findings.
+**Status: controlled experiments only.** E1 (fault injection with exact depth) and the H7 pose check have been
+run on one MatrixCity block; H1-H6 on real data are pre-registered and pending. Placeholders are marked `TODO` in red.
 
 ## Build
 ```
@@ -30,13 +30,17 @@ from the letter carry `M-`. The build script runs each document twice so these r
 RA-L allows 6 pages plus up to 2 paid extra pages, references included; the letter is 6 pages. Material cut from the letter lives in the supplement (method details, results in full, hypotheses and limitations in full). After moving text between the two documents, run `scripts/xref_prefixes.py` to re-derive the S-/M- prefixes.
 
 ## Outline
-Main text: Abstract, Keywords; 1 Introduction; 2 Related Work (short); 3 Method (setting, measurement model and faults;
-poses as a trajectory spline refined by render-and-compare; surfels with an uncertainty that renders; fusion on rendering, leave-view-out and the message-passing reading; the view
-gate; leave-block-out; the outer loop with Algorithm 1 "Train, freeze, fuse, test" in rounds, Holm across rounds); 4 Experimental Design and Hypotheses (H1-H6, breakdown);
-5 Results (status); 6 Conclusions, Limitations, Future Work. Acknowledgment (data/code and AI-use statements); References.
-Supplement (`supplement.tex`, separate PDF): S1 related work; S2 derivations (ray-surfel and opacity Jacobians, information update and Newton leave-out,
-solution separation, rendered variance, minimum detectable bias, scene temperature and heterogeneity); S3 experimental
-setup; S4 planned tables and figures.
+Letter (6 pages): Abstract, Index Terms; I Introduction; II Related Work; III Method (setting and measurement
+model; poses; surfels with an uncertainty that renders; fusion and leave-out by subtraction, incl.
+leave-block-out; the view gate; the outer loop with Algorithm 1); IV Experimental Design and Hypotheses (H1-H7,
+short form); V Results (E1, H7); VI Conclusion; Acknowledgment; References.
+Supplement: S1 related work; S2 method details; S3 derivations; S4 experimental setup; S5 hypotheses, limitations
+and future work in full; S6 results in full (E1, RGB and surface checks, H7, planned real-data results);
+S7 planned tables and figures. Section numbers follow the build; check `build/supplement.pdf`.
+
+## Double-anonymous review
+Set `\anonymoustrue` near the top of `main.tex` and `supplement.tex` to replace the author block and running
+head with "Anonymous". The repository URL TODO in the Acknowledgment must stay anonymous too.
 
 ## Layout
 - `main.tex` RA-L letter: title, abstract, index terms, section includes, acknowledgment; `supplement.tex` supplementary material; `preamble.tex` shared packages and macros

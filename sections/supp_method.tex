@@ -175,3 +175,14 @@ view's information by $n_{\mathrm{eff}}/n$ or inflating the variance by a jackkn
 Within a round, opacity frozen after the warm-up has a residual risk: a surfel that a not-yet-caught view
 caused to be pruned cannot be restored by any leave-out. The outer loop removes this risk for views it
 catches; a fold-wise warm-up is the ablation that measures what remains.
+
+\subsection{Further Details of the Gate}
+Each view ends a round kept, flagged, or reported untestable; flagged views are handled by the outer loop.
+A fitted scene temperature $\hat\gamma$ beyond its development range raises a scene-level alarm. Further
+shared bias terms (grazing angle, texture) are added to \eqref{M-eq:meas} only if the development residuals
+show them. The degrees of freedom $m_j$ of the energy statistic are based on $n_{\mathrm{eff}}$, not on the
+pixel count, and the region scan leads when the heterogeneity $\omega$ is large. Both the information
+$\Lambda^{(j)}$ and the gradient $\nabla\mathcal{L}_j$ of a view come from one backward pass, so nothing per
+view and surfel has to be stored. Gradients run only inside the train step; the fuse and test steps are not
+differentiated, so fusion need not be differentiable. H3D \cite{data_h3d} is used only if its raw images and
+orientations can be obtained.

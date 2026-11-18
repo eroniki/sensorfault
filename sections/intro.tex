@@ -25,8 +25,8 @@ the rasteriser renders into depth variance, used with exact leave-out to test wh
 \begin{itemize}
   \item a depth-only view gate with untestable pixels, no surfels spawned by the tested view, and a
         Holm-controlled outer loop (Sections~\ref{sec:method:gate}--\ref{sec:method:loop});
-  \item leave-block-out, so that neighbours that repeat a view's error cannot mask it
-        (Section~\ref{sec:method:fusion});
+  \item leave-block-out, designed so that neighbours that repeat a view's error cannot mask it; it is
+        untested so far on real repeated failures (H2) (Section~\ref{sec:method:fusion});
   \item controlled experiments on false-alarm control, swamping and pose errors, and a pre-registered
         protocol for real depth models (Sections~\ref{sec:setup}--\ref{sec:results}).
 \end{itemize}

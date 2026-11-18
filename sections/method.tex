@@ -185,7 +185,7 @@ Two statistics are used. The energy $T_j=\mathbf{r}_j^{\top}M\mathbf{r}_j$, with
 $\Sigma_r^{-1}$ projected orthogonally to the alignment, has $m_j$ degrees of freedom based on
 $n_{\mathrm{eff}}=\mathrm{tr}(C)^{2}/\mathrm{tr}(C^{2})$. With $m_j$ of order $10^{3}$ it is as much a test
 of the noise level as of faults: a clean view whose noise is 2\% above the scene temperature already has a
-23\% false-alarm rate at a nominal 5\%, so its threshold absorbs the per-view heterogeneity $\omega$
+23\% false-alarm rate at a nominal 5\% (Supplement~\ref{S-sup:derivations}), so its threshold absorbs the per-view heterogeneity $\omega$
 measured on development views. The region scan $\max_{\mathcal{R}}|z_{\mathcal{R}}|$ over appearance
 segments $\mathcal{R}$ of view $j$,
 $z_{\mathcal{R}}=\mathbf{g}_{\mathcal{R}}^{\top}M\mathbf{r}_j/\sqrt{\mathbf{g}_{\mathcal{R}}^{\top}M\mathbf{g}_{\mathcal{R}}}$,
@@ -201,7 +201,7 @@ A single pass leaves the geometry shaped by every view, including the faulty one
 training, freezing, fusing and testing in rounds (Algorithm~\ref{alg:gate}), each warm-started from the
 previous one with densification and pruning back on, and drop flagged views between rounds. A fixed
 $\alpha$ per round would let the false-alarm rate grow with the number of rounds, so a Holm step-down
-schedule runs over a family fixed in advance, $M=NR_{\max}$ tests: the $(k{+}1)$-th rejection overall uses
+\cite{stat_holm} schedule runs over a family fixed in advance, $M=NR_{\max}$ tests: the $(k{+}1)$-th rejection overall uses
 the threshold $\alpha/(M-k)$. Because the p-values change as the surface is retrained, the level of the
 whole loop is calibrated by clean-run permutation. By default a round drops only the most significant
 rejected view, with no readmission and $R_{\max}=10$. This guards against \emph{swamping}, in which a clean
