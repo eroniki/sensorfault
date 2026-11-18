@@ -23,24 +23,21 @@ Associate Editor and Reviewers' comments. This research received no external fun
 
 \begin{abstract}
 Monocular metric depth models can supervise Gaussian splatting from aerial survey imagery, but they fail
-regionally and for reasons of appearance: on specular surfaces they predict the depth of the reflection,
-and on textureless roofs and roads they guess; they are also trained mostly near the ground, so nadir
-views from altitude are an unfamiliar regime. Robust losses and distractor masks act per pixel, mostly
-from colour, and state no false-alarm rate. The contribution of this paper is a depth-only view gate. It
-uses a standard representation, 2DGS surfels augmented with $10\times10$ information blocks over mean,
-rotation error, log scales and opacity, kept apart from the rendering shape. Every view adds the
-alpha-weighted rasteriser information $J^{\top}R^{-1}J$, so fusion is sparse and correspondence-free, and
-leaving out a view, or a block of neighbouring frames of the same flight strip that tend to share its
-errors, is an exact subtraction and one Newton step. The remaining views' surface and its variance are
-rendered into the tested view, whose whitened depth residuals are tested at a stated false-alarm rate,
-with untestable pixels and no surfels spawned by the tested view, in rounds that retrain without
-flagged views under a Holm schedule. Geometry is fitted to depth only, so reflectance cannot corrupt it;
-poses are a trajectory spline from GNSS/IMU refined by render-and-compare; the noise has one free
-variable, a scene temperature. A pre-registered protocol first measures the residuals of a real depth
-model on UAV survey data with LiDAR reference, tests whether it repeats errors across neighbouring frames,
-and requires the gate to beat cheap baselines, including SpotLessSplats, RobustNeRF, robust depth losses,
-aligned residual RMS and depth confidence, on UseGeo, MatrixCity and ETH3D.
-\textcolor{red}{\textbf{[TODO: one sentence with the main quantitative result once experiments exist.]}}
+regionally and for reasons of appearance: on specular surfaces they return the depth of the reflection, and
+on textureless roofs and roads they guess. Robust losses and distractor masks act per pixel, mostly on
+colour, and state no false-alarm rate. We propose a depth-only view gate that tests each view's depth map
+against the surface supported by the other views. Each 2DGS surfel carries a $10\times10$ information
+block, kept apart from its rendering shape, to which every view adds the alpha-weighted rasteriser
+information $J^{\top}R^{-1}J$. Fusion is therefore sparse and correspondence-free, and leaving out a view,
+or a block of neighbouring frames that tend to share its errors, is an exact subtraction and one Newton
+step. The remaining views' surface and its variance are rendered into the tested view, whose whitened
+depth residuals are tested at a stated false-alarm rate, in rounds that retrain without flagged views under
+a Holm schedule. In controlled experiments on an aerial MatrixCity block with exact depth, the gate kept
+the family-wise false-alarm rate at zero on clean scenes, also with noise 30\% above its calibrated level,
+detected every single-view regional fault of 2--16$\sigma$, and excluded no clean views where a single pass
+excluded 5--8\%. A pre-registered protocol extends the evaluation to real depth models on UseGeo,
+MatrixCity and ETH3D against cheap and robust baselines.
+\textcolor{red}{\textbf{[TODO: add the main real-data result once H1--H4 are evaluated.]}}
 \end{abstract}
 
 \begin{IEEEkeywords}
