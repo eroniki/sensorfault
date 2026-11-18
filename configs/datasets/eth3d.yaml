@@ -3,5 +3,25 @@ dataset: ETH3D
 role: sanity_check
 ref: data_eth3d
 ground_truth: laser scan depth + calibrated poses
-licence: TODO(verify)
+licence: CC BY-NC-SA 4.0 ("The data provided here is licensed under the Creative Commons
+  Attribution-NonCommercial-ShareAlike 4.0 International License.", eth3d.net home page "License"
+  section; checked 2026-11-18)
+non_commercial: true
 poses: registered poses used as given
+scenes: [courtyard, delivery_area, electro, facade, kicker, meadow, office, pipes, playground, relief,
+  relief_2, terrace, terrains]   # high-res multi-view training, DSLR (13 scenes)
+archives:   # https://www.eth3d.net/data/<name>, HTTP Content-Length 2026-11-18
+  multi_view_training_dslr_undistorted.7z: 5.89 GB   # images + dslr_calibration_undistorted (PINHOLE)
+  multi_view_training_dslr_scan_eval.7z: 1.92 GB     # laser scan, eval version, all scenes
+  <scene>_dslr_depth.7z: 5.93 GB total (0.13 pipes .. 0.80 facade)
+  multi_view_training_dslr_jpg.7z: 5.0 GB     # distorted JPGs + dslr_calibration_jpg
+  not_downloaded: {multi_view_training_dslr_occlusion.7z: 1.27 GB, <scene>_scan_clean.7z: 4.39 GB total}
+depth_gt: >-
+  ground_truth_depth/dslr_images/<NAME>: float32 raw row-major dump at full image resolution
+  (6048x4032), .JPG extension but not a JPEG, inf = no depth, sparse at full res. It matches the
+  DISTORTED images, not the undistorted ones (about 6200x4135, per-camera PINHOLE) the depth models
+  see. GT depth is in the distorted geometry; <scene>/dslr_calibration_jpg (THIN_PRISM_FISHEYE,
+  6048x4032) is the reference calibration for warping between the two. It is only in
+  multi_view_training_dslr_jpg.7z (5.0 GB, downloaded; only dslr_calibration_jpg extracted).
+views: 454   # 38/44/45/76/31/15/26/14/38/31/31/23/42 in scene order above
+extracted: 52 GB under data/eth3d (13 GB of archives)
