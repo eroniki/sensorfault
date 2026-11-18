@@ -203,9 +203,8 @@ def test_unknown_model_and_missing_wrapper(tmp_path):
 
 
 def test_stub_datasets_raise_clearly():
-    for name in ("usegeo", "eth3d"):
-        with pytest.raises(DatasetUnavailableError, match="approval"):
-            enumerate_views(name, "x")
+    with pytest.raises(DatasetUnavailableError, match="approval"):
+        enumerate_views("usegeo", "x")
     with pytest.raises(ValueError):
         enumerate_views("nope", "x")
 
@@ -228,6 +227,46 @@ def test_matrixcity_views_from_synthetic_block(tmp_path):
 
     Image.fromarray(np.full((4, 6, 3), 9, np.uint8)).save(block / "images" / "7.png")
     assert views[0].load_rgb().shape == (4, 6, 3)
+
+
+def _eth3d_scene(root, model="PINHOLE"):
+    calib = root / "eth3d" / "sc" / "dslr_calibration_undistorted"
+    calib.mkdir(parents=True)
+    (calib / "cameras.txt").write_text(
+        "# Camera list with one line of data per camera:\n"
+        f"0 {model} 6 4 3400.5 3401.0 3.0 2.0\n1 {model} 6 4 3300.0 3300.0 3.0 2.0\n"
+    )
+    (calib / "images.txt").write_text(
+        "# Image list with two lines of data per image:\n"
+        "#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n"
+        "7 1 0 0 0 0 0 0 1 dslr_images_undistorted/DSC_0300.JPG\n"
+        "\n"  # empty 2D points line must not shift the pairing
+        "3 1 0 0 0 0.5 0 0 0 dslr_images_undistorted/DSC_0286.JPG\n"
+        "1.0 2.0 -1 3.0 4.0 12\n"
+    )
+    (root / "eth3d" / "sc" / "images" / "dslr_images_undistorted").mkdir(parents=True)
+    return root / "eth3d" / "sc"
+
+
+def test_eth3d_views_from_fake_layout(tmp_path):
+    scene = _eth3d_scene(tmp_path)
+    views = enumerate_views("eth3d", "sc", data_root=tmp_path)
+    assert [v.view_id for v in views] == ["DSC_0286", "DSC_0300"]
+    assert [v.focal_px for v in views] == [3400.5, 3300.0]  # fx of each image's own camera
+    with pytest.raises(DatasetUnavailableError):
+        enumerate_views("eth3d", "missing", data_root=tmp_path)
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    img = np.full((4, 6, 3), 5, np.uint8)
+    Image.fromarray(img).save(scene / "images" / "dslr_images_undistorted" / "DSC_0286.JPG")
+    assert views[0].load_rgb().shape == (4, 6, 3)
+
+
+def test_eth3d_refuses_distorted_camera(tmp_path):
+    _eth3d_scene(tmp_path, model="THIN_PRISM_FISHEYE")
+    with pytest.raises(ValueError, match="PINHOLE"):
+        enumerate_views("eth3d", "sc", data_root=tmp_path)
 
 
 def test_manifest_keeps_result_extra(tmp_path):

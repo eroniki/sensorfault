@@ -43,7 +43,20 @@ which is the reader's fallback name.
 - MatrixCity: reads `<data_root>/matrixcity/<scene>/transforms.json` and `images/` (frame image,
   `frame['file_path']` or `<frame_index:04d>.png`); focal from `camera_angle_x` at 1920 px width as in
   `experiments/matrixcity_io.py`. RGB frames are not downloaded by this code (block 3 images: ~1 GB).
-- UseGeo, ETH3D: stubs that raise; download needs M's approval, ETH3D licence unchecked.
+- ETH3D (high-res multi-view training, 13 DSLR scenes; CC BY-NC-SA 4.0, eth3d.net home page,
+  checked 2026-11-18): `multi_view_training_dslr_undistorted.7z` extracted under `<data_root>/eth3d`
+  gives `<scene>/dslr_calibration_undistorted/{cameras,images}.txt` (COLMAP text, PINHOLE) and
+  `<scene>/images/dslr_images_undistorted/*.JPG`. `eth3d_views` reads those: view_id = image stem,
+  focal_px = fx of the image's camera, sorted by view_id; non-PINHOLE cameras are refused.
+  Ground truth (`<scene>_dslr_depth.7z`) is `<scene>/ground_truth_depth/dslr_images/<NAME>`: raw
+  float32 at full resolution (6048x4032), `.JPG` name but not a JPEG, inf = no depth. **It matches the
+  distorted images** (6048x4032), not the undistorted ones the models see (about 6200x4135, size and
+  PINHOLE intrinsics vary per camera): warp one into the other's geometry before comparing. The
+  distorted calibration (`dslr_calibration_jpg`, THIN_PRISM_FISHEYE) ships with
+  `multi_view_training_dslr_jpg.7z` (4.7 GB), not with the undistorted archive. 454 views in total
+  (38/44/45/76/31/15/26/14/38/31/31/23/42 in the order of `configs/datasets/eth3d.yaml`); GT valid
+  pixels about 10-12% at full resolution. Sizes in `configs/datasets/eth3d.yaml`.
+- UseGeo: stub that raises (download server's TLS certificate expired 2024-08-30; waiting on M).
 
 ## Tests
 `pytest tests/test_depthcache_cache.py` (CPU, offline, fake estimator).

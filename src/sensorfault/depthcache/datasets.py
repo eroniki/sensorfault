@@ -1,7 +1,7 @@
 """View enumeration for the depth cache.
 
 Each reader returns a list of :class:`View` (view_id, lazy RGB loader, focal length in pixels).
-Nothing here downloads data. UseGeo and ETH3D are stubs until the download is approved.
+Nothing here downloads data. UseGeo is a stub until its data is on disk.
 """
 
 from __future__ import annotations
@@ -91,11 +91,69 @@ def usegeo_views(scene: str, **_kw) -> list[View]:
     )
 
 
-def eth3d_views(scene: str, **_kw) -> list[View]:
-    raise DatasetUnavailableError(
-        "ETH3D reader is a stub: the download needs M's approval and the licence is unchecked "
-        "(configs/datasets/eth3d.yaml: TODO(verify)). Nothing is fetched by this code."
-    )
+def _colmap_cameras(path: Path) -> dict[int, tuple[str, int, int, list[float]]]:
+    """COLMAP cameras.txt -> {camera_id: (model, width, height, params)}."""
+    cams = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        tok = line.split()
+        cams[int(tok[0])] = (tok[1], int(tok[2]), int(tok[3]), [float(x) for x in tok[4:]])
+    return cams
+
+
+def _colmap_images(path: Path) -> list[tuple[int, int, str]]:
+    """COLMAP images.txt -> [(image_id, camera_id, name)] in file order.
+
+    Each image takes two lines (pose line, then the 2D points line, which may be empty), so lines
+    are paired by position, not by skipping blanks.
+    """
+    lines = [ln for ln in path.read_text().splitlines() if not ln.startswith("#")]
+    out = []
+    for i in range(0, len(lines), 2):
+        tok = lines[i].split()
+        if not tok:
+            continue
+        if len(tok) < 10:
+            raise ValueError(f"{path}: malformed image line {lines[i]!r}")
+        out.append((int(tok[0]), int(tok[8]), " ".join(tok[9:])))
+    return out
+
+
+def eth3d_views(
+    scene: str,
+    data_root: str | Path | None = None,
+    **_kw,
+) -> list[View]:
+    """ETH3D high-res multi-view scene, pre-undistorted DSLR images.
+
+    Expects the layout of ``multi_view_training_dslr_undistorted.7z`` extracted under
+    ``<data_root>/eth3d``: ``<scene>/dslr_calibration_undistorted/{cameras,images}.txt`` (COLMAP
+    text, PINHOLE ``fx fy cx cy``) and ``<scene>/images/<NAME>`` where NAME comes from images.txt
+    (``dslr_images_undistorted/DSC_0286.JPG``). view_id is the image stem, focal_px is fx; views
+    are sorted by view_id. Other camera models are refused. Ground-truth depth
+    (``<scene>_dslr_depth.7z``) matches the *distorted* images, not these; it is not read here.
+    """
+    base = Path(data_root or os.environ.get("SENSORFAULT_DATA", "data")) / "eth3d" / scene
+    calib = base / "dslr_calibration_undistorted"
+    if not (calib / "cameras.txt").is_file() or not (calib / "images.txt").is_file():
+        raise DatasetUnavailableError(
+            f"ETH3D calibration not found under {calib}. Nothing is downloaded by this code; "
+            "extract multi_view_training_dslr_undistorted.7z into <data_root>/eth3d."
+        )
+    cams = _colmap_cameras(calib / "cameras.txt")
+    views = []
+    for _image_id, cam_id, name in _colmap_images(calib / "images.txt"):
+        model, _w, _h, params = cams[cam_id]
+        if model != "PINHOLE":
+            raise ValueError(f"ETH3D {scene}: camera {cam_id} is {model}, expected PINHOLE")
+        path = base / "images" / name
+        views.append(View(Path(name).stem, (lambda p=path: _read_image(p)), float(params[0])))
+    ids = [v.view_id for v in views]
+    if len(set(ids)) != len(ids):
+        raise ValueError(f"ETH3D {scene}: duplicate image stems in images.txt")
+    return sorted(views, key=lambda v: v.view_id)
 
 
 READERS: dict[str, Callable[..., list[View]]] = {
