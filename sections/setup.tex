@@ -1,26 +1,16 @@
 \section{Experimental Design and Hypotheses}
 \label{sec:setup}
-The experiments ask when the gate helps and when it does not, starting with a measurement of the depth
-model. They use public datasets, released pretrained models and public code, and the protocol, hypotheses
-and thresholds are tagged in the code repository before any test scene is run. So far E1 and the H7 pose
-check have been run, both on one MatrixCity block (Section~\ref{sec:results}).
+The protocol, hypotheses and thresholds are tagged in the code repository before any test scene is run;
+only public data, released models and public code are used.
 
-\runin{Data and models.} The main real set is UseGeo \cite{data_usegeo}, UAV nadir survey strips with
-exterior orientation and per-image LiDAR depth; H3D \cite{data_h3d} is a second real set if its raw images
-and orientations can be obtained. MatrixCity \cite{data_matrixcity}, a synthetic city with exact depth and
-poses for aerial views, is used for fault injection with exact truth, and ETH3D \cite{data_eth3d}, with
-laser depth and registered poses, is a sanity check. Depth Pro \cite{est_depthpro} is the default depth
-model; Metric3D v2 and UniDepthV2 supply the confidence baseline, and all three enter a comparison of nadir
-views from altitude with near-ground views.
-
-\runin{Faults, baselines and metrics.} Natural failures are labelled against the reference depth on
-connected regions and classed as specular, textureless or other. Injected faults (offset, plane
-replacement, blurred copy, mirrored depth) cover 2--40\% of a view at 2--16$\sigma$, independent per view
-or repeated across neighbours. Baselines are SpotLessSplats \cite{gs_spotless}, the RobustNeRF loss
-\cite{gs_robustnerf} and robust depth losses in the fit; the aligned RMS residual and the depth model's
-confidence as view tests; and no gate and an oracle gate. Metrics are detection power at 5\% per-view false
-alarm, false-alarm and untestable rates, held-out AbsRel, and surface accuracy, completeness and F-score.
-Details are in Supplement~\ref{S-sup:setup}.
+\runin{Data, baselines and metrics.} The main real set is UseGeo \cite{data_usegeo}, UAV nadir strips with
+per-image LiDAR depth; MatrixCity \cite{data_matrixcity} gives exact depth for fault injection, and ETH3D
+\cite{data_eth3d} is a sanity check. Depth Pro \cite{est_depthpro} is the default model; Metric3D v2 and
+UniDepthV2 supply the confidence baseline. Natural failures are labelled against the reference depth;
+injected faults cover 2--40\% of a view at 2--16$\sigma$. Baselines are SpotLessSplats \cite{gs_spotless},
+RobustNeRF \cite{gs_robustnerf}, robust depth losses, the aligned RMS residual and the model's confidence.
+Metrics are detection power at 5\% false alarm, untestable rate, AbsRel and surface F-score
+(Supplement~\ref{S-sup:setup}).
 
 \runin{Hypotheses.} Each states what would falsify it (full text and thresholds in
 Supplement~\ref{S-sup:hyp}).

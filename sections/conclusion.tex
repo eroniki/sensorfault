@@ -1,23 +1,10 @@
 \section{Conclusion}
 \label{sec:conclusion}
-We have proposed a depth-only view gate for depth-supervised Gaussian splatting. Each surfel keeps a
-$10\times10$ uncertainty apart from its rendering shape, the rasteriser renders it into depth variance,
-and leaving a view or a block of neighbouring frames out is a subtraction and one Newton step. Each view is
-tested against the others' rendered surface at a stated false-alarm rate, in rounds under a Holm schedule.
-In controlled experiments with exact depth, the loop kept the family-wise false alarm at zero, also with
-miscalibrated noise, and avoided the swamping of clean neighbours that a single pass causes. Of the two
-pose predictions, detection held and recovery was falsified, because the perturbed frame's own GNSS/IMU
-prior holds its pose.
+We have proposed a depth-only view gate in which each surfel's uncertainty is rendered into depth variance,
+leave-out is an exact subtraction, and views are tested against the others' surface at a stated false-alarm
+rate under a Holm schedule. With exact depth, the loop held the false alarm at zero and avoided swamping;
+pose errors were detected but not fully recovered. The rendered variance is overconfident because
+cross-surfel correlations are ignored, errors repeated across whole strips are invisible, and pixels seen
+by no other view are untestable (Supplement~\ref{S-sup:limits}).
 \TODO{Rewrite around the real-data results; if H1 is a no-go, reframe as an analysis of the depth model's
 failures.}
-
-\runin{Limitations.} Independent per-surfel blocks ignore cross-surfel and within-view correlations, so the
-rendered variance is overconfident; the threshold is calibrated on clean data, and H5 measures the gap.
-Errors repeated across whole strips are invisible to the gate, and leave-block-out trades power and
-availability for robustness to repetition. Pixels that no other view sees are untestable, and a region in
-which faulty views are a majority pulls the cavity towards the fault. The leave-out is exact only for the
-linear model. A full list is in Supplement~\ref{S-sup:limits}.
-
-\runin{Future work.} Low-rank cross-surfel correlation, joint testing of poses and depth, using the
-rendered uncertainty for view selection, and relighting the appearance block \cite{data_beyondlight} so
-that colour can help without shaping the geometry.

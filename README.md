@@ -27,7 +27,7 @@ from TeX Live (`texlive-publishers`). `preamble.tex` is shared by both documents
 `xr`: in the letter, labels from the supplement carry the prefix `S-` (e.g. `\ref{S-sup:h7}`); in the supplement, labels
 from the letter carry `M-`. The build script runs each document twice so these resolve.
 `draft_v0.pdf` (letter) and `draft_v0_supplement.pdf` are the last committed builds.
-RA-L allows 6 pages plus up to 2 paid extra pages, references included; the letter is 8 pages. Material cut from the letter lives in the supplement (method details, results in full, hypotheses and limitations in full). After moving text between the two documents, run `scripts/xref_prefixes.py` to re-derive the S-/M- prefixes.
+RA-L allows 6 pages plus up to 2 paid extra pages, references included; the letter is 6 pages. Material cut from the letter lives in the supplement (method details, results in full, hypotheses and limitations in full). After moving text between the two documents, run `scripts/xref_prefixes.py` to re-derive the S-/M- prefixes.
 
 ## Outline
 Main text: Abstract, Keywords; 1 Introduction; 2 Related Work (short); 3 Method (setting, measurement model and faults;
@@ -50,4 +50,4 @@ Original text in `sections/` and `main.tex` is the author's.
 
 ## Open items before the preprint
 AI-use declaration and the code/data statement (TODO in `main.tex`); Holm's step-down procedure is named but not cited;
-final literature pass; results, figures and tables from the experiment code; decide whether to cut to 6 pages (no page charges); resize the TikZ generators for the 252 pt column (main-text figures span both columns for now).
+final literature pass; results, figures and tables from the experiment code; resize the TikZ generators for the 252 pt column (main-text figures span both columns for now).

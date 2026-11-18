@@ -33,7 +33,7 @@ frames out of 30 were never detected, in two of the ten scenes. In this exact, i
 the energy statistic was slightly conservative, mean $T/m=0.965$, and the per-view false-alarm rate of a
 single test at $p<0.05$ was 7.5\% with the temperature. The temperature is fitted from the conservative
 energy statistics and so slightly loosens the region scan; the Holm schedule absorbs this. Whitening kept the correlation between pixels that one surfel renders (Section~\ref{M-sec:method:gate});
-without it, the region scan raised false alarms on weakly supported views in a dry run. Figure~\ref{M-fig:e1compact} shows the test on single views of one
+without it, the region scan raised false alarms on weakly supported views in a dry run. Figure~\ref{fig:e1compact} shows the test on single views of one
 scene: the fault stands out in the standardised residual and the region scan, and the neighbour that it
 swamps is flagged only while the faulty view is still in its cavity. The loop
 ranked views by $\log p$, so that a swamped neighbour whose p-value underflows to zero cannot be
@@ -49,6 +49,19 @@ wall-clock per stage; a gate pass tests every active view once.}
 \centering\footnotesize\setlength{\tabcolsep}{3pt}
 \input{\efigdir/e1_summary_table.tex}
 \end{table}
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_e1_compact.tex}
+\caption{E1, the test on single views of one grid scene ($8\sigma$ on 40\% of view 59). Rows: a clean view far
+from the fault, the faulty view, and a clean neighbour on the same strip, swamped while the faulty view
+still shapes its cavity. Columns: (\textbf{a})~true depth; (\textbf{b})~the cavity's rendered surfel depth (grey: untestable);
+(\textbf{c})~the residual standardised by $\sqrt{(\Sigma_r)_{uu}}$; and (\textbf{d})~the region-scan $|z|$ per
+tile ($\geq$20 clipped), with the tiles above the first Holm threshold (red mark on the colour bar) outlined
+in black. The verdict and the number of flagged tiles are given at the end of each row. Once the faulty view
+is dropped, the neighbour has none (Figure~\ref{fig:e1qualviews}, which also shows the raw residuals).}
+\label{fig:e1compact}
+\end{figure}
 
 \begin{figure}[!t]
 \centering
@@ -111,7 +124,7 @@ height residual on land had median $+0.49$~m, RMSE 6.0~m, and 81\% of cells with
 the covered area and a flat plane in the ground truth, was not recovered: median $+5.7$~m, 95th percentile
 $+48$~m, 5\% of cells within 1~m (Figure~\ref{fig:surfacecompact}b). The textureless water surface is the
 kind of region where image-based geometry fails. For the E1 surfels (4~m cells), the scene of
-Figure~\ref{M-fig:e1compact} was fused twice: with all views, and without the one view the gate's loop
+Figure~\ref{fig:e1compact} was fused twice: with all views, and without the one view the gate's loop
 excluded (the faulty view, after two rounds). Over the cells under the injected fault, the median
 residual was $-2.16$~m with the faulty view and $-0.16$~m without it, against $-0.19$~m for the same
 noise without a fault; 18\%, 54\% and 57\% of these cells were within 1~m. Over the whole block the three
@@ -123,7 +136,7 @@ surfaces differ by at most 0.03~m in median and RMSE, because the fault covers 3
 \caption{Surfaces of MatrixCity block~3 against the exact-depth ground truth (north up). (\textbf{a})~Ground-truth
 height, hillshaded. (\textbf{b})~RGB 2DGS model minus ground truth (2~m cells); the water at the bottom is
 reconstructed metres to tens of metres too high. (\textbf{c}, \textbf{d})~E1 surfels minus ground truth (4~m
-cells) for the fault scene of Figure~\ref{M-fig:e1compact}, fused with all views and without the view that the
+cells) for the fault scene of Figure~\ref{fig:e1compact}, fused with all views and without the view that the
 gate excluded, enlarged to the window marked in (a) ($x$ 170--402~m, $y$ $-712$ to $-508$~m); dashed: the convex
 hull of the cells under the injected fault. Grey: no surface. Statistics are in
 Table~\ref{tab:surface}; the full set is in Figures~\ref{fig:surfacergb}--\ref{fig:surfacenormals}.}
@@ -134,7 +147,7 @@ Table~\ref{tab:surface}; the full set is in Figures~\ref{fig:surfacergb}--\ref{f
 \subsection{H7}
 \label{sup:h7full}
 H7 was run on MatrixCity block~3 in the E1 setting (exact geometry, independent noise of 1\% of depth,
-$96\times54$ pixels per view), after the gate had run on the fault scene of Figure~\ref{M-fig:e1compact} and
+$96\times54$ pixels per view), after the gate had run on the fault scene of Figure~\ref{fig:e1compact} and
 excluded its faulty view. The input (GNSS/IMU) poses of chosen views were perturbed by known amounts: an
 isolated clean view, a block of three consecutive clean views of a strip sharing one perturbation, or the
 flagged view, one group at a time. Rotations of 0.05--2$^{\circ}$ about a random axis, translations of 1--50
@@ -149,9 +162,21 @@ render-and-compare depth factors with the per-view alignment; these settings, an
 rate and a median removed fraction of at least 80\% at every level in range), were fixed before the run
 (Supplement~\ref{sup:h7}).
 
+\begin{figure}[!t]
+\centering
+\input{\hfigdir/fig_h7.tex}
+\caption{H7 on MatrixCity block~3 (E1 setting; 16 perturbed clean views per point, two seeds). Top: share of
+perturbed clean views flagged by the gate before refinement. Bottom: median share of the pose error
+removed by spline, pose-graph and render-and-compare refinement, per perturbed component, as specified
+(solid) and in an exploratory variant without the perturbed frame's GNSS/IMU prior (dashed). Grey: the
+range of each prediction; dotted: the 80\% target. In (c) and (f) rotation and translation are perturbed
+together at paired levels (grey labels: translation in GSD).}
+\label{fig:h7}
+\end{figure}
+
 Prediction (a) holds: the gate flagged every perturbed clean view at every level, 100\% in all nine levels
 at or above 0.5$^{\circ}$ or 10~GSD, and also at the smallest sizes, 0.05$^{\circ}$ and 1~GSD, which are within the
-GNSS/IMU prior (Figure~\ref{M-fig:h7}a--c, Table~\ref{tab:h7}). The size-0 control flagged none. The
+GNSS/IMU prior (Figure~\ref{fig:h7}a--c, Table~\ref{tab:h7}). The size-0 control flagged none. The
 sensitivity at small sizes is not the pose term at work. At 1~GSD, 0.2--0.7\% of a view's pixels see a
 different surfel at the perturbed pose, at building edges of point-sampled exact depth, and these pixels
 carry 97--99\% of the squared standardised residual; a real depth model smooths edges, so this sensitivity
@@ -160,7 +185,7 @@ reject on average 1.2 (0.05$^{\circ}$) to 27.5 (2$^{\circ}$ and 50~GSD) unpertur
 The outer loop, which drops one view per round, was not run here.
 
 Prediction (b) is falsified: no level up to 1$^{\circ}$ and 25~GSD reached a median of 80\% of the error
-removed (Figure~\ref{M-fig:h7}d--f). The refinement removed 63--64\% of a rotation at every size and
+removed (Figure~\ref{fig:h7}d--f). The refinement removed 63--64\% of a rotation at every size and
 38--80\% of a translation (79.6\% at 25~GSD, just below the target); with both, 59--64\% of the rotation
 and 34--62\% of the translation. At 1$^{\circ}$ and 25~GSD the remaining error was 0.37$^{\circ}$ and 9.9~GSD
 (medians). Blocks recovered less than isolated views (at 1$^{\circ}$ and 25~GSD: 35\% and 11\% against 66\%

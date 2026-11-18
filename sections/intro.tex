@@ -1,50 +1,33 @@
 \section{Introduction}
 \label{sec:intro}
 
-\IEEEPARstart{M}{onocular} metric depth models \cite{est_metric3dv2,est_unidepth,est_depthpro} are now
-accurate enough to supervise 3D reconstruction: depth-supervised Gaussian splatting
-\cite{gs_3dgs,gs_2dgs,gs_dnsplatter} uses one predicted depth map per image as a geometric prior. For aerial
-survey imagery, flown in parallel strips with GNSS/IMU poses, such a prior could complement or replace dense
-multi-view stereo. The predictions, however, fail in a characteristic way: \emph{regionally} and for reasons
-of \emph{appearance}. On glass, water and other specular surfaces the model returns the depth of the
-reflection; on textureless roofs, roads and walls it has no cue and returns a smooth guess. Inside such a
-region the error is many times the nominal noise, while the rest of the same depth map is accurate. The
-models are also trained mostly on near-ground imagery, so nadir views from survey altitude are an
-unfamiliar regime. Depth supervision bakes the faulty regions into the surface, and nothing in a single
-image says which depth map to distrust.
+\IEEEPARstart{M}{onocular} metric depth models \cite{est_metric3dv2,est_unidepth,est_depthpro} are accurate
+enough to supervise Gaussian splatting with one depth map per image \cite{gs_3dgs,gs_2dgs,gs_dnsplatter},
+which for aerial survey imagery could complement dense multi-view stereo. Their failures, however, are
+\emph{regional} and \emph{appearance-driven}: on glass and water they return the depth of the reflection,
+on textureless roofs and roads a smooth guess, many times the nominal noise, while the rest of the depth map
+is accurate. Nadir views from survey altitude are also far from their mostly near-ground training data.
+Depth supervision bakes such regions into the surface, and nothing in a single image says which depth map
+to distrust. Robust losses \cite{rob_blackrangarajan,rob_barron} and distractor-aware splatting
+\cite{gs_robustnerf,gs_spotless} down-weight outlying pixels, mostly on photometric evidence; none states a
+false-alarm rate, and none uses the fact that the other views observe the same surface with known
+uncertainty.
 
-Existing defences act per pixel or per ray. Robust losses \cite{rob_blackrangarajan,rob_barron} and
-distractor-aware methods such as RobustNeRF and SpotLessSplats \cite{gs_robustnerf,gs_spotless}
-down-weight residuals that look like outliers, mostly on photometric evidence; the aligned depth RMS of a
-view, or the depth model's own confidence, gives a view score. None of them states a false-alarm rate, and
-none uses the fact that the other views observe the same surface with known uncertainty.
-
-We propose a \emph{depth-only view gate} (Fig.~\ref{fig:pipeline}). Each 2DGS surfel \cite{gs_2dgs}
-carries a $10\times10$ information block over its mean, rotation error, log scales and opacity, kept apart
-from the shape used for rendering. Every view adds the alpha-weighted rasteriser information
-$J^{\top}R^{-1}J$ to the surfels it renders, so the fused surface is a Laplace posterior obtained by
-rendering. Fusion and testing are sparse and need no correspondences, unlike TSDF fusion
-\cite{fus_curless,fus_kinectfusion}, radiance fields \cite{rec_nerf} or multi-view stereo cost volumes
-\cite{rec_mvsnet}. Leaving out a view, or a block of neighbouring frames that tend to share its errors, is
-a subtraction of their information and one Newton step. The gate renders the remaining views' surface and
-its variance into the tested view and tests the whitened depth residuals at a stated false-alarm rate.
-Geometry is fitted to depth only, so reflectance cannot corrupt it, and poses come from GNSS/IMU as a
-trajectory spline refined by render-and-compare.
-
-The ingredients are established: surfel fusion \cite{fus_keller_surfels}, Baarda's data snooping and
-Teunissen's DIA procedure \cite{stat_teunissen_dia}, solution separation \cite{flt_raim_joerger}, the
-cavity step of expectation propagation \cite{mp_minka_ep} and iterative data snooping as hard EM
-\cite{stat_dempster_em}. To our knowledge, what is new is a per-Gaussian uncertainty that the splatting
-rasteriser renders into depth variance, used with exact leave-view-out and leave-block-out to test whole
-views at a stated false-alarm rate. Our contributions are:
+We propose a \emph{depth-only view gate} (Fig.~\ref{fig:pipeline}). Each 2DGS surfel carries a
+$10\times10$ information block, kept apart from its rendering shape, to which every view adds the
+alpha-weighted rasteriser information $J^{\top}R^{-1}J$. Fusion is sparse and needs no correspondences,
+unlike TSDF fusion \cite{fus_curless,fus_kinectfusion} or cost volumes \cite{rec_mvsnet}, and leaving out a
+view, or a block of neighbouring frames that tend to share its errors, is a subtraction and one Newton
+step. The gate renders the remaining views' surface and its variance into the tested view and tests its
+whitened depth residuals at a stated false-alarm rate. The testing theory is classical
+\cite{stat_teunissen_dia,flt_raim_joerger}; to our knowledge, what is new is a per-Gaussian uncertainty that
+the rasteriser renders into depth variance, used with exact leave-out to test whole views. We contribute:
 \begin{itemize}
-  \item a depth-only view gate that tests each view against the rendered cavity of the other views, with
-        untestable pixels, no surfels spawned by the tested view, and a Holm-controlled outer loop
-        (Sections~\ref{sec:method:gate} and~\ref{sec:method:loop});
-  \item leave-block-out, an exact subtraction of neighbouring frames, so that neighbours that repeat a
-        view's error cannot mask it (Section~\ref{sec:method:fusion});
-  \item controlled experiments on an aerial MatrixCity block that measure false-alarm control, swamping
-        and the response to pose errors, and a pre-registered protocol for real depth models on UseGeo,
-        MatrixCity and ETH3D (Sections~\ref{sec:setup} and~\ref{sec:results}).
+  \item a depth-only view gate with untestable pixels, no surfels spawned by the tested view, and a
+        Holm-controlled outer loop (Sections~\ref{sec:method:gate}--\ref{sec:method:loop});
+  \item leave-block-out, so that neighbours that repeat a view's error cannot mask it
+        (Section~\ref{sec:method:fusion});
+  \item controlled experiments on false-alarm control, swamping and pose errors, and a pre-registered
+        protocol for real depth models (Sections~\ref{sec:setup}--\ref{sec:results}).
 \end{itemize}
 \TODO{Replace the last item by result-bearing contributions once H1--H6 are evaluated.}
