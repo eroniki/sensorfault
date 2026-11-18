@@ -126,6 +126,33 @@ $\alpha/M$ with $\alpha=0.05$ and $M=6$; ``excl.'' marks an excluded view. Data:
 \label{fig:bunny}
 \end{figure}
 
+Figure~\ref{fig:bunnysteps} follows the faulty case through one pass of the gate. The fused surfels
+have a normal-offset standard deviation of 2--6~mm, and v3 supplies 11--18\% of each surfel's
+normal-offset information. That is too little to pass the support threshold of the cavity
+($\lambda_{\min}=25/\sigma^2$, a standard deviation of 2~mm) for 278 of the 289 surfels even with v3
+included, so the cavity keeps them with an inflated covariance, and the rendered standard deviation in
+v3 is 25--46~mm per pixel against 5~mm of noise. The fault still stands out in the region scan
+($z=4.6$ in one tile), but this inflation is the likely reason that the bunny's end views are weakly
+tested. Setting the threshold to zero, so that every surfel is supported, is not a fix on its own (one round,
+same fits): it weakened the false alarm on v0 in the clean scene with the other seed from
+$p=1.7\times10^{-14}$ to $3.7\times10^{-3}$, still below the first Holm threshold of $0.0083$; it
+caught the fault on v5 ($p=3.2\times10^{-3}$); and it lost the fault on v3 ($p=0.011$).
+
+\begin{figure}[!htbp]
+\centering
+\input{\mfigdir/fig_bunny_steps.tex}
+\caption{One pass of the gate on the bunny (fault on v3, the regression-test case; 289 surfels drawn as
+1-sigma ellipses; axes in metres). (\textbf{a})~Step~1: the posed depth views back-projected (v3 red).
+(\textbf{b})~Step~2: the shared surface fitted to all views; colour: standard deviation of each surfel's
+normal offset. (\textbf{c})~Step~3: the share of that information supplied by v3, which the cavity
+subtracts. (\textbf{d})~Step~4: the cavity without v3, coloured as (\textbf{b}); orange outline: below the
+support threshold, rendered with an inflated covariance (278 of 289). (\textbf{e})~Step~5: the cavity
+rendered into v3. (\textbf{f})~Observed minus rendered depth; dashed: the $+5$~cm window. (\textbf{g})~The
+residual after the shared bias and the per-view scale and offset, standardised. (\textbf{h})~Step~6:
+region-scan $z$ per tile; the largest sets the p-value that Holm compares with $\alpha/M$.}
+\label{fig:bunnysteps}
+\end{figure}
+
 \FloatBarrier
 
 \subsection{RGB Rendering Check}
