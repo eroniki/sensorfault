@@ -47,3 +47,4 @@ evidence logs (removed in the clean-up; see git history). Re-check all entries b
 | fus_curless | https://doi.org/10.1145/237170.237269 / SIGGRAPH 1996, pp. 303-312 (carried over from the earlier evidence log). |
 | fus_kinectfusion | https://doi.org/10.1109/ISMAR.2011.6092378 / ISMAR 2011, pp. 127-136 (carried over from the earlier evidence log). |
 | data_urbanscene3d | https://api.crossref.org/works (search) -> 10.1007/978-3-031-20074-8_6 ; arXiv 2107.04286 / ECCV 2022, LNCS, pp. 93-109; six authors (record; checked 2026-11-15). Terms: non-commercial, no dissemination (vcc.tech/UrbanScene3D). |
+| stat_holm | Scand. J. Statist. 6(2):65-70, 1979 (JSTOR 4615733). Entered from the standard record on 2026-11-18; Crossref is blocked from the build container, so not yet checked against a resolver. |

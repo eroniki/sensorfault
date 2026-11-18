@@ -1,100 +1,33 @@
 \section{Experimental Design and Hypotheses}
 \label{sec:setup}
-The experiments ask when the gate helps and when it does not, and they start by measuring the
-depth model. All use public datasets, public pretrained models and public code; the protocol,
-hypotheses and thresholds are fixed and tagged in the code repository before any test scene is run.
-Only E1 and the H7 pose check have been run, both on one MatrixCity block (Sections~\ref{sec:results:e1}
-and~\ref{sec:results:h7}).
+The protocol, hypotheses and thresholds are tagged in the code repository before any test scene is run;
+only public data, released models and public code are used.
 
-\subsection{Design in Brief}
-\label{sec:setup:expsetup}
-\emph{Data.} The main real set is UseGeo \cite{data_usegeo}: UAV nadir survey images flown in parallel
-strips, with exterior orientation per image and UAV LiDAR with per-image LiDAR depth maps as the
-reference. H3D \cite{data_h3d} (UAV oblique imagery and dense UAV LiDAR) is a second real set if its raw
-images and orientations can be obtained. MatrixCity \cite{data_matrixcity}, a synthetic city with exact
-rendered depth and poses for aerial views, is used for controlled fault injection with exact truth.
-ETH3D \cite{data_eth3d}, with laser-scan depth and registered poses, is a small sanity check. At most
-one scene of UrbanScene3D \cite{data_urbanscene3d} may be added for comparability with large-scene
-splatting work. All sets are licensed for non-commercial use only.
-Residuals are measured on development scenes of UseGeo and ETH3D. Poses are the given exterior
-orientation or registration, refined as a trajectory spline (Section~\ref{sec:method:poses});
-perturbed starting poses are an ablation. Licences are listed in Supplement~\ref{sup:setup}.
-\emph{Depth models.} Only off-the-shelf models with released weights are used; no unreleased or in-house
-model. Depth Pro \cite{est_depthpro} gives one prediction per image; Metric3D v2 and UniDepthV2, which
-output a confidence, supply the confidence baseline, and all three enter the altitude comparison, which
-contrasts nadir views from survey altitude with near-ground views. \emph{Reconstruction.}
-Depth-supervised splatting of 2DGS surfels with gsplat, with the appearance block of
-Section~\ref{sec:method:setting}, run with and without the gate. \emph{Faults.} Natural failures
-labelled against the LiDAR or laser depth on connected regions, classed as specular (glass, water),
-textureless (roofs, roads, walls) or other; and injected regional faults (offset, plane replacement, blurred copy and mirrored
-depth on 2--40\% of a view, at 2--16$\sigma$), placed on appearance masks or random superpixels,
-either independent per view or repeated across views. \emph{Baselines.} SpotLessSplats
-\cite{gs_spotless}, the RobustNeRF loss \cite{gs_robustnerf} and robust depth losses (Huber,
-Geman--McClure) in the fit; as view tests, the per-view aligned RMS residual against the other
-views' render and the depth model's confidence; no gate and an oracle gate. \emph{Metrics.}
-Detection power at 5\% per-view false alarm, false-alarm and untestable rates, held-out laser-depth
-AbsRel, and surface accuracy, completeness and F-score. Details are in Supplement~\ref{sup:setup}.
+\runin{Data, baselines and metrics.} The main real set is UseGeo \cite{data_usegeo}, UAV nadir strips with
+per-image LiDAR depth; MatrixCity \cite{data_matrixcity} gives exact depth for fault injection, and ETH3D
+\cite{data_eth3d} is a sanity check. Depth Pro \cite{est_depthpro} is the default model; Metric3D v2 and
+UniDepthV2 supply the confidence baseline. Natural failures are labelled against the reference depth;
+injected faults cover 2--40\% of a view at 2--16$\sigma$. Baselines are SpotLessSplats \cite{gs_spotless},
+RobustNeRF \cite{gs_robustnerf}, robust depth losses, the aligned RMS residual and the model's confidence.
+Metrics are detection power at 5\% false alarm, untestable rate, AbsRel and surface F-score
+(Supplement~\ref{S-sup:setup}).
 
-\subsection{Hypotheses}
-\label{sec:setup:hyp}
-Each hypothesis states what would falsify it, and several state where the gate is not expected to
-help. Thresholds match the pre-registered configuration files.
-\begin{description}
-  \item[H1] \emph{(residuals first; go/no-go).} Fit $\sigma(\cdot)$, $\ell$, $\nu_{\mathrm{nug}}$, the tails, the
-        shared distance-bias coefficient $\beta$, the range of the scene temperature $\gamma$ and
-        the per-view heterogeneity $\omega$ of the aligned Depth Pro residuals on UseGeo and ETH3D
-        development scenes; characterise natural regional failures, separately for nadir views from
-        survey altitude and for near-ground views. If $\omega\gtrsim0.05$, the region scan leads
-        and the energy test keeps its $\omega$-calibrated threshold. \emph{Go} if $\ge10\%$ of views carry a failure covering $\ge2\%$ of pixels at
-        $>3\sigma$ and keeping those views lowers the fused-surface F-score by $\ge2$ points.
-        \emph{No-go} (pivot to an analysis paper) below 5\% of views or below 1 point.
-  \item[H2] \emph{(repetition).} Cross-view correlation of aligned errors at the same reference
-        surface point: $\ge0.5$ on textureless regions, $\le0.3$ on specular, $\le0.2$ on textured, and
-        decreasing with the separation of the two frames along the strip. \emph{Falsified} if the
-        textureless value is below 0.5 or not at least 0.2 above the specular one. The decay with
-        separation sets the block size $B$.
-  \item[H3] \emph{(detection).} At 5\% false alarm, on specular-region failures, the gate beats the
-        best cheap or robust baseline by $\ge15$ points of power. \emph{Falsified} if the gain is
-        below 15 points or its interval includes zero. No gain is predicted on textureless failures.
-  \item[H4] \emph{(reconstruction).} With the gate, AbsRel and F-score improve by $\ge10\%$ relative
-        over no gate and the best robust-splatting baseline on failure scenes of UseGeo and ETH3D, and
-        on MatrixCity with injected faults,
-        and change by $\le2\%$ on clean scenes. \emph{Falsified} if the paired interval includes zero
-        on failure scenes, or clean scenes degrade by more than 2\%.
-  \item[H5] \emph{(calibration).} With independent per-surfel blocks, the raw mean $T_j/m_j$ on
-        clean views exceeds 1.2 (overconfidence). With the leave-view-out scene temperature and the
-        $\omega$-calibrated energy threshold, the per-view false-alarm rate on test scenes is within
-        $[0.5\alpha,1.5\alpha]$ without per-scene retuning; deflation by $n_{\mathrm{eff}}/n$ and
-        jackknife inflation are ablations. \emph{Falsified} if it leaves that band.
-  \item[H6] \emph{(ablations).} Joint surface $-10$ points; keeping tested-view-only surfels $-20$
-        points on large region failures; unwhitened $-5$ points; rendered blocks at least as calibrated
-        and powerful as the FisherRF-style and Bayes' Rays-style uncertainties; dropping the scene
-        temperature or the shared distance bias raises the clean false-alarm rate; a fold-wise opacity
-        warm-up changes the false-alarm rate and the power by less than 2 points, so freezing opacity is
-        safe. The outer loop detects at least 10 points more faulty views than a single pass when two or
-        more faulty views share a region, with the clean false-alarm rate still in its band; dropping
-        all rejected views per round excludes more clean views; readmission changes the results by
-        less than 2 points. Leave-block-out with $B$ chosen from the sweep $B\in\{1,3,5,9\}$ detects at least
-        10 points more faulty views than $B=1$ when neighbouring frames repeat the error, at a cost in
-        untestable pixels that is reported; starting from perturbed poses changes the detection power
-        by less than 5 points. \emph{Falsified} if any ablation is within its margin, if the fold-wise
-        warm-up changes the results by more, if the loop does not beat the single pass by 10 points,
-        or if the chosen block does not beat $B=1$ by 10 points.
-  \item[H7] \emph{(pose perturbation check).} After the gate has run, the poses of chosen views (isolated
-        views, a block, and the flagged view) are perturbed by known rotations
-        ($0.05$--$2^{\circ}$) and translations (1--50 ground sampling distances). (a)~Before refinement, with
-        their own depth excluded from the tested pose, the gate flags at least 80\% of the views
-        perturbed by at least $0.5^{\circ}$ or 10 ground sampling distances. (b)~Spline, pose-graph and
-        render-and-compare refinement removes at least 80\% of the perturbation up to $1^{\circ}$ and 25
-        ground sampling distances. Recovery error is reported against perturbation size, including where
-        it fails. \emph{Falsified} if either rate is below 80\% in its range.
+\runin{Hypotheses.} Each states what would falsify it (full text and thresholds in
+Supplement~\ref{S-sup:hyp}).
+\begin{description}\setlength{\itemsep}{1pt}
+  \item[H1] \emph{Go/no-go:} on UseGeo and ETH3D development scenes, $\ge10\%$ of views carry a failure
+        covering $\ge2\%$ of pixels at $>3\sigma$, and keeping them costs $\ge2$ points of F-score.
+  \item[H2] \emph{Repetition:} cross-view error correlation is $\ge0.5$ on textureless regions and
+        $\le0.3$ on specular ones, and decays along the strip; the decay sets $B$.
+  \item[H3] \emph{Detection:} at 5\% false alarm the gate beats the best baseline by $\ge15$ points of power
+        on specular failures; no gain is predicted on textureless ones.
+  \item[H4] \emph{Reconstruction:} AbsRel and F-score improve by $\ge10\%$ on failure scenes and change by
+        $\le2\%$ on clean scenes.
+  \item[H5] \emph{Calibration:} the per-view false-alarm rate stays within $[0.5\alpha,1.5\alpha]$ on test
+        scenes without retuning.
+  \item[H6] \emph{Ablations:} each design choice (cavity, whitening, scene temperature, outer loop,
+        leave-block-out) earns a stated margin.
+  \item[H7] \emph{Poses:} (a)~the gate flags $\ge80\%$ of views perturbed by $\ge0.5^{\circ}$ or 10 ground
+        sampling distances (GSD); (b)~refinement removes $\ge80\%$ of perturbations up to $1^{\circ}$ and
+        25~GSD.
 \end{description}
-H1 is a go/no-go and runs first; H2 predicts a blind spot rather than a success; H3 and H4 are the
-claims that would justify the method; H5 tests the stated approximation; H6 tests the design choices; H7 is a controlled check of the
-pose refinement and of the gate on pose errors.
-
-\paragraph{Breakdown scenarios} Reported as honest negatives: errors repeated in all views
-(textureless surfaces, H2), including across a whole block; low overlap, where pixels are untestable; faulty views that supply most of a
-region; masking and swamping across rounds of the outer loop, and loops that reach
-the round cap; a misspecified noise shape or a per-view heterogeneity above the calibrated $\omega$, which the
-scene temperature cannot fix; and faults or misfits beyond the linearised fusion.

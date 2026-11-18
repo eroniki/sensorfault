@@ -1,52 +1,10 @@
-\section{Conclusions, Limitations and Future Work}
+\section{Conclusion}
 \label{sec:conclusion}
-We have proposed a depth-only view gate for depth-supervised Gaussian splatting. Each surfel keeps a
-$10\times10$ uncertainty, separate from its rendering shape, with its opacity frozen after a warm-up;
-the rasteriser renders its normal-offset and tilt block into depth variance. Views add their
-alpha-weighted information, leaving a view out is a subtraction and one Newton step, and the tested
-view is compared with the other views' rendered surface by a whitened test at a scene temperature
-fitted without it, with a stated false-alarm rate. The test is Baarda's and Teunissen's; the
-contribution is an uncertainty that renders and its use for testing views. The evaluation starts by
-measuring the depth model and requires the gate to beat cheap baselines on regional,
-appearance-driven failures. Two controlled experiments have been run, on exact synthetic depth with
-independent noise. E1 addresses the false-alarm control, the scene temperature and part of H6. The H7
-pose check supports its detection prediction (a) and falsifies its recovery prediction (b): the
-refinement as specified removed 63\% of a rotation error and 38--80\% of a translation error, below the
-80\% target, and a perturbed view swamped up to 67 others.
-\TODO{Rewrite around the measured results; if H1 is a no-go, reframe as an analysis of the depth
-model's failures; report for each of H1--H6 whether it was supported or falsified.}
-
-\subsection{Limitations}
-\label{sec:disc:limits}
-(1)~Independent per-surfel blocks ignore cross-surfel correlations, the correlation of depth error
-within a view and the shared pose error of a view, so the rendered variance is overconfident; we do not
-fix this here. The threshold is calibrated on clean data, H5 measures the gap, and deflation by
-$n_{\mathrm{eff}}/n$ or jackknife inflation are ablations only. (2)~The scene temperature corrects the
-noise level, not its shape or tails, and not a view whose nominal noise is genuinely larger than the
-scene's; such a view keeps an elevated false-alarm rate and is indistinguishable from a fault by design,
-so the guarantee is a scene-average false-alarm rate. (3)~If the depth model repeats the same error
-across views, as H2 tests for textureless surfaces, the other views agree with the fault and the gate
-cannot see it; leave-block-out removes the neighbours that share it, but not errors repeated across
-whole strips, and it weakens the cavity, raises the detection floor and leaves more pixels untestable. (4)~Pixels that no other view sees are untestable, so low overlap lowers availability.
-(5)~If faulty views are a majority in a region, the leave-view-out surface follows the fault and the
-outer loop locks onto the wrong consensus; masking among a minority of faulty views and swamping of
-clean views are reduced, not excluded, by dropping one view per round, and a dropped clean view is not
-readmitted by default. (6)~The leave-out is a Newton step at the MAP, exact only for the linear model,
-and opacity is not re-estimated without the tested view; within a round, a surfel pruned because of a
-not-yet-caught view cannot be restored, although the next round re-densifies once that view is caught.
-The Holm schedule over rounds is exact only for fixed p-values, so the loop's level rests on
-clean-run calibration. (7)~Whole-view affine errors are absorbed by the alignment and are neither
-detected nor harmful; the depth bias is modelled only as a shared distance term. (8)~Colour may refine the
-poses but never the map geometry, so appearance cues are not used for detection. (9)~Pose faults are
-not a target of the gate, only of the controlled check in H7; poses are refined, not estimated from scratch, and the spline assumes a smooth,
-continuously recorded flight. (10)~The noise shape is calibrated on a few static scenes for one default
-model, and nadir aerial imagery lies outside the depth model's main training distribution, which H1
-measures rather than assumes away.
-
-\subsection{Future Work}
-\label{sec:disc:future}
-Planned, none started: modelling cross-surfel correlation by low-rank or banded blocks; testing poses
-as well as depth; a per-view bias field of the depth model, which is the subject of a separate paper; using the rendered uncertainty for view selection and for reconstruction from fewer
-views; online operation; and depth from physical sensors. Estimating the light sources and relighting the
-appearance block, for example on aerial data under varying illumination \cite{data_beyondlight}, could later
-let colour help without letting it shape the geometry.
+We have proposed a depth-only view gate in which each surfel's uncertainty is rendered into depth variance,
+leave-out is an exact subtraction, and views are tested against the others' surface at a stated false-alarm
+rate under a Holm schedule. With exact depth, the loop held the false alarm at zero and avoided swamping;
+pose errors were detected but not fully recovered. The rendered variance is overconfident because
+cross-surfel correlations are ignored, errors repeated across whole strips are invisible, and pixels seen
+by no other view are untestable (Supplement~\ref{S-sup:limits}).
+\TODO{Rewrite around the real-data results; if H1 is a no-go, reframe as an analysis of the depth model's
+failures.}

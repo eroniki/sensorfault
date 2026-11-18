@@ -1,42 +1,19 @@
 \section{Related Work}
 \label{sec:related}
-\runin{Testing theory.} Baarda's data snooping, its reliability theory and the DIA procedure test a
-linear Gaussian model with nuisance parameters for misspecified observations and give a minimum
-detectable bias \cite{stat_teunissen_dia}; in satellite navigation, solution separation equals the
-residual-based test \cite{flt_raim_joerger}. Read as message passing, removing one source's Gaussian
-message is the cavity step of expectation propagation \cite{mp_minka_ep}, and Gaussian belief
-propagation has been proposed for spatial AI \cite{mp_davison_gbp}; we use the cavity only as a
-framing of one exact subtraction. Our gate
-is an instance: the observations are pixels, the nuisance is a per-view scale and offset, and the
-leave-one-out solution is a rendered surface.
+\runin{Robust and uncertainty-aware reconstruction.} Robust losses \cite{rob_blackrangarajan,rob_barron} and
+distractor-aware methods \cite{gs_robustnerf,gs_spotless,gs_robustsplat} down-weight outlying pixels;
+multi-view filters test pixels by correspondence \cite{fus_merrell,fus_colmap_mvs}. FisherRF
+\cite{unc_fisherrf} and Bayes' Rays \cite{unc_bayesrays} quantify radiance-field uncertainty. None decides
+on a whole view at a stated false-alarm rate; H6 compares their uncertainties inside our test.
 
-\runin{Surfels, splatting and monocular priors.} Point-based fusion keeps surfels with a normal, a
-radius and a confidence and fuses depth by projective association \cite{fus_keller_surfels}. Gaussian
-splatting renders primitives with a differentiable rasteriser \cite{gs_3dgs,gs_gsplat}; 2DGS uses planar
-Gaussians for accurate surfaces \cite{gs_2dgs}, and monocular depth and normal priors supervise
-splatting and implicit surfaces after per-view alignment \cite{gs_dnsplatter,rec_monosdf}. We fuse by
-the rasteriser's own Jacobians rather than by association, and keep the uncertainty apart from the
-rendering shape.
+\runin{Surfels and splatting.} Point-based fusion associates depth to surfels projectively
+\cite{fus_keller_surfels}; Gaussian splatting uses a differentiable rasteriser \cite{gs_3dgs,gs_gsplat},
+2DGS planar Gaussians \cite{gs_2dgs}, and monocular priors are aligned per view \cite{gs_dnsplatter,rec_monosdf}.
+We fuse through the rasteriser's Jacobians and keep the uncertainty apart from the rendering shape.
 
-\runin{Dense fusion.} Volumetric fusion integrates depth into a truncated signed distance function on
-a voxel grid \cite{fus_curless,fus_kinectfusion}; radiance fields fit a dense volumetric field to images
-\cite{rec_nerf}; learned multi-view stereo builds cost volumes over depth hypotheses from feature
-correspondences \cite{rec_mvsnet}. Our representation is sparse, and its fusion and testing need no
-correspondences.
-
-\runin{Trajectories.} Continuous-time estimation writes the trajectory with temporal basis functions
-\cite{traj_furgale_basis}, and cumulative B-splines on Lie groups give smooth rotations with cheap
-derivatives \cite{traj_sommer_bspline}; we use such a spline as the prior for survey flights.
-
-\runin{Robust reconstruction.} Robust losses \cite{rob_blackrangarajan,rob_barron} and distractor-aware
-methods \cite{gs_robustnerf,gs_spotless,gs_robustsplat} down-weight pixels whose residual, mostly
-photometric, looks like an outlier; multi-view consistency filters test pixels by correspondence
-\cite{fus_merrell,fus_colmap_mvs}. None decides on a whole view at a stated false-alarm rate.
-
-\runin{Uncertainty in radiance fields.} FisherRF uses the Fisher information of radiance-field
-parameters for view selection and uncertainty quantification \cite{unc_fisherrf}; Bayes' Rays fits a
-post-hoc Laplace uncertainty over a perturbation field of a trained NeRF \cite{unc_bayesrays}. They
-quantify uncertainty; we render a per-primitive uncertainty into depth variance and use it, with exact
-leave-view-out, to test views. H6 puts both inside the same test. A longer review is in
-Supplement~\ref{sup:related}.
-
+\runin{Testing and message passing.} Data snooping and the DIA procedure test a linear Gaussian model for
+misspecified observations \cite{stat_teunissen_dia}; solution separation is equivalent
+\cite{flt_raim_joerger}; removing a Gaussian message is the cavity step of expectation propagation
+\cite{mp_minka_ep}, and Gaussian belief propagation serves spatial AI \cite{mp_davison_gbp}. Our gate is
+such a test with pixels as observations and a rendered surface as the leave-one-out solution
+(Supplement~\ref{S-sup:related}).

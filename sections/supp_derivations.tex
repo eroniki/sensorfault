@@ -14,7 +14,7 @@ $\delta\mathbf{n}^{\top}(\mathbf{x}-\boldsymbol\mu)+\mathbf{n}^{\top}\mathbf{w}\
 With $\mathbf{R}\leftarrow\mathbf{R}\exp([\delta\boldsymbol\phi]_\times)$ and $\mathbf{R}=[\mathbf{t}_1\ \mathbf{t}_2\ \mathbf{n}]$,
 $\delta\mathbf{n}=\mathbf{R}(\delta\boldsymbol\phi\times\mathbf{e}_3)=\delta\phi_2\mathbf{t}_1-\delta\phi_1\mathbf{t}_2$, which has no normal
 component. Hence $\delta d$ depends on $\boldsymbol\theta$ only through
-$(\nu,\tau_1,\tau_2)=(\mathbf{n}^{\top}\delta\boldsymbol\mu,\ \delta\phi_2,\ -\delta\phi_1)$, which gives \eqref{eq:jac}.
+$(\nu,\tau_1,\tau_2)=(\mathbf{n}^{\top}\delta\boldsymbol\mu,\ \delta\phi_2,\ -\delta\phi_1)$, which gives \eqref{M-eq:jac}.
 The in-plane components of $\delta\boldsymbol\mu$, the spin $\delta\phi_3$ and the scales do not change
 the ray-surfel depth to first order and keep their prior information $\Lambda_0$; they must not be
 reported as learned surface uncertainty.
@@ -27,13 +27,13 @@ $W=\sum_kw_k$ and $\hat D=A/W$,
 \[
 \frac{\partial\hat D}{\partial\,\mathrm{logit}\,\alpha_k}=\alpha_k(1-\alpha_k)\,\frac{\partial_{\alpha_k}A-\hat D\,\partial_{\alpha_k}W}{W},
 \]
-which includes the transmittance of the surfels behind $k$. The code checks this and \eqref{eq:jac}
+which includes the transmittance of the surfels behind $k$. The code checks this and \eqref{M-eq:jac}
 against finite differences of the exact compositing and ray-surfel depth.
 
 \subsection{Information Update, Posterior and Newton Leave-Out}
 Linearise the measurement of view $i$ at the MAP $\hat{\boldsymbol\theta}$: $\hat d_i(u)=a_i\bigl(\hat D_i(u)+\sum_k
 \mathbf{g}_{uk}\boldsymbol\theta_k\bigr)+b_i+\varepsilon_i(u)$. With independent pixel noise and independent
-surfel blocks the Gaussian likelihood of view $i$ contributes \eqref{eq:info}, and with opacity frozen the
+surfel blocks the Gaussian likelihood of view $i$ contributes \eqref{M-eq:info}, and with opacity frozen the
 posterior of the geometric coordinates is Gaussian with the precision of the geometric block. For the
 linear model, $\Lambda\hat{\boldsymbol\theta}=\boldsymbol\eta$ and
 $\Lambda^{(-j)}\hat{\boldsymbol\theta}^{(-j)}=\boldsymbol\eta-\boldsymbol\eta^{(j)}$, so
@@ -41,7 +41,7 @@ $\Lambda^{(-j)}\hat{\boldsymbol\theta}^{(-j)}=\boldsymbol\eta-\boldsymbol\eta^{(
 \hat{\boldsymbol\theta}^{(-j)}-\hat{\boldsymbol\theta}=\bigl(\Lambda^{(-j)}\bigr)^{-1}\bigl(\Lambda^{(j)}\hat{\boldsymbol\theta}-\boldsymbol\eta^{(j)}\bigr)
 =\bigl(\Lambda^{(-j)}\bigr)^{-1}\nabla\mathcal{L}_j(\hat{\boldsymbol\theta}),
 \]
-which is \eqref{eq:loo}: one Newton step on the loss without view $j$, started at the full MAP (the
+which is \eqref{M-eq:loo}: one Newton step on the loss without view $j$, started at the full MAP (the
 infinitesimal jackknife). It is exact for the linear-Gaussian model and a first-order approximation
 otherwise; the code checks that it equals a fusion recomputed without the view. The shared bias $\beta$
 has scalar normal equations $\sum_i\lambda^{\beta}_i\,\beta=\sum_i\eta^{\beta}_i$, with $\lambda^{\beta}_i=\sum_u a_i^{2}d_i(u)^{4}/\sigma_i^{2}(u)$, so its leave-view-out value subtracts
@@ -71,7 +71,7 @@ With independent blocks and opacity frozen,
 \[
 \mathrm{Var}\,\hat D_{-j}(u)=\sum_kw_{uk}^{2}J_{uk}P_k^{(-j)}J_{uk}^{\top},
 \]
-with $P_k^{(-j)}$ the inverse of $\Lambda_k^{(-j)}$ on the nine geometric coordinates, which is \eqref{eq:var}. The residual \eqref{eq:res} is the sum of the depth noise of view $j$ and the
+with $P_k^{(-j)}$ the inverse of $\Lambda_k^{(-j)}$ on the nine geometric coordinates, which is \eqref{M-eq:var}. The residual \eqref{M-eq:res} is the sum of the depth noise of view $j$ and the
 error of the leave-$j$-out surface, which are independent because view $j$ was subtracted, so its
 covariance is $\gamma^{2}DCD+a_j^{2}UP^{(-j)}U^{\top}+J_q\Sigma_qJ_q^{\top}$, the last term being the error of view
 $j$'s pose, which was estimated without its depth. Pixels that one surfel renders are correlated through
@@ -145,7 +145,7 @@ $\Lambda^{(-\mathcal{B})}=\Lambda-\sum_{i\in\mathcal{B}}\Lambda^{(i)}$, so
 \[
 \hat{\boldsymbol\theta}^{(-\mathcal{B})}-\hat{\boldsymbol\theta}=\bigl(\Lambda^{(-\mathcal{B})}\bigr)^{-1}\sum_{i\in\mathcal{B}}\nabla\mathcal{L}_i(\hat{\boldsymbol\theta}),
 \]
-which is \eqref{eq:block}. It equals removing the views of the block one after another, since messages add,
+which is \eqref{M-eq:block}. It equals removing the views of the block one after another, since messages add,
 and it equals a fusion recomputed without the block; the code checks both, and that the cavity of a block
 carries less normal-offset information than the cavity of one of its views. Only the tested view's
 residual enters its test, so the Holm family counts views, not blocks.
