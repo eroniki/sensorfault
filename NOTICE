@@ -8,4 +8,12 @@ user into the git-ignored third_party/ directory or the Python environment, and 
 their own licences, some of which are restrictive (AGPL-3.0, research-only, non-commercial).
 Wrappers in src/sensorfault/baselines/ call them through subprocess or import boundaries only.
 
-Datasets are not distributed with this repository and keep their own terms (see README.md).
+Datasets are not distributed with this repository and keep their own terms (see README.md),
+with one exception:
+
+src/sensorfault/sim/assets/stanford_bunny_8mm.obj is a decimated copy (vertex clustering, 8 mm
+cells) of the Stanford Bunny, Stanford 3D Scanning Repository, Stanford University Computer
+Graphics Laboratory (http://graphics.stanford.edu/data/3Dscanrep/; Turk & Levoy, SIGGRAPH 1994).
+It is NOT covered by the MIT licence. The repository's terms permit research use and free
+redistribution with acknowledgement of the source, and exclude commercial use without the
+laboratory's permission. scripts/data/bunny.py regenerates it from upstream.
