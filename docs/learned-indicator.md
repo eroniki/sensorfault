@@ -101,8 +101,7 @@ $\hat d_i$ each. With $d_i(u)$ the true depth of pixel $u$ in view $i$,
 ```
 
 where $(a_i, b_i)$ are a per-view scale and offset, $\beta$ is a distance bias shared by all views, and
-$\varepsilon_i(u)$ has nominal standard deviation $\sigma_i(u) = \sigma(\text{range}, \text{texture},
-\text{incidence})$ from an offline calibration. A *fault* is a connected region of a view whose depth
+$\varepsilon_i(u)$ has nominal standard deviation $\sigma_i(u)$, a function of range, texture and incidence from an offline calibration. A *fault* is a connected region of a view whose depth
 deviates from this model by many $\sigma$. A whole-view affine error is absorbed by $(a_i, b_i)$ and is
 not a fault.
 
