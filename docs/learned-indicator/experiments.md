@@ -1,734 +1,577 @@
-# Experiment Design: a Fault Indicator Combined from Several Cues on Frozen Features
+# Experiment Design: Monocular Depth Judged by Motion Parallax
 
-This document designs the experiments for an indicator that treats several cheap signals as noisy
-fault detectors, combines them with a label model whose accuracies are estimated from the agreement
-pattern of the detectors, and distils the result into a light head on a frozen backbone. It starts
-with a cheap test that can kill the idea before any method code is written. Notation follows the
-main document (`docs/learned-indicator.md`, Section 7); new symbols are introduced in Section 0.
+This note designs the experiments for a fault indicator in which a monocular depth map is judged
+by motion parallax from the same posed video. A frozen tracker gives correspondences; with known
+poses each track is a triangulated depth with an uncertainty set by its parallax; where
+triangulation is well conditioned, the gap between monocular and triangulated depth is a fault
+label that costs nothing; a light head on frozen features is trained on those labels and carries
+them to pixels where the tracker abstains. One depth model is used per image. The note starts
+with a cheap test that can stop the idea before any method code is written. Notation follows the
+main document (`docs/learned-indicator.md`, Section 7); new symbols are in Section 0.
 
-Status of every number below: values quoted from the repository are marked *(repo)*; everything
-else is a design choice or an estimate and is marked as such. No experiment in this document has
-been run.
+Status of every number: values quoted from the repository are marked *(repo)*; facts about
+external models and datasets are marked *(checked)* when read on the project's own page or paper
+while writing this note and *(recalled)* when not; everything else is a design choice or an
+estimate. Nothing in this note has been measured, and every statement about what an experiment
+will show is a prediction.
 
 ## 0. Setting, symbols and what exists
 
-**Unit.** A unit is a pair (view $j$, pixel $u$) on an analysis grid of $480 \times 270$ (every
-fourth pixel of the $1920 \times 1080$ frame, the grid `experiments/surface_dsm.py` already uses).
-The method's native unit is a (view, surfel) pair; the pixel grid is used for the kill test because
-it needs no fitted surface. Section 3 moves to surfels.
-
-**Symbols added to the main document's notation.**
+**Unit.** A pair (view $j$, pixel $u$) on an analysis grid of $480 \times 270$. The method's
+native unit is a (view, surfel) message; Section 4, F6 moves there.
 
 | Symbol | Meaning |
 | --- | --- |
-| $m_0$; $m$ | the depth model whose maps are reconstructed from (primary); any other depth model |
-| $q \in \{1,\dots,Q\}$ | cue index |
-| $x^{(q)}_j(u) \ge 0$ | score of cue $q$; larger means more evidence for a fault |
-| $\lambda^{(q)}_j(u) \in \{1, 0, \varnothing\}$ | vote of cue $q$: fault, no fault, abstain |
-| $\mathrm{se}_q$, $\mathrm{sp}_q$ | $P(\lambda^{(q)}=1 \mid f=1)$ and $P(\lambda^{(q)}=0 \mid f=0)$, among non-abstaining units |
-| $\pi$ | fault prevalence $P(f=1)$ |
-| $\zeta^{\mathrm{LM}}_j(u)$ | posterior fault probability of the label model |
-| $\varrho(X)$ | repeat fraction of a ground point $X$: share of the views observing $X$ whose depth is faulty there |
-| $L$ | label budget (number of labelled views) |
+| $\tau$ | a track: image positions $\mathbf u_t$ of one scene point in frames $t \in T_\tau$ |
+| $p$ | parallax of a track in pixels: image displacement caused by camera translation, $p = f\, b_\perp / d$ for baseline $b_\perp$ across the ray |
+| $\sigma_{\mathrm{px}}$ | standard deviation of the tracker's position error, per axis |
+| $d^{\triangle}_j(u)$, $\sigma^{\triangle}_j(u)$ | triangulated depth of the track through pixel $u$ of view $j$, and its standard deviation |
+| $\epsilon^{\mathrm{rp}}$ | root-mean-square reprojection residual of a track after triangulation |
+| $x^{\mathrm{mo}}_j(u)$ | motion witness: standardised gap between aligned monocular depth and triangulated depth |
+| $\mathcal W_j$, $\mathcal A_j$ | pixels of view $j$ where the witness is well conditioned; pixels where it abstains |
+| $\ell_j(u) \in \{0, 1\}$ | witness label on $\mathcal W_j$ |
+| $e(\boldsymbol\phi)$ | propensity: probability that a pixel with frozen features $\boldsymbol\phi$ lies in $\mathcal W$ |
+| $n$ | frame stride of a subsampled video |
+| $\varepsilon_{\mathrm{mo}}$ | relative error scale of the aligned monocular depth |
 
-**What exists in the repository and constrains the design.**
+**What exists** *(repo)*. MatrixCity `small_city` aerial block 3: 185 training views in strips
+and 19 test views, $1920 \times 1080$, exact depth, median depth 338 m; water is 46% of the
+ground area (flat at $-3.4$ m). A depth cache with four model wrappers; four views cached; after
+alignment to exact depth the median relative error is 3-5% for Depth Pro (the default model), 1-2%
+for Depth Anything V2, below 1% for UniDepthV2; Depth Pro takes 0.54 s per view and 6.3 GB.
+`depthcache.align.align_depth` fits a per-view scale or affine map to a *sparse* reference with
+outliers. A photometric 2DGS model of the block, whose surface is within 1 m of truth on 81% of
+land cells and 5% of water cells. Wrappers for OpenMVS depth maps (`baselines/openmvs_dmap.py`).
+Loaders with strip keys (`experiments/matrixcity_io.py`). No tracker, matcher or flow model is in
+the repository. Compute: one 8 GB GPU; a 24 GB card has been used for depth models.
 
-- MatrixCity `small_city` aerial block 3: 185 training views and a 19-view test split, exact
-  float32 depth, loaded by `experiments/matrixcity_io.py` (`load_block`, `project`,
-  `pixel_rays_world`). Median true depth is 338 m *(repo)*.
-- Water is 46% of the block's ground area, a flat plane at $-3.4$ m; land starts at $+0.5$ m
-  *(repo, `results/surface/summary.json`, constant `WATER_Z = -2.0` in `surface_dsm.py`)*.
-- A photometric 2DGS model of the block exists (`experiments/rgb_train_2dgs.py`,
-  `surface_render_rgb.py`): test PSNR 23.1 dB; its surface is within 1 m of truth on 81% of land
-  cells and on 5% of water cells, median error $+5.7$ m on water *(repo)*.
-- Depth cache (`sensorfault.depthcache`): four wrappers, `run.run(...)` accepts a custom list of
-  `datasets.View` objects, `align.align_depth` fits a per-view scale (metric models) or an affine
-  map in inverse depth (Depth Anything V2) robustly. Only four test views are cached so far. On
-  those, after alignment to exact depth, the median relative error is 3-5% (Depth Pro), 9.5-14%
-  (Metric3D v2), below 1% (UniDepthV2) and 1-2% (Depth Anything V2); peak memory 6.3, 4.4, 4.6 and
-  2.1 GB; 0.54, 1.35, 0.22 and 0.35 s per view on a 24 GB card *(repo, `docs/depth-cache.md`)*.
-  UniDepth's confidence reads as predicted error; Metric3D's changes sign between views *(repo)*.
-- Experiment E1 (`experiments/e1_matrixcity_injection.py`) injected regional faults into
-  *synthetic* depth noise on surfels placed on the exact geometry. It has not seen a real depth
-  model. Its result that a per-view aligned RMS detects 98.1% against the gate's 100% *(repo)* shows
-  that injected faults do not discriminate between detectors; the experiments below therefore rest
-  on natural errors of real depth models.
-- `sensorfault.faults.injectors` holds the legacy sensor-fault kinds (extrinsic, constant and
-  range bias, multipath surrogate, transient); the regional injection used in E1 lives in the E1
-  script. `sensorfault.sim.bunny` gives a small scene with exact masks.
-- Compute: one 8 GB GPU for the method; a 24 GB card has been used for the depth models.
+**A fact about the data that the design must face.** The block is a survey: still frames in
+strips, not a dense video. The frame spacing and overlap of block 3 are not recorded in the
+repository and are the first thing to compute from `transforms.json`. The real set planned so far
+(UseGeo) is also stills at 80% forward overlap *(repo)*. Section 1.2 shows that this places both
+sets in the regime where the witness is far more precise than the monocular depth, which is the
+regime in which the question "why keep the monocular prior" is hardest.
 
-**Learning scope.** Every learned component is a light head on frozen features; no backbone is
-fine-tuned. Training is unsupervised (label model), self-supervised (distillation from the label
-model's posterior) or semi-supervised (a small labelled set next to a large unlabelled one). The
-amount of labels is an experimental variable (Section 3, F2). Fully supervised training of a large
-model is out of scope and appears only as an evaluation-side upper bound on cue scores.
+## 1. What the witness can know: three regimes
 
----
+### 1.1 Precision of a triangulated depth
 
-## 1. The kill test (K0)
+For a camera translating by $b_\perp$ across the ray, a point at depth $d$ moves by
+$p = f\, b_\perp / d$ pixels, so $d = f\, b_\perp / p$ and
 
-**Question.** Do at least three cues carry information about the true faults of a real depth
-model, are their errors close enough to conditionally independent for a label model to estimate
-their accuracies, and is there headroom above the best single cue, in particular on faults that
-depth consensus cannot see?
+```math
+\frac{\sigma^{\triangle}}{d} = \frac{\sigma_{\mathrm{px}}}{p} \quad \text{(two frames)}, \qquad
+\frac{\sigma^{\triangle}}{d} = \frac{\sigma_{\mathrm{px}}}{\sqrt{\sum_{t \in T_\tau} (p_t - \bar p)^2}} \approx \frac{\sigma_{\mathrm{px}}}{P}\sqrt{\frac{12}{N}} \quad \text{($N$ equally spaced frames, total parallax $P$)} .
+```
 
-Exact depth is used for scoring only. Nothing computed from it enters a cue, an alignment used by a
-cue, a threshold of a vote, or a parameter of the label model.
+The second form assumes position errors that are independent between frames. Tracker errors are
+not: drift is correlated along a track. The $\sqrt{N}$ gain of dense frames is therefore an
+assumption to be measured (M1), and until it is, the two-frame form with the end points of the
+track is the honest one. Pose error adds to $\sigma_{\mathrm{px}}$ through the reprojection of the
+pose covariance $\Sigma_q$, as in the main document's residual variance.
 
-### 1.1 Data and depth-model runs
+With known poses, two frames constrain a correspondence to a line, which leaves one of the two
+position components unchecked: an error along the epipolar line is read as depth. In a straight
+nadir strip all epipolar lines run along the flight direction, so the two-frame check sees only
+cross-track error. Three or more frames overdetermine the depth, and the reprojection residual
+$\epsilon^{\mathrm{rp}}$ then checks both components. The witness therefore requires
+$\lvert T_\tau\rvert \ge 3$, and a forward-backward tracking cycle as a second check.
 
-Scene: block 3, the 185 training views (cache scene name `block3train`; the 19 test views share
-frame indices with the training views and need their own scene name).
+### 1.2 Regimes
 
-Runs, at full resolution, stored as float32 (float16 quantises a Depth Pro map to about 0.27 m
-steps *(repo)*, which is of the order of the equivariance differences to be measured):
+Let $\varepsilon_{\mathrm{mo}}$ be the relative error scale of the aligned monocular depth and
+$n_{\mathrm{eff}}$ the effective number of independent tracks in a fault region. Define the
+crossover parallax $p^\ast = \sigma_{\mathrm{px}} / \varepsilon_{\mathrm{mo}}$.
 
-| Group | Models | Input transformation | Runs |
+| Regime | Parallax | Per pixel | Per region |
 | --- | --- | --- | --- |
-| Identity | Depth Pro, Metric3D v2, UniDepthV2, Depth Anything V2 | none | $4 \times 185 = 740$ |
-| Flip | Depth Pro, UniDepthV2, Depth Anything V2 | horizontal flip | $3 \times 185$ |
-| Rotation | same three | $90^\circ$ and $270^\circ$ (a nadir image has no canonical up) | $3 \times 370$ |
-| Rescale | same three | downsample to $960 \times 540$ | $3 \times 185$ |
-| Context | same three | four overlapping crops of $1152 \times 648$ (60% of each side) | $3 \times 740$ |
-
-Total $740 + 3 \times 1480 = 5180$ forward passes. With the measured times this is
-$185 \times 2.46\,\mathrm{s} + 1480 \times 1.11\,\mathrm{s} \approx 35$ minutes of GPU time plus model loading; the
-times were measured on a 24 GB card and UniDepth ran a slow fallback, so one hour is the planning
-figure. Depth Pro peaks at 6.3 GB including 0.5 GB of other processes *(repo)*; it should fit 8 GB
-but this is not verified. Metric3D is run on the identity only: its 300 m clamp must be raised
-(`max_depth_m`) because 72% of true depth is beyond it *(repo)*, and it is the slowest model.
-Storage: transformed outputs are mapped back to the identity frame and kept at $480 \times 270$
-float32 (0.5 MB each, about 2.3 GB); identity outputs are kept at full resolution.
-
-Focal length passed to the wrappers: unchanged for flip, rotation and crop; halved for the
-rescale. Depth Pro reads the scene as a 3-5 m miniature *(repo)*; that is a whole-view scale error,
-removed by alignment and not a fault.
-
-### 1.2 Alignment used by the cues (label-free)
-
-Each cue needs depth in a common gauge. Two alignments, neither using exact depth:
-
-- **Within a view, between maps of the same image** (cues c2 and c3): a robust affine fit in
-  inverse depth of map A to map B over all pixels (RANSAC then least squares, the algorithm of
-  `align.fit_affine_inverse`). No reference outside the image is needed.
-- **Across views** (cues c1 and c4): with known metric poses the scale of a depth map is
-  determined by multi-view consistency. Initialise the per-view scale from the camera height above
-  a ground plane (median depth equals flying height over ground for a nadir view), then alternate:
-  reproject all views outside the block $\mathcal B_j$ into view $j$, take the per-pixel median, and
-  refit $(a_j, b_j)$ robustly (Huber weights, as in the main document's Section 3). Five rounds.
-
-A control alignment uses 1% of the exact depth pixels as a stand-in for triangulated tie points
-(the "run b" protocol of `docs/depth-cache.md`). It leaks two parameters per view from the
-evaluation data and is reported only to bound what the label-free alignment costs.
-
-Known weak point: with water covering 46% of the area, some views are mostly water. If a model is
-wrong on water, the robust alignment of such a view can lock onto the water. Views whose two
-alignments (from the largest and from the second-largest consistent pixel set) are both
-self-consistent are reported as view-level ambiguous and analysed separately.
-
-### 1.3 True-fault mask (evaluation only)
-
-For the primary model $m_0$ and view $j$:
-
-1. Align $\hat d_j$ to the exact depth $d_j$ with `align_depth` (median scale, or RANSAC affine for
-   Depth Anything V2). This is the best-case alignment; it is an evaluation device.
-2. Relative error $e_j(u) = (\hat d^{\mathrm{al}}_j(u) - d_j(u)) / d_j(u)$. Robust scale
-   $\hat\sigma_j = 1.4826 \cdot \operatorname{MAD}_u\, e_j(u)$.
-3. $f_j(u) = 1$ if $\lvert e_j(u)\rvert > 3\hat\sigma_j$ and $u$ lies in a connected region of
-   such pixels covering at least 2% of the view (the main document's definition). $f_j(u) = 0$ if
-   $\lvert e_j(u)\rvert < 2\hat\sigma_j$. Everything else (the band between 2 and 3 $\hat\sigma_j$,
-   small exceedance regions, and pixels within 3 grid cells of a true depth discontinuity) is
-   *ignore* and enters neither class.
-4. Sensitivity variants, reported but not used for the decision: thresholds 2 and 4
-   $\hat\sigma_j$; region sizes 0.5% and 5%; an absolute threshold $\lvert e\rvert > 0.03$; and
-   the alignment of Section 1.2 in place of step 1. A threshold-free companion is the Spearman
-   correlation between each score and $\lvert e\rvert$.
-
-The mask is a property of ($m_0$, view, pixel). The test is run with each of Depth Pro,
-UniDepthV2 and Depth Anything V2 as $m_0$; the pre-declared decision model is Depth Pro (the
-plan's default). If Depth Pro's prevalence $\pi$ is outside $[0.01, 0.30]$, the decision model is
-the one whose prevalence is closest to 0.05.
-
-**Fault classes derived from the scene** (no semantic labels are needed; MatrixCity's material
-or reflectance layers, if released for the aerial blocks, would refine this, which is not verified):
-
-| Class | Definition from exact data |
-| --- | --- |
-| Water | true height below $-2$ m |
-| Ground | horizontal normal, height within 2 m of the local ground level |
-| Roof | horizontal or sloped normal, elevated |
-| Facade | normal within $30^\circ$ of horizontal |
-| Edge and thin | within 3 grid cells of a depth discontinuity (scored separately, outside the main mask) |
-| Texture-free | local gradient energy of the image below its 10th percentile (from the image, not from depth) |
-
-**Repetition strata.** Each faulty unit is back-projected with the exact depth to its ground point
-$X$; $\varrho(X)$ is the share of views observing $X$ that are faulty there with the same sign of
-error. Strata: *isolated* ($\varrho < 1/3$), *mixed*, *common-mode* ($\varrho \ge 2/3$). The
-common-mode stratum is where depth consensus is blind by construction and is the stratum on which
-the idea must earn its keep.
-
-Masks, classes and strata are written to `results/k0/eval_only/` and read by the scoring script
-only.
-
-### 1.4 Cues
-
-All scores are computed for $m_0$ on the analysis grid. Votes use a threshold that needs no
-labels: each score is turned into a robust z-value with the scene-wide median and MAD of that
-score, and $\lambda^{(q)} = 1$ where it exceeds 3, $0$ where it is below 2, and abstains in
-between or where the cue is undefined.
-
-- **c1, geometric consensus.** Cavity depth $\hat D_{-j}$ is the per-pixel median of the aligned
-  depth maps of all views outside $\mathcal B_j$ reprojected into view $j$ (z-buffered); its spread
-  gives $V_{-j}$; $x^{(1)} = \lvert z_j(u)\rvert$ with $z_j$ as in the main document. $B \in \{1, 3\}$.
-  Abstains outside $\Omega_j$ (fewer than three contributing views). This is a stand-in for the
-  surfel cavity of `gs/gate.py` and needs no fit; the stand-in is replaced in F0.
-- **c2, cross-model disagreement.** For each other model $m$, align its map to that of $m_0$
-  within the view and take $x^{(2,m)} = \lvert \log \hat d^{m_0} - \log \hat d^{m \to m_0}\rvert$.
-  Three pairwise scores are kept as separate cues and also pooled as their median.
-- **c3, equivariance failure.** Each transformed output of $m_0$ is mapped back, aligned to the
-  identity output within the view, and $x^{(3)}$ is the standard deviation of log depth over the
-  available transformations. Sub-scores per transformation family (flip and rotation, rescale,
-  context) are kept. Abstains where fewer than three transformed outputs cover the pixel.
-- **c4a, multi-view photo-consistency.** Using $\hat d_j$ in the cross-view gauge and the known
-  poses, the four neighbours with the largest baseline (two along the strip, two across) are
-  warped into view $j$; a $7 \times 7$ zero-mean normalised cross-correlation cost is evaluated at
-  $\hat d_j$ and at 32 depth hypotheses around it. $x^{(4a)}$ is the cost at $\hat d_j$ minus the
-  minimum over the sweep, taking the best two neighbours per pixel. The cue abstains where the
-  cost profile is flat (range of the profile below a fixed fraction of its noise level), which
-  covers texture-free ground and water.
-- **c4b, disagreement with the photometric surface.** $x^{(4b)} = \lvert \log \hat d_j - \log D^{\mathrm{rgb}}_j\rvert$
-  with $D^{\mathrm{rgb}}_j$ the median depth rendered from the existing RGB 2DGS model. Cheap
-  because the model exists; a proxy for the influence of a depth message on held-out colour loss.
-
-Reference scores that are not part of the method: UniDepthV2's and Metric3D's own confidence;
-the per-view aligned RMS (view level); a constant.
-
-Sensitivity of the photometric cues is bounded by geometry: a depth error $\delta$ at depth $d$
-moves the correspondence by $f\, b\, \delta / d^2$ pixels for baseline $b$ and focal length $f$.
-This is computed from `transforms.json` for every neighbour pair before c4a is interpreted; if
-a $3\hat\sigma$ error moves the correspondence by less than one pixel, c4a cannot work on this
-block regardless of image quality.
-
-### 1.5 Measurement (a): how much each cue knows
-
-For each cue, against $f$, over non-ignored units: area under the ROC curve (AUC), average
-precision (AP) together with $\pi$ and the lift $\mathrm{AP}/\pi$, true-positive rate at 5%
-false-positive rate, coverage (share of units where the cue does not abstain), and
-$\mathrm{se}_q$, $\mathrm{sp}_q$ of the vote. Each is reported overall, per class and per
-repetition stratum. Metrics for an abstaining cue are computed on its covered units and,
-separately, with abstention counted as "no fault".
-
-**Uncertainty.** Units are strongly dependent: neighbouring pixels share an error and neighbouring
-views repeat it. Confidence intervals come from a cluster bootstrap over ground tiles of
-$100 \times 100$ m (all units whose ground point falls in a tile are resampled together; 1000
-resamples). Block 3 spans about $800 \times 700$ m, so there are about 56 tiles, half of them
-water. The number of distinct fault regions in ground space is reported next to every interval;
-with fewer than 20 distinct regions the intervals describe one scene and nothing more.
-
-### 1.6 Measurement (b): dependence between cue errors given the class
-
-The label model assumes that votes are independent given $f$. Three statistics, each with a
-cluster-bootstrap interval:
-
-1. **Conditional log odds ratio** for each pair of cues and each class,
-
-```math
-\mathrm{LOR}_{qq' \mid y} = \log \frac{P(\lambda^{(q)}{=}1, \lambda^{(q')}{=}1 \mid f{=}y)\; P(\lambda^{(q)}{=}0, \lambda^{(q')}{=}0 \mid f{=}y)}{P(\lambda^{(q)}{=}1, \lambda^{(q')}{=}0 \mid f{=}y)\; P(\lambda^{(q)}{=}0, \lambda^{(q')}{=}1 \mid f{=}y)} ,
-```
-
-   estimated from the $2 \times 2$ table of jointly non-abstaining units with 0.5 added to each
-   cell. Conditional independence means $\mathrm{LOR} = 0$ in both classes. This is the primary
-   statistic because it does not depend on the marginals and has a direct reading: at
-   $\mathrm{LOR} = 1$ one cue erring multiplies the odds of the other erring by 2.7.
-2. **Conditional Spearman correlation** of the continuous scores within each class; it catches
-   dependence that the vote threshold hides.
-3. **Conditional mutual information** $I(\lambda^{(q)}; \lambda^{(q')} \mid f)$ in bits, with the
-   plug-in estimator on the vote table, reported as a fraction of $\min\{H(\lambda^{(q)} \mid f), H(\lambda^{(q')} \mid f)\}$.
-
-Two further analyses decide what the dependence means:
-
-- **Does a scene class explain it?** The same three statistics are computed within strata of a
-  label-free clustering (k-means with 16 clusters on frozen patch features, Section 3 F2 names the
-  backbones). If dependence is large given $f$ and small given ($f$, cluster), cues share a
-  cause that the image identifies, and a label model stratified by cluster is the remedy. If it
-  stays large, the remedy is a model with explicit dependence, whose structure is not identifiable
-  from three cues.
-- **Consequence for the label model.** The error of the label-free accuracy estimates,
-  $\lvert \widehat{\mathrm{se}}_q - \mathrm{se}_q\rvert$ and $\lvert \widehat{\mathrm{sp}}_q - \mathrm{sp}_q\rvert$,
-  with the right-hand values from the masks. This is what dependence costs in the end and is the
-  quantity the decision uses.
-
-What is expected before measuring, stated so that the result can contradict it: c2 and c3 share
-the network $m_0$ and should be positively dependent given no fault (both fire on depth edges and
-fine structure); c1 and c4b both rest on multi-view geometry and should be dependent given a fault
-on water; the pair (c1, c3) should be the closest to independent.
-
-### 1.7 Measurement (c): gain of the label-free combination
-
-Combinations that use no labels:
-
-| Name | Rule |
-| --- | --- |
-| Majority | share of non-abstaining votes that say fault |
-| Mean rank | mean of the scores' scene-wide ranks |
-| Max rank | maximum of the ranks |
-| DS | Dawid-Skene two-class model on the votes with abstention, fitted by expectation-maximisation from 10 starts, initialised at majority vote |
-| DS-binned | the same with each score cut into five quantile bins (a non-parametric conditional density per cue) |
-| Triplet | method-of-moments accuracies from every cue triple, then the naive Bayes posterior |
-| DS-stratified | DS-binned with accuracies and prevalence per feature cluster |
-
-The class called "fault" in the fitted model is fixed by the convention that it is the smaller
-class and that c1's sensitivity plus specificity exceeds one. Whether that convention picks the
-right class is itself scored (Section 1.9, K5).
-
-Comparators: the best single cue chosen with the masks (the strict comparator); c1 alone (the
-comparator a practitioner would use without labels); the depth models' confidences.
-
-Reported for each: AP, AUC, true-positive rate at 5% false-positive rate, the expected calibration
-error of $\zeta^{\mathrm{LM}}$, overall and per stratum, and paired bootstrap differences against
-the comparators.
-
-### 1.8 Measurement (d): upper bounds (evaluation only)
-
-Fitted with the masks, cross-fitted over ground tiles (train on four fifths of the tiles, score
-on the rest, tiles with a 50 m buffer):
-
-- **Supervised naive Bayes** on the binned scores: the label model's family with parameters set
-  from labels.
-- **Logistic regression** and **gradient-boosted trees** (depth 3) on the raw scores: the best
-  that these cues allow.
-
-These split the distance to the best single cue into three parts:
-
-```math
-\underbrace{\mathrm{AP}_{\mathrm{GBT}} - \mathrm{AP}_{\mathrm{best\ single}}}_{\text{headroom } H}
-= \underbrace{\mathrm{AP}_{\mathrm{GBT}} - \mathrm{AP}_{\mathrm{sup.\ NB}}}_{\text{cost of assuming independence}}
-+ \underbrace{\mathrm{AP}_{\mathrm{sup.\ NB}} - \mathrm{AP}_{\mathrm{DS}}}_{\text{cost of having no labels}}
-+ \underbrace{\mathrm{AP}_{\mathrm{DS}} - \mathrm{AP}_{\mathrm{best\ single}}}_{\text{realised gain } G} .
-```
-
-The bounds are bounds for these cues, not for the problem: an image-only supervised probe
-(Section 3, F2) can exceed them.
-
-### 1.9 Decision thresholds, fixed in advance
-
-All thresholds refer to the decision model, the 3-$\hat\sigma$, 2% mask, the label-free
-alignment, and images degraded as in Section 2 (the "realistic" setting). An interval means the
-95% cluster-bootstrap interval. The numerical values are conventions chosen before seeing data;
-they have no derivation behind them and are stated so that the outcome cannot be reinterpreted.
-
-**Precondition P (is the test informative at all).** $0.01 \le \pi \le 0.30$ for at least one
-model, at least 20 distinct fault regions in ground space, and the common-mode stratum holds at
-least 10% of the faulty units. If P fails, the block cannot test the idea: the result is "no
-information", not "killed", and the test moves to a second block and to real data (K0-R below).
-
-**Kill** if any of:
-
-- **K1, no headroom.** $H < 0.05$ in AP overall *and* on the common-mode stratum (upper interval
-  bound below 0.05). No combination of these cues can help.
-- **K2, nothing new where consensus is blind.** On the common-mode stratum no cue other than c1
-  has AUC with lower bound above 0.60.
-- **K3, fewer than three usable detectors.** Fewer than three cues, counting c2's pairs as one,
-  have overall AUC with lower bound above 0.60 at coverage of at least 50%.
-- **K4, the label model cannot use them.** Every label-free combination, including the
-  stratified one, has $G < 0$ with the interval excluding zero, while $H \ge 0.05$. This kills the
-  zero-label version; the semi-supervised version is then tested in F2 before the idea is dropped.
-- **K5, the model finds something else.** The label model's fault class predicts a scene class
-  better than it predicts faults: AP of $\zeta^{\mathrm{LM}}$ against the water mask exceeds its AP
-  against $f$ by more than 0.10.
-
-**Support** if all of:
-
-- **S1.** At least three cues have overall AUC $\ge 0.70$, and at least one cue other than c1 has
-  AUC $\ge 0.70$ on the common-mode stratum.
-- **S2.** Some triple of cues has $\lvert \mathrm{LOR}\rvert \le 1$ for all three pairs in both
-  classes, unstratified or within feature clusters, and the label-free accuracy estimates of that
-  triple are within 0.10 of the true values.
-- **S3.** The best label-free combination has $G \ge 0.05$ in AP with the interval above zero and
-  $G \ge H/2$.
-- **S4.** On the common-mode stratum the combination's true-positive rate at 5% false-positive
-  rate is at least 0.30 and at least twice that of c1.
-
-Anything between is **inconclusive**: the idea continues only as the semi-supervised variant, and
-only if S1 and $H \ge 0.05$ hold.
-
-**K0-R, the same test on a real scene.** Before any method code is written, Sections 1.3 to 1.8
-are repeated on two ETH3D scenes with laser depth (valid on 10-12% of pixels *(repo)*; the truth
-must be warped from the distorted to the undistorted geometry, see `docs/depth-cache.md`). These
-are terrestrial, not aerial, and serve one purpose: to check that the synthetic verdict on
-measurements (a) and (b) is not an artefact of rendering. If the sign of the verdict differs
-between MatrixCity and ETH3D, the real scene decides.
-
-### 1.10 Cost of the kill test
-
-| Item | Cost (estimate) |
-| --- | --- |
-| Depth-model runs, 5180 passes | about 1 h GPU, 2.5 GB kept |
-| Frozen features for the clustering, 185 views, one backbone | minutes; under 1 GB |
-| c1 (reprojection of 185 views at $480 \times 270$) | minutes, CPU |
-| c4a (plane sweep, 4 neighbours, 32 hypotheses, $960 \times 540$) | under 30 min GPU, under 2 GB |
-| Label models, bounds, bootstrap | minutes, CPU |
-| New code | 800 to 1000 lines; three to four evenings |
-| K0-R on two ETH3D scenes | about 80 views; under 30 min GPU for the same transformation set |
-
-The 185 training images (about 1 GB for the block *(repo)*) must be on disk under
-`data/matrixcity/block3train/`.
-
----
-
-## 2. What a rendered scene can and cannot show
-
-**Which real failure classes occur.**
-
-- *Water* occurs and is large: 46% of the area. The existing photometric reconstruction fails on
-  it (5% of cells within 1 m, median $+5.7$ m, normals off by $30^\circ$ median *(repo)*). So in
-  this render the photometric judge is not unrealistically good on water: it is bad. Whether the
-  monocular models are wrong on this water is unknown; a flat plane may be easy for them. Two
-  outcomes are possible and both matter. If the models are right and the photometric cue fires,
-  water is a large block of correlated false alarms of c4a, c4b and possibly c1, and K5 tests
-  whether the label model then learns "water" instead of "fault". If the models are wrong on water
-  in the same way in every view, water is the common-mode stratum.
-  The exact depth on water is the water surface (flat at $-3.4$ m), which is the surface a survey
-  wants; real laser references are sparse or absent on water, so this is the one place where water
-  can be scored at all.
-- *Glass and specular facades* are in doubt. The depth buffer returns the glass pane, so truth is
-  well defined, but at a range of about 340 m in near-nadir views a window is far below the 2%
-  region size of the fault definition, and facades are barely visible. Rendered reflections are
-  also not guaranteed to move across views as real reflections do. Glass is therefore treated as
-  untested on this data. The 0.5% region-size variant and the facade class report whatever is
-  there; no conclusion about glass is drawn from MatrixCity.
-- *Texture-free surfaces* (roads, flat roofs, water) occur and are the class the rendering
-  represents best.
-- *Not represented:* moving objects between frames, illumination change along a flight, haze,
-  sensor noise, motion blur, rolling shutter, lens distortion residuals, pose error.
-
-**Which cues a render flatters.**
-
-- *c4a and c4b* benefit from noise-free images, identical exposure in all frames, static
-  lighting and exact poses. On textured land they are expected to be better than they would be on
-  real imagery.
-- *c1* benefits from exact poses.
-- *c2 and c3* depend on how the depth models treat rendered images. Several of the models were
-  trained partly on synthetic data; whether MatrixCity or closely related renders were among it is
-  not known and must be checked in the models' data lists. If so, errors on this block are smaller
-  and less varied than on real aerial images (UniDepthV2 below 1% after alignment on four views
-  *(repo)* is a warning), which makes precondition P the likely point of failure.
-
-**Controls.**
-
-1. *Image degradation for the photometric cues only.* Per-view gain and gamma jitter of
-   $\pm 20\%$, Gaussian noise of 3/255, a Gaussian blur of 0.7 px and JPEG quality 75, applied to
-   the images c4a reads and to a retrained copy of the RGB model for c4b. The depth models see
-   the degraded images too in a second pass (740 identity runs more), so that c2 is not compared
-   across different inputs. The decision thresholds of Section 1.9 are read in this setting; the
-   clean setting is reported next to it and the difference is the size of the flattery.
-2. *Pose perturbation.* Poses perturbed at the level left by a bundle adjustment (0.5 px
-   reprojection), with the machinery of `experiments/h7_pose_check.py`; c1 and c4 recomputed.
-3. *Sensitivity floor.* The disparity $f\, b\, \delta / d^2$ of a $3\hat\sigma$ error per
-   neighbour pair, as in Section 1.4; a photometric cue that looks good below one pixel of
-   disparity is reading something other than depth (most likely the image content that also
-   predicts the fault) and is flagged.
-4. *Image-only shortcut.* A cue can score well because it detects a *class* (water) that happens
-   to be faulty, not the fault. The within-class tables of Section 1.5 show this: a cue whose AUC
-   is high overall and near 0.5 inside every class is a class detector. A class detector is useful
-   but transfers only if the class is faulty elsewhere too.
-5. *Real replica.* K0-R of Section 1.9.
-6. *A second block.* A block with less water changes prevalence and the class mix; verdicts that
-   flip between blocks are reported as scene-dependent. One block tar is about 15.8 GB *(repo)*.
-
-One property of the method limits the damage of all this: a label model re-estimates the
-accuracies of its cues on every scene, so accuracies measured on a render are never carried to
-real data. What can be wrong is the decision to continue, in either direction, which is why the
-real replica precedes the method.
-
----
-
-## 3. Follow-on experiments, in order
-
-Each is run only if the one before it does not stop the line. "Statistical gate" is the existing
-test of `gs/gate.py` with its Holm loop. All intervals are cluster-bootstrap intervals over ground
-tiles or, across scenes, over scenes.
-
-### F0. Cues on surfels
-
-- **Question.** Do the kill-test verdicts hold when c1 comes from the leave-block-out surfel
-  cavity and the unit is a (view, surfel) message with information $(\Lambda_{ik}, \eta_{ik})$?
-- **Data.** Block 3, Depth Pro; a depth-supervised surfel fit.
-- **Metric.** AUC and AP of each cue on messages (truth: share of the message's pixels that are
-  faulty, thresholded at one half), and separately the share of faulty messages that land on
-  surfels supported only by faulty views.
-- **Baseline.** The pixel-level stand-in of K0.
-- **Hypothesis.** Message-level AUC of every cue is within 0.03 of its pixel-level value.
-  Falsified otherwise. A separate count decides whether a ray-level (see-through) cue is needed:
-  if more than 20% of faulty messages sit on fault-only surfels, c1 at the surfel is blind to them
-  and a free-space violation score is added as a cue.
-
-### F1. Label model without labels versus with
-
-- **Question.** How close is the label-free estimate of the cue accuracies to the supervised one,
-  and what does the difference cost?
-- **Data.** Block 3 and one more block; three depth models as $m_0$.
-- **Metric.** $\lvert \widehat{\mathrm{se}}_q - \mathrm{se}_q\rvert$,
-  $\lvert \widehat{\mathrm{sp}}_q - \mathrm{sp}_q\rvert$, $\lvert \hat\pi - \pi\rvert$; AP of the
-  posterior; frequency of class swaps over 10 starts and over scenes.
-- **Baseline.** Supervised naive Bayes; majority vote.
-- **Hypothesis.** Accuracy errors at most 0.10; AP within 0.03 of supervised naive Bayes; no
-  class swap in any scene under the convention of Section 1.7. Falsified by a larger gap or a
-  single swap that the convention does not catch.
-
-### F2. Label budget and frozen backbones
-
-- **Question.** At an equal number of labelled views, does the method beat a supervised linear
-  probe on frozen features, and what do a few labels buy?
-- **Budgets.** $L \in \{0, 1, 5, 20\}$ labelled views and one whole labelled scene (185 views);
-  10 random draws of the labelled views per budget. Labelled views come from a block or scene
-  that is never evaluated (Section 4).
-- **Methods at each budget.**
-  1. *Reference line:* logistic regression on frozen patch features, trained on the $L$ labelled
-     views only. Undefined at $L = 0$.
-  2. The same probe with the cue scores appended to the features.
-  3. Label model with labels as anchors: labelled units enter the likelihood with $f$ observed;
-     this fixes which class is the fault and pins the accuracies.
-  4. Head distilled from the label model's posterior on all unlabelled views plus a supervised
-     loss on the $L$ labelled views.
-  5. Head trained by pseudo-labels and consistency under the transformations of Section 1.1, no
-     cues: the generic semi-supervised baseline.
-  6. Logistic regression on the cue scores alone, trained on the labelled views.
-  The conformal threshold of the main document is calibrated on the labelled views when $L > 0$.
-- **Frozen backbones** (features computed once and cached; the head trains from the cache, so the
-  method's own memory is that of a linear layer or a two-layer network):
-
-  | Backbone | Parameters | Why | 8 GB at inference (estimate, fp16, not measured) |
+| R1, blind | $p < p^\ast / (3\sqrt{n_{\mathrm{eff}}})$ | triangulation worse than monocular | a regional shift of $\varepsilon_{\mathrm{mo}}$ is not detectable |
+| R2, judge | between | triangulation worse than monocular | a regional shift of $\varepsilon_{\mathrm{mo}}$ is detectable at 3 standard errors |
+| R3, replace | $p > p^\ast$ | triangulation better than monocular | detectable; triangulation could stand in for the prior on $\mathcal W$ |
+
+R2 is the only regime in which the phrase "the witness judges the dense prior without replacing
+it" is literally true on tracked pixels: no single triangulated depth is as good as the
+monocular one, yet their regional mean exposes a fault. It exists for short windows of dense
+video, for forward motion, and near the focus of expansion.
+
+In a survey block it barely exists. A point seen across a whole pass moves by about the image
+extent along the track, $P \approx 1000$ px; even adjacent stills at 80% overlap give
+$p \approx 0.2 \times 1080 = 216$ px. With $\sigma_{\mathrm{px}} = 1$ px this is a relative depth
+error of 0.1% to 0.5%, against 3-5% for Depth Pro on the four cached views. Whatever
+$\sigma_{\mathrm{px}}$ turns out to be within reason, tracked pixels of a survey block are in R3
+by an order of magnitude. Two consequences shape everything below.
+
+1. On $\mathcal W$ the monocular depth is the weakest sensor present, and a reconstruction that
+   adds the tracks as depth messages with their own $\sigma^{\triangle}$ will overrule it there
+   without any indicator. The indicator's value on survey data lies on $\mathcal A$ only.
+2. The claim about faults that every view repeats splits in two. On $\mathcal W$ the witness sees
+   such faults directly, because triangulation does not use any depth map; this part is nearly
+   guaranteed and nearly worthless, since the tracks would have corrected the surface anyway. On
+   $\mathcal A$ nothing sees them except the head, which extrapolates from appearance. The paper's
+   claim lives or dies on $\mathcal A$.
+
+### 1.3 A caution about reflections
+
+A reflection in a *planar* mirror of a static scene is the image of a static virtual point behind
+the mirror. It satisfies the epipolar constraint in every frame and triangulates, with small
+residual, to the virtual depth. So calm water and flat glass do not necessarily produce tracks
+that leave their epipolar lines: they can produce confident, self-consistent tracks at the wrong
+depth. Only curved or moving reflectors (ripples, waves) break the constraint. Likewise an object
+moving along the flight direction stays on its epipolar line. The self-check is an honest
+abstention flag for tracker failure and for most motion, and is not one for planar specular
+surfaces. Whether the witness then mislabels correct monocular depth as faulty there is measured
+in M2; it is the most likely source of systematically wrong labels.
+
+## 2. The cheap test (K0)
+
+**Question.** Is the witness a sound label where it claims to be; do faults exist where it
+abstains; does a head trained on witness labels rank faults on abstaining pixels; and does the
+monocular prior beat the alternatives there once it is gated?
+
+Exact depth is used for scoring only. No alignment, threshold, label or head parameter touches it.
+
+### 2.1 Inputs
+
+- **Depth.** One identity pass of Depth Pro over the 185 training views (about 100 s of GPU), and
+  one of Depth Anything V2 (about 65 s) as a second decision model, stored as float32.
+- **Geometry, before any model is run.** From `transforms.json`: frames per strip, forward and
+  side overlap, and for every pixel (using exact depth, evaluation side) the number of frames that
+  see it and the total parallax $P$. This costs nothing and decides which regime of Section 1.2
+  the block is in.
+- **Correspondences from frozen models.** Three witnesses are run so that the claim "learned
+  tracking holds where patch correlation abstains" is itself tested:
+
+  | Witness | Model | Verified | Remarks |
   | --- | --- | --- | --- |
-  | DINOv2 ViT-S/14, ViT-B/14, ViT-L/14 with registers | 21 M, 86 M, 0.3 B | general image features; size sweep | all fit; ViT-L on a $518 \times 924$ input about 2 GB, on tiles at native resolution about 4 GB |
-  | DINOv2 ViT-g/14 | 1.1 B | upper end of what fits | fits on $518$-px tiles, about 5 GB |
-  | DINOv3 ViT-L, including the variant pretrained on satellite imagery | 0.3 B | closest pretraining domain to nadir aerial views; existence and licence of the released weights recalled from memory, to verify | as ViT-L |
-  | Encoder of the depth model $m_0$ (Depth Anything V2 ViT-L; Depth Pro; UniDepthV2) | 0.3 B and up | features that already encode what the depth model is unsure about; free, because the forward pass is run anyway | measured peak of the full models: 2.1, 6.3, 4.6 GB *(repo)* |
-  | Cue scores only (no image features) | none | separates what the image adds | none |
+  | Point tracker | CoTracker3, online (windowed) and offline checkpoints | exists, tracks grids of queries, licence CC-BY-NC *(checked)* | trained on video with small inter-frame motion; a 20% image shift between survey stills is outside that; internal resolution near $384 \times 512$ *(recalled)*, which sets $\sigma_{\mathrm{px}}$ at several full-resolution pixels |
+  | Dense matcher | RoMa, chained along the strip | *(recalled: published 2024, built on a frozen DINOv2 encoder; licence not checked)* | made for wide baselines; pairwise, so tracks come from chaining |
+  | Optical flow | SEA-RAFT or RAFT, chained | *(recalled)* | all-pairs correlation at 1/8 of $1920 \times 1080$ needs about 5.6 GB in single precision (computed from the volume size); run at half resolution |
+  | Classical control | plane-sweep patch correlation along the ray | no model | the witness that tracking replaces |
 
-  Larger backbones (for example a 7 B model) are excluded: their weights alone exceed 8 GB in
-  half precision. Feature storage for 185 views at $37 \times 66$ patches and 1024 dimensions in
-  half precision is about 0.9 GB per backbone.
-- **Metric.** AP and true-positive rate at 5% false-positive rate on evaluation scenes, as curves
-  over $L$; the crossover budget $L^\ast$ at which the reference line reaches the method.
-- **Hypotheses.** (i) At $L \le 5$ the best of methods 3 and 4 exceeds the reference line by at
-  least 0.05 AP. (ii) At $L = 0$ the method reaches at least 80% of the AP of the reference line
-  at $L = 185$. (iii) Five labelled views remove every class swap and halve the accuracy errors
-  of F1. (iv) Method 2 exceeds method 1 at every budget, i.e. the cues add information the
-  features do not have. Falsified individually. If (i) and (iv) both fail, a linear probe with a
-  handful of labels is the better method and the cue machinery is not justified; this is a second
-  kill criterion and is reported as such.
-- **Expected weak point.** Where faults are tied to a visible class (water), a probe on frozen
-  features with five labelled views is likely to be very strong within a dataset. The probe's
-  weakness is transfer from synthetic labels to real images, which F7 tests.
+  None of these has been run here; memory and time on 8 GB are unmeasured.
+- **Frozen features** for the head, cached once (Section 4, F3 lists the candidates). The cheap
+  test uses one image encoder and the tracker's own outputs.
 
-### F3. Violation of independence and its effect
+### 2.2 The witness
 
-- **Question.** How fast does the label model degrade as cue errors become dependent, and does
-  stratification repair it?
-- **Data.** (a) Controlled: votes simulated from the measured $\mathrm{se}_q$, $\mathrm{sp}_q$
-  with a pairwise dependence set by a shared latent cause, $\mathrm{LOR}$ swept from 0 to 3, in
-  one class or both. (b) Natural: cue subsets ordered by their measured dependence, including the
-  deliberately redundant set of the three c2 pairs.
-- **Metric.** Accuracy-estimate error and AP loss against supervised naive Bayes as functions of
-  $\mathrm{LOR}$; the same for the stratified model and for a model with one extra pairwise term.
-- **Baseline.** Majority vote, which assumes nothing.
-- **Hypothesis.** AP loss stays below 0.03 for $\lvert\mathrm{LOR}\rvert \le 1$ and the
-  stratified model keeps it below 0.03 up to the dependence measured on real cues. Falsified if
-  the plain model falls below majority vote at the measured dependence and stratification does not
-  recover it.
-- **Not identifiable, by construction.** With three cues the dependence structure cannot be
-  estimated from votes alone; with more cues it can only under assumptions on which pairs are
-  dependent. The structure used is therefore fixed from how the cues are built (c2 and c3 share a
-  network; c1 and c4 share geometry) and never fitted to masks.
+1. **Tracks.** Queries on the analysis grid of every frame; tracked through the frames of the
+   same strip in which the point stays visible, and into the neighbouring strips where the model
+   allows.
+2. **Triangulation with known poses.** Linear triangulation then two Gauss-Newton steps on the
+   reprojection error; $\sigma^{\triangle}$ from the inverse normal matrix with
+   $\sigma_{\mathrm{px}}$ estimated label-free as the robust scale of the reprojection residuals of
+   all tracks with at least four frames.
+3. **Conditioning and abstention.** $u \in \mathcal W_j$ if the track has at least three frames,
+   $\epsilon^{\mathrm{rp}}$ is below three times its nominal value, the forward-backward cycle
+   closes within $2\sigma_{\mathrm{px}}$, and $\sigma^{\triangle}/d^{\triangle}$ is below one third
+   of the monocular error scale. Otherwise $u \in \mathcal A_j$, with the reason recorded (lost,
+   off-epipolar, cycle failure, low parallax, near a depth discontinuity of $d^{\triangle}$).
+4. **Alignment.** The per-view scale and offset $(a_j, b_j)$ are fitted to the triangulated
+   depths on $\mathcal W_j$ with `align_depth`, which was written for a sparse reference with
+   outliers. This is the label-free reference the cache documentation asks for. The monocular
+   error scale $\varepsilon_{\mathrm{mo}}$ is the robust scale of the aligned gap on $\mathcal W_j$.
+5. **Score and label.**
 
-### F4. Distilled head versus label model
+```math
+x^{\mathrm{mo}}_j(u) = \frac{\log d^{\mathrm{al}}_j(u) - \log d^{\triangle}_j(u)}{\sqrt{\varepsilon_{\mathrm{mo}}^2 + \bigl(\sigma^{\triangle}_j(u) / d^{\triangle}_j(u)\bigr)^2}}, \qquad
+\ell_j(u) = 1 \ \text{if } \lvert x^{\mathrm{mo}}_j(u)\rvert > 3 \text{ in a connected region of at least 2\% of the view}, \quad
+\ell_j(u) = 0 \ \text{if } \lvert x^{\mathrm{mo}}_j(u)\rvert < 2 ,
+```
 
-- **Question.** Does a head on frozen features, trained on $\zeta^{\mathrm{LM}}$, match the label
-  model where cues exist and add anything beyond it?
-- **Data.** Blocks as in F1; head trained on some blocks, evaluated on others and transductively
-  on the same block.
-- **Metric.** AP on testable units; AP with one cue withheld from the head's teacher and the head
-  asked to predict that cue's region; calibration.
-- **Baseline.** $\zeta^{\mathrm{LM}}$ itself; a head trained on c1's votes alone (the main document's
-  student); the reference line of F2.
-- **Hypothesis.** The head is within 0.02 AP of the label model on testable units and above the
-  c1-only student by at least 0.05 AP. Falsified otherwise. A head that exceeds its teacher is
-  reported with the within-class analysis of Section 2, control 4, because the likely reason is a
-  class shortcut.
+   and no label in between. The region rule matches the evaluation mask so that label and target
+   describe the same object.
 
-### F5. Transfer to untestable regions
+### 2.3 Evaluation targets
 
-- **Question.** Where no other view observes the scene ($O_{-j}$ below threshold; c1 and c4
-  abstain), does the indicator still work?
-- **Data.** Strip ends and block borders of MatrixCity blocks; a low-overlap subsample (every
-  second strip, every second frame) that makes more pixels untestable while their truth is known.
-- **Metric.** AP on untestable units only, for the label model restricted to c2 and c3, for the
-  distilled head, and for both combined.
-- **Baseline.** Depth-model confidence; the reference line of F2 at $L = 5$.
-- **Hypothesis.** The head's AP on untestable units is at least 80% of its AP on testable units
-  of the same views and exceeds depth-model confidence by at least 0.05. Falsified otherwise.
-  The low-overlap subsample controls for the fact that naturally untestable pixels sit at image
-  borders, where features differ.
+The true-fault mask $f$, the ignore band, the surface classes (water, ground, roof, facade, edge
+and thin, texture-free) and the repetition strata by $\varrho(X)$ are those of the main
+document's Section 5.1. They are written to `results/k0/eval_only/` and read by the scoring script
+only. Exact depth and poses also give exact correspondences for any static pixel, so the
+tracker's position error is measured directly, without a flow benchmark.
 
-### F6. Errors repeated in all views of a region (headline)
+### 2.4 Measurements
 
-- **Question.** Does the indicator detect faults that every view of a region repeats, which no
-  method built on depth consensus can see?
-- **Data.** The common-mode stratum of natural errors on MatrixCity blocks (water if the models
-  fail there); and, as a controlled complement, natural single-view faults transplanted: the
-  depth map of a faulty region is replaced, in *all* views observing it, by a surface consistent
-  across those views (the faulty depth of one view back-projected and re-rendered into the
-  others). This keeps the image content of a real failure while making the error common-mode. An
-  injection into depth alone cannot serve here, because c2, c3 and c4 read the image.
-- **Metric.** True-positive rate at 5% false-positive rate and AP on common-mode units; the same
-  per cue.
-- **Baseline.** The statistical gate, c1 alone, the main document's mixture indicator on c1's residual
-  (all three predicted to be at chance), depth-model confidence, and the reference line of F2.
-- **Hypothesis.** The three consensus-based baselines have AUC within 0.05 of 0.5 on this
-  stratum; the combined indicator reaches a true-positive rate of at least 0.30 at 5% false
-  alarms. Falsified if the indicator is at chance too, or if the consensus baselines are not
-  (which would mean the stratum is mis-defined).
-- **Caveat on the transplant.** A transplanted common-mode error is geometrically consistent by
-  construction and so is as hard as possible for c1 and c4a; a natural common-mode error can be
-  slightly inconsistent between views. Both are reported; the natural one is the claim.
+- **M1, witness accuracy and calibration.** End-point error of tracks against exact
+  correspondences, per class and per frame gap; error of $d^{\triangle}$; the ratio of that error
+  to $\sigma^{\triangle}$ (robust standard deviation of the standardised error, target one); the
+  same ratio as a function of the number of frames used, which tests the $\sqrt{N}$ assumption;
+  coverage $\lvert\mathcal W\rvert$ per class for each witness. This is where the learned
+  trackers are compared with plane-sweep correlation on weakly textured ground.
+- **M2, the self-check.** How well $\epsilon^{\mathrm{rp}}$ and the cycle error detect tracks
+  with end-point error above 3 px (ROC), per class. On water: the share of tracks that pass all
+  checks, and the error of their triangulated depth against the water surface. A cluster of
+  passing tracks at a consistent wrong depth is the virtual-image case of Section 1.3.
+- **M3, label quality on $\mathcal W$.** Precision and recall of $\ell$ against $f$, overall, per
+  class and on the common-mode stratum; every disagreement attributed to a cause (alignment,
+  tracker, discontinuity, reflection, threshold band).
+- **M4, where the faults are.** The table of fault by coverage: $\Pr(f = 1 \mid \mathcal W)$ and
+  $\Pr(f = 1 \mid \mathcal A)$; the share of faulty units, and of common-mode faulty units, in
+  each set, per class; the number of distinct fault regions in ground space that lie mostly in
+  $\mathcal W$ (training positives) and mostly in $\mathcal A$ (the test).
+- **M5, transfer.** A logistic head and a two-layer head on cached frozen features, trained on
+  witness labels of the block itself (transductive, no ground truth), scored on $\mathcal A$
+  against $f$: AUC, average precision, true-positive rate at 5% false positives, overall and
+  within each surface class, and as a function of propensity decile (Section 3). Comparators that
+  use no labels: a constant; local texture energy; the cavity residual of the main document where
+  it is defined; the per-cluster fault rate of a 16-cluster k-means on the same features (a head
+  that only learned "which kind of surface"). Comparator with labels: a linear probe on the same
+  features trained on true masks of a disjoint set of ground tiles.
+- **M6, replacement.** On $\mathcal A$, per class, the relative depth error of: (i) monocular
+  depth with the global alignment of step 4; (ii) the same restricted to pixels with $f = 0$,
+  which is what a perfect indicator would keep; (iii) monocular depth warped locally to the
+  triangulated anchors (a smooth scale field interpolated from $\mathcal W$); (iv) triangulated
+  depth filled into $\mathcal A$ by harmonic and by piecewise-planar interpolation, no monocular
+  depth at all; (v) OpenMVS depth maps; (vi) a feed-forward multi-view model on windows of frames.
+  For (vi), VGGT exists and has a track head; its original checkpoint is non-commercial and no way
+  to supply known poses is documented *(checked)*; its memory per number of frames on 8 GB is not
+  verified, so (vi) is optional in the cheap test.
 
-### F7. Use in reconstruction
+**Uncertainty.** Cluster bootstrap over $100 \times 100$ m ground tiles, 1000 resamples; the
+number of distinct fault regions is reported beside every interval.
 
-- **Question.** Do the message weights $w_{ik} = 1 - \zeta_{ik}$ improve the fused surface?
-- **Data.** MatrixCity blocks with Depth Pro and Depth Anything V2 depth; held-out views by
-  block of frames.
-- **Metric.** Held-out depth error (AbsRel, and the share of pixels within 1 m) and surface
-  F-score at 1 m and 2 m against the exact surface, overall, on faulty regions, and on the
-  common-mode stratum; change on fault-free regions.
-- **Baselines.** No gating; the statistical gate (view removal); a robust depth loss (Huber and
-  Geman-McClure); weighting by the depth model's own confidence; the main document's mixture indicator;
-  an oracle with true masks. Same poses, depth maps, alignment, initialisation and schedule for
-  all.
-- **Hypothesis.** On faulty regions the indicator closes at least half of the F-score gap
-  between no gating and the oracle and exceeds the best non-oracle baseline by an interval that
-  excludes zero; on fault-free regions it changes held-out AbsRel by less than 2% relative.
-  On the common-mode stratum the robust loss and the statistical gate are predicted to equal no
-  gating. Falsified by failure of either part.
-- **Known gap.** Removing a common-mode fault leaves a hole, since no view has correct depth
-  there. The metric must separate "wrong surface removed" (precision rises) from "surface
-  missing" (recall falls); both are reported, and F-score alone is not used to claim a gain there.
+### 2.5 Decision thresholds, fixed in advance
 
-### F8. Real aerial data with laser depth
+Read on the decision model (Depth Pro; Depth Anything V2 if Depth Pro's prevalence is outside
+1-30%), the best of the three learned witnesses chosen by coverage at calibrated
+$\sigma^{\triangle}$ (a label-free criterion), with images degraded and poses perturbed as in
+Section 5. The numbers are conventions fixed before measurement.
 
-- **Question.** Does any of it hold on real nadir imagery?
-- **Data.** UseGeo (three sets of eight strips, per-image laser depth maps; reader is a stub and
-  the download is pending); H3D if images and poses turn out to be released. Zero-label fitting
-  per set; the label-budget variants with labels from MatrixCity only, and with a few labelled
-  real views from a designated set (Section 4).
-- **Metric.** As F2 and F7, on laser-covered pixels; the false-alarm rate realised by the
-  conformal threshold.
-- **Baseline.** As F7, plus the reference line of F2 trained on synthetic labels and on five real
-  labelled views.
-- **Hypothesis.** The zero-label method on real data exceeds the probe trained on synthetic
-  labels by at least 0.05 AP (the probe does not transfer; the label model does not need to), and
-  is within 0.05 AP of the probe trained on five real labelled views. Falsified otherwise.
-- **Limits.** Laser returns are sparse or missing on water and glass, so the classes of most
-  interest are the ones the reference scores worst; missing reference is reported as "unscored",
-  never as "no fault".
+**Precondition.** Prevalence between 1% and 30%; at least 20 fault regions mostly in
+$\mathcal W$ and at least 20 mostly in $\mathcal A$; $\mathcal W$ covers at least 20% of land
+pixels. If it fails, the block says nothing about the idea and the test moves to dense synthetic
+video (Section 4, F2).
 
----
+**The approach is abandoned if any of:**
 
-## 4. Protocol hygiene
+- **K1, the label is unsound.** On $\mathcal W$ the precision or the recall of $\ell$ against $f$
+  has an upper interval bound below 0.90; or the standardised triangulation error has robust
+  standard deviation outside $[0.5, 2]$ after the label-free estimate of $\sigma_{\mathrm{px}}$.
+- **K2, nothing left to judge.** Fewer than 10% of faulty units lie in $\mathcal A$. All faults
+  then sit where triangulation overrules the prior anyway, and on survey data the indicator has
+  no job. (The idea could survive only in regime R2, tested in F2.)
+- **K3, no transfer.** On $\mathcal A$ the head's AUC has lower bound at or below 0.65, or its
+  average precision does not exceed the best label-free comparator by 0.05.
+- **K4, a surface-type detector and nothing more.** On $\mathcal A$ the per-cluster fault rate
+  matches the head within 0.02 average precision, *and* within every surface class the head's
+  AUC has lower bound at or below 0.55. The method then reduces to "distrust this kind of
+  surface", which a handful of labels or a rule would give.
+- **K5, the prior is not worth keeping.** On $\mathcal A$, in every surface class with at least
+  five fault regions, some alternative without monocular depth, (iv), (v) or (vi), has median
+  relative error no larger than (ii), the monocular depth under a perfect indicator. No indicator
+  can then make the prior useful.
 
-**Three kinds of data, kept apart.**
+**It is supported if all of:** precision and recall of $\ell$ at least 0.95 on $\mathcal W$; at
+least 30% of faulty units and of common-mode faulty units in $\mathcal A$; the head on
+$\mathcal A$ has AUC at least 0.75 overall and at least 0.65 inside two or more surface classes,
+and a true-positive rate of at least 0.30 at 5% false positives on common-mode units; and in at
+least one surface class (ii) beats every alternative of M6 by an interval that excludes zero.
 
-| Kind | May contain | May be used for |
-| --- | --- | --- |
-| Unlabelled | images, poses, depth-model outputs, cues, frozen features, of any scene including evaluation scenes | fitting the label model and the head (transductive fitting on the evaluated scene is the intended use and is declared as such) |
-| Labelled, tier S | fault masks from exact depth on designated synthetic *label blocks* | semi-supervised terms, anchors, threshold calibration, selection among a pre-declared short list |
-| Labelled, tier R | fault masks from laser depth on a few views of a designated real *label set* | the same, in runs marked as using real labels |
-| Evaluation | masks, classes and strata of evaluation scenes | scoring only |
+K5 is the criterion most likely to fire on this block, for a simple reason: its largest
+abstaining region is a flat water plane, which planar interpolation from the shoreline reproduces
+exactly. A verdict from K5 on block 3 alone is therefore read per class, and the classes that
+decide are the non-planar ones: facades, thin structures, shadowed and occluded ground.
 
-**Rules.**
+### 2.6 Cost
 
-1. *Splits by block or scene.* A scene is either a label scene or an evaluation scene for the
-   whole study. For MatrixCity: block 3 is an evaluation block for the zero-label experiments and
-   the kill test; label blocks are other blocks. For UseGeo: one of the three sets is the label
-   set, the other two are evaluation sets; within the label set the labelled views come from one
-   strip. Where label and evaluation areas could overlap on the ground, a buffer of one image
-   footprint separates them, so no ground point is seen by both a labelled and an evaluated view.
-2. *Evaluation masks live elsewhere.* They are written by one script to an `eval_only/`
-   directory; fitting scripts take no path into it; the scoring script is the only reader and
-   writes only aggregate tables. A unit test asserts that the fitting modules do not import the
-   truth loader.
-3. *What may be tuned on what.* Without labels: vote thresholds (robust z of the cue's own
-   distribution), number of bins and clusters, head capacity and stopping are selected by held-out
-   likelihood of the votes on views not used for fitting, or by agreement between label models
-   fitted on disjoint cue subsets. With labels: only on the label tier in force. Never on an
-   evaluation metric. The list of cues, the dependence structure of F3 and the class convention
-   are fixed before any mask is read.
-4. *The kill test is the one exception and is contained.* It reads masks of block 3 to decide
-   whether to build the method. After it, block 3 is spent as an untouched test block for
-   everything the kill test could have influenced: the choice of cues and thresholds. Later
-   headline numbers therefore come from other blocks and from real data; block 3 numbers are
-   reported as development results.
-5. *Alignment.* No cue uses an alignment fitted to exact or laser depth. The evaluation
-   alignment of Section 1.3 is used to define truth only.
-6. *Frozen means frozen.* Backbones and depth models are used with released weights; nothing is
-   fine-tuned; the head sees cached features. Whether an evaluation dataset was in a backbone's or
-   a depth model's training data is checked and stated; where it cannot be determined it is
-   stated as unknown.
-7. *Label budgets.* Labelled views are drawn by a seeded rule before any result is seen; every
-   budget is run with 10 draws and reported as median and range. The reference probe and the
-   method receive the same labelled views.
-8. *Registration.* Thresholds of Section 1.9, the hypotheses of Section 3 and the scene roles are
-   committed and tagged (as `prereg/TAGGING.md` prescribes) before the scoring script is first run.
-9. *Seeds and intervals.* Every stochastic step is seeded; intervals are over ground tiles within
-   a scene and over scenes across scenes, never over pixels.
+| Item | Cost (estimate; nothing measured) |
+| --- | --- |
+| Overlap and parallax from poses | seconds |
+| Depth, 370 passes | about 3 min GPU |
+| Tracker, matcher, flow over about 185 frames in strips | tens of minutes each; memory on 8 GB to be measured |
+| Triangulation, alignment, labels | minutes, CPU |
+| Features and heads | minutes; head memory negligible |
+| M6 fills and OpenMVS | under an hour |
+| New code | about 1000 lines |
 
----
+## 3. Measuring transfer without ground truth
 
-## 5. Implementation plan for the kill test
+The head is trained where the witness speaks and used where it does not. That is selection on
+the covariates: $\mathcal W$ is textured and diffuse, $\mathcal A$ is water, glass, texture-free
+and occluded. Three quantities describe the shift, and each is an experiment.
 
-New scripts go under `experiments/` with the prefix `k0_`, a config
-`configs/experiments/k0_kill_test.yaml`, outputs under `results/k0/`. Existing modules are used
-as they are; nothing in `src/` needs to change for the kill test.
+**Propensity.** $e(\boldsymbol\phi) = \Pr(u \in \mathcal W \mid \boldsymbol\phi)$ is estimated
+without any label by a logistic regression of the coverage flag on the frozen features, cross-fitted
+over ground tiles. Where $e$ is near zero the head has seen nothing like the pixel; importance
+weighting cannot correct that, and the output there is an extrapolation by construction. The share
+of $\mathcal A$ with $e < 0.05$ is reported for every scene; it is the share of the image on which
+the method has, in the strict sense, no evidence.
+
+**Prevalence shift.** $\Pr(f \mid \mathcal A) \ne \Pr(f \mid \mathcal W)$ in general, and the
+difference is not identified from unlabelled data: nothing on $\mathcal A$ observes $f$. The head
+can rank on $\mathcal A$; its calibration there is unknown. This is the one thing a few labels
+from a synthetic scene buy that nothing else does, and the label-budget experiment (F4) is designed
+around it.
+
+**Counterfactual abstention.** Pixels of $\mathcal W$ can be made to play the part of
+$\mathcal A$ while their witness label is kept:
+
+- *Withheld strata.* Remove whole feature clusters, or the lowest-propensity decile of
+  $\mathcal W$, from the head's training set and score the head on them against $\ell$.
+- *Short windows.* Compute labels from full tracks; give the pipeline a window so short that the
+  conditioning rule of Section 2.2 fails on low-parallax pixels; score the head on the pixels
+  that became abstentions.
+- *Degraded texture.* Blur or downsample the frames until the tracker loses a region; train and
+  apply the head on the degraded frames; score against labels from the clean frames.
+
+Each gives the head's accuracy as a function of distance from its training support, on any video,
+with no ground truth. The proposal is to report this curve on real data, where laser references
+are sparse or missing on exactly the surfaces of interest. Its validity is itself a hypothesis
+(F3): on synthetic data with exact depth, does the curve at low propensity predict the true
+accuracy on $\mathcal A$? If it does, the method carries its own evaluation to scenes without
+reference data. If it does not (because water is not blurred land), the note says so and real-data
+claims about $\mathcal A$ need reference depth after all.
+
+## 4. Follow-on experiments, in order
+
+Each is run only if the one before does not stop the line. Intervals are over ground tiles within
+a scene and over scenes across scenes.
+
+### F1. Which witness, at which frame density
+
+- **Question.** Which frozen correspondence model gives the largest $\mathcal W$ at calibrated
+  uncertainty, and how does that depend on frame spacing?
+- **Data.** Block 3 as stills; a dense synthetic video with exact depth and poses, subsampled at
+  strides $n \in \{1, 2, 4, 8, 16\}$. TartanAir provides long sequences with exact depth, pose and
+  optical flow, an ocean environment and reflections from glass and puddles *(checked)*; its motion
+  is not aerial survey motion and its total size is 4 TB, so a few sequences are taken. Mid-Air is
+  a synthetic low-altitude drone set *(checked that it exists; its frame rate and depth format are
+  recalled)*. MatrixCity's authors describe a plugin that renders camera trajectories in Unreal
+  Engine scenes *(checked on the project page; whether it is released and usable for a dense
+  flight over block 3 is not verified)*.
+- **Metric.** M1 and M2 per stride and per class.
+- **Baseline.** Plane-sweep patch correlation; SIFT matching with geometric verification.
+- **Hypothesis.** At strides typical of video the point tracker has the largest calibrated
+  coverage on texture-free ground, exceeding plane-sweep correlation by at least 10 points of
+  coverage in that class; at survey spacing the dense matcher overtakes the tracker. Falsified if
+  plane-sweep correlation matches the learned witnesses within 5 points in every class, in which
+  case tracking adds cost and no coverage.
+
+### F2. The judge regime
+
+- **Question.** Is there a range of parallax in which triangulated depth is worse than monocular
+  depth per pixel and still detects regional faults?
+- **Data.** Dense synthetic video; window length swept from 3 frames up, so that total parallax
+  runs from a few pixels to $p^\ast$ and beyond. Causal windows only, as an online system would
+  have.
+- **Metric.** Median relative error of $d^{\triangle}$ against that of the monocular depth;
+  region-level AUC of the pooled witness $\sum_{u \in \text{region}} x^{\mathrm{mo}} / \sqrt{n_{\mathrm{eff}}}$
+  against $f$; detection delay in frames.
+- **Baseline.** The single-pixel witness; the cavity residual over the same window.
+- **Hypothesis.** For windows with $p^\ast / (3\sqrt{n_{\mathrm{eff}}}) < P < p^\ast$ the pooled
+  witness reaches region-level AUC of 0.9 while its per-pixel depth error exceeds the monocular
+  one. Falsified if the two crossovers coincide within a factor of two in $P$, which would mean
+  the witness is useful only once it could replace the prior. This experiment is the direct
+  answer to "why keep the monocular prior" for tracked pixels, and the natural core of an
+  online, robotics-facing version of the work.
+
+### F3. Transfer from textured to untextured surfaces
+
+- **Question.** Does the head rank faults on $\mathcal A$, which frozen features carry that, and
+  does counterfactual abstention predict it?
+- **Data.** MatrixCity blocks and the dense synthetic sequences with water and glass.
+- **Frozen feature sets compared** (cached once; the head trains from the cache):
+
+  | Features | Why | Status |
+  | --- | --- | --- |
+  | Per-image self-supervised encoder (DINOv2 at three sizes; DINOv3 including a variant pretrained on overhead imagery) | appearance; the reference | DINOv2 widely used; DINOv3 and its overhead variant *(recalled; weights and licence to verify)* |
+  | Encoder of the depth model itself | encodes what the depth model was unsure about; free, the pass is run anyway | available for the cached models; Depth Pro peaks at 6.3 GB *(repo)* |
+  | The tracker's own outputs and features: visibility, confidence, correlation features at the query | free; says *why* the witness abstained | CoTracker3 returns visibility *(checked)*; access to internal features is a code change, not verified |
+  | Multi-view geometry model, aggregated features over a window (VGGT) | sees parallax inside its features, which a per-image encoder cannot | exists *(checked)*; memory on 8 GB per window length not verified |
+  | Video encoder (V-JEPA 2 or similar) | temporal features without a geometry head | *(recalled; not checked)* |
+
+- **Metric.** As M5, on $\mathcal A$, per class and per propensity decile; error of the
+  counterfactual-abstention estimate against the true value.
+- **Baseline.** Per-cluster fault rate; texture energy; a linear probe with true labels from a
+  disjoint scene.
+- **Hypotheses.** (i) The head exceeds the per-cluster rate by 0.05 average precision on
+  $\mathcal A$. (ii) Multi-view features exceed per-image features by 0.05 on $\mathcal A$.
+  (iii) The counterfactual estimate at the lowest propensity decile is within 0.05 AUC of the
+  true value on $\mathcal A$. Each falsified separately.
+- **Caution.** Features of a multi-view geometry model may encode that model's own depth. A head
+  on them can then act as a comparison between two depth estimators. That is permitted by the
+  frozen-backbone scope, but it is a different mechanism from appearance transfer and is reported
+  as such, with an ablation that removes the model's depth-head inputs.
+
+### F4. Label budget
+
+- **Question.** With the witness supplying labels for free, what do true labels still buy?
+- **Budgets.** 0, 1, 5, 20 labelled views and one whole labelled synthetic scene, ten draws each,
+  from scenes never evaluated.
+- **Methods.** Witness-trained head; the same with labelled views used only to recalibrate
+  prevalence and threshold on $\mathcal A$; the same with a supervised term; and the reference
+  line, a linear probe on the same frozen features trained on the labelled views alone.
+- **Metric.** Average precision and expected calibration error on $\mathcal A$, as curves over
+  the budget; the budget at which the reference line catches the method.
+- **Hypothesis.** Labels improve calibration on $\mathcal A$ (calibration error halves at 5
+  views) and not ranking (average precision changes by less than 0.02); at zero labels the method
+  reaches 80% of the probe's average precision at one full scene; and with labels from synthetic
+  scenes only, the probe loses at least 0.05 on real data where the witness-trained head, which is
+  fitted on the target scene, does not. Falsified separately. If the probe with five synthetic
+  labelled views matches the method on real $\mathcal A$, the witness is unnecessary as a source of
+  supervision.
+
+### F5. Faults that every view repeats
+
+- **Question.** Does the indicator detect them, and where?
+- **Data.** The common-mode stratum of natural errors; and, to obtain such errors on
+  $\mathcal A$ in controlled number, depth maps in which one view's natural fault region is made
+  consistent across all views that observe it.
+- **Metric.** True-positive rate at 5% false positives and AUC, separately on
+  $\mathcal W \cap$ common-mode and $\mathcal A \cap$ common-mode.
+- **Baseline.** The cavity residual, a robust loss and view removal (all predicted at chance);
+  the depth model's confidence; disagreement between several depth models and instability under
+  input transformations, as single-image baselines that cost extra depth passes.
+- **Hypothesis.** On $\mathcal W \cap$ common-mode the witness alone reaches AUC 0.9 while the
+  consensus baselines are within 0.05 of 0.5. On $\mathcal A \cap$ common-mode the head reaches a
+  true-positive rate of 0.30 at 5% false positives and exceeds every single-image baseline.
+  Falsified separately; the second part is the claim that matters.
+
+### F6. Reconstruction
+
+- **Question.** Does gating the monocular messages by $1 - \zeta$ improve the surfel surface?
+- **Data.** MatrixCity blocks and dense synthetic sequences; held-out frames by block.
+- **Metric.** Held-out depth error and surface F-score, overall, on $\mathcal W$ and on
+  $\mathcal A$, and on fault regions; precision and recall of the surface reported separately,
+  because removing a wrong surface on $\mathcal A$ leaves a hole.
+- **Baselines.** No gate; robust depth loss; view removal; the cavity residual gate; the depth
+  model's confidence; and the three that decide whether the indicator is needed at all:
+  (a) *tracks as depth messages, monocular depth ungated*, where information-form fusion already
+  lets the precise tracks overrule the prior on $\mathcal W$; (b) the same with the monocular
+  noise inflated uniformly on $\mathcal A$; (c) no monocular depth: tracks plus interpolation, or
+  OpenMVS, or a feed-forward multi-view model. Bound: an oracle gate.
+- **Hypothesis.** On fault regions inside $\mathcal A$ the indicator closes at least half the gap
+  between baseline (a) and the oracle, and beats (b) and (c) on non-planar classes; on clean
+  regions it changes error by less than 2%. Falsified if (a) is within noise of the oracle (the
+  tracks already do the work) or if (c) wins on $\mathcal A$ (the prior is not needed).
+
+### F7. The same judge for another prior
+
+- **Question.** Is the method specific to monocular depth?
+- **Design.** Replace the monocular depth map by the dense depth of a feed-forward multi-view
+  model and rerun K0 and F6. Such a model uses parallax itself, so its errors on $\mathcal W$
+  should shrink; its errors on water and glass are, like the monocular ones, repeated by every
+  view.
+- **Hypothesis.** The witness-trained head detects faults of the multi-view prior on
+  $\mathcal A$ with AUC within 0.05 of its value for the monocular prior. If it holds, the
+  contribution is a judge for any dense learned depth prior, which survives the day multi-view
+  models displace monocular ones. If the multi-view prior has no faults left to find, that is the
+  strongest form of the objection and is reported.
+
+### F8. Real aerial data
+
+- **Question.** Does it hold on real imagery with real pose error?
+- **Data.** UseGeo, stills with laser depth maps (reader is a stub; download pending *(repo)*).
+  A real aerial *video* with poses and a laser reference has not been identified; a multi-modal
+  UAV dataset with LiDAR appeared in a search and is not verified. Without one, the judge regime
+  (F2) is shown on synthetic video only, and this is stated as a limit.
+- **Metric.** M1 to M4 on laser-covered pixels; the head on $\mathcal A$ where laser exists; the
+  counterfactual-abstention curve everywhere; reconstruction as F6.
+- **Hypothesis.** Witness labels keep precision and recall of 0.90 under real pose error once
+  $\Sigma_q$ enters $\sigma^{\triangle}$; the counterfactual curve on real data lies within 0.05
+  AUC of the synthetic one at equal propensity. Missing laser returns are reported as unscored.
+
+## 5. What a rendered survey block can and cannot show
+
+- **Water** is 46% of block 3 and the photometric reconstruction fails on it *(repo)*, so it is a
+  large abstaining region. Whether the monocular models are wrong there is unknown. Whether the
+  renderer produces view-consistent reflections on it is unknown; if it produces none, the
+  virtual-image failure of Section 1.3 cannot appear and M2 on this block is uninformative about
+  it. TartanAir's reflective scenes are the fallback.
+- **Glass** at 340 m range in nadir views is below the 2% region size; not tested here.
+- **Flattery.** Rendered frames have no noise, blur, exposure change or rolling shutter, and the
+  poses are exact. A tracker benefits from all of it. Controls: frames degraded (gain and gamma
+  jitter of 20%, noise of 3/255, blur of 0.7 px, JPEG quality 75) before tracking and before the
+  depth model; poses perturbed at the level a bundle adjustment leaves, with the machinery of
+  `experiments/h7_pose_check.py`; decisions read in the degraded setting.
+- **Training-set overlap.** Trackers and depth models are trained largely on synthetic video.
+  Whether MatrixCity or TartanAir is in the training data of any model used must be checked per
+  model; CoTracker3's baseline checkpoints were trained on Kubric only *(checked)*, which makes
+  them a clean control for that question.
+- **Moving objects.** The released block's traffic state is not verified; the dataset supports
+  controllable vehicle and pedestrian density *(checked)*.
+
+## 6. Protocol
+
+1. **No ground truth in the loop.** Tracks, triangulation, alignment, labels, propensity and the
+   head use images, poses and one depth map per image. Evaluation masks live in `eval_only/`; a
+   unit test fails if a fitting script imports the exact-depth reader.
+2. **Thresholds of the witness** (conditioning, residual, cycle, the 2 and 3 standard-deviation
+   label bounds) are set from nominal values and from track statistics, never from a detection
+   metric.
+3. **Transductive fitting is declared.** The head is fitted on the scene it is applied to, from
+   witness labels. Labelled data, when used (F4), come from scenes that are never evaluated, in
+   two tiers: synthetic only, or a few real views from a designated set separated on the ground
+   from all evaluation views by one image footprint.
+4. **Model selection** for the head (capacity, stopping, feature set) uses held-out witness
+   labels on $\mathcal W$ and the counterfactual-abstention score, both label-free. The feature-set
+   comparison of F3 is reported in full, not as a selected winner.
+5. **Splits by block or scene.** Block 3 is used by the cheap test and is thereafter a
+   development block; headline numbers come from other blocks, other sequences and real data.
+6. **Frozen means frozen.** Released weights; no fine-tuning of tracker, depth model or encoder.
+7. **Registration.** The thresholds of Section 2.5 and the hypotheses of Section 4 are committed
+   and tagged as `prereg/TAGGING.md` prescribes before the scoring script is first run.
+8. **Intervals** are over ground tiles and scenes, with the count of fault regions shown.
+
+## 7. Implementation plan for the cheap test
+
+Scripts under `experiments/` with prefix `k0_`, config `configs/experiments/k0_kill_test.yaml`,
+outputs under `results/k0/`. Nothing in `src/` changes.
 
 | # | Script | Inputs | Outputs | Reuses |
 | --- | --- | --- | --- | --- |
-| 1 | `k0_cache.py` | block 3 training images and `transforms.json`; list of models and transformations | depth cache under one scene name per transformation (`block3train`, `block3train.hflip`, `.rot90`, `.rot270`, `.half`, `.crop0` to `.crop3`), float32; a JSON with the inverse mapping of each transformation | `depthcache.run.run(..., views=...)` with `depthcache.datasets.View` objects whose `load_rgb` applies the transformation and whose `focal_px` is adjusted; `depthcache.datasets.matrixcity_views`; `ModelCache` for resume. Scene names must match `[A-Za-z0-9._-]+`. `model_options: {metric3d_v2: {max_depth_m: 1000}}` |
-| 2 | `k0_align.py` | identity cache; poses | per-view $(a_j, b_j)$ for each model in the cross-view gauge; within-view maps between models and between transformations; list of ambiguous views | `depthcache.load_depth`, `align.fit_scale`, `align.fit_affine_inverse` (called with another map as reference); `matrixcity_io.load_block` for poses only (`project`, `pixel_rays_world`) |
-| 3 | `k0_cue_consensus.py` | aligned identity maps of $m_0$; poses; block size $B$ | `c1.npz` per view: $\hat D_{-j}$, $V_{-j}$, support count, $z_j$, abstain mask | `matrixcity_io.project`; strip keys from `load_block` to form $\mathcal B_j$; reprojection logic of `baselines/_common.reproject_to_ref` and `baselines/median_fusion.py` |
-| 4 | `k0_cue_models.py` | identity maps of all models; within-view maps | `c2.npz` per view: one score per model pair and the pooled score | step 2 outputs |
-| 5 | `k0_cue_equiv.py` | transformed caches of $m_0$; inverse mappings | `c3.npz` per view: pooled score, per-family scores, coverage count | step 1 mapping file; step 2 |
-| 6 | `k0_cue_photo.py` | images (clean and degraded); aligned $\hat d_j$; poses; rendered depth of the RGB model | `c4a.npz` (cost difference, flatness, abstain mask), `c4b.npz`; a table of disparity per $\hat\sigma$ for each neighbour pair | half-resolution images of `rgb_prepare.py`; `surface_render_rgb.py` for $D^{\mathrm{rgb}}_j$; torch `grid_sample` for the sweep |
-| 7 | `k0_features.py` | images; backbone name | cached patch features (half precision) and a k-means assignment per pixel of the analysis grid | none in the repository; one frozen backbone |
-| 8 | `k0_label_model.py` | `c1` to `c4` files; cluster assignment | `zeta_<combination>.npz` per view; fitted $\widehat{\mathrm{se}}_q$, $\widehat{\mathrm{sp}}_q$, $\hat\pi$ per start; held-out vote likelihood | none; numpy only. Takes no path to `eval_only/` |
-| 9 | `k0_truth.py` | exact depth; identity cache; images (for the texture class) | `results/k0/eval_only/`: $f_j$, ignore mask, classes, $\varrho$, ground-tile index, mask variants | `matrixcity_io.load_block(step=4)`; `depthcache.align.align_depth`; `WATER_Z` and the height grid of `surface_dsm.py`; `baselines/_common.depth_to_normals` |
-| 10 | `k0_score.py` | outputs of steps 3 to 9 | `results/k0/summary.json` and `summary.md`: tables of Sections 1.5 to 1.8 and one line per criterion K1 to K5, S1 to S4 and P with the measured value, interval and verdict | `eval/metrics.detection_pr`; `eval/stats.bootstrap_ci` and `paired_wilcoxon`, with a cluster-resampling wrapper if the existing function resamples units; scikit-learn for the supervised bounds |
-| 11 | `tests/test_k0_isolation.py` | - | fails if any of scripts 2 to 8 imports the exact-depth reader or opens `eval_only/` | - |
+| 1 | `k0_geometry.py` | `transforms.json` | frames per strip, overlaps, neighbour lists; no GPU | `matrixcity_io.load_block` (poses, strip keys) |
+| 2 | `k0_cache.py` | training images | identity depth cache, float32, scene `block3train` | `depthcache.run.run`, `datasets.matrixcity_views` |
+| 3 | `k0_tracks.py` | images (clean and degraded), neighbour lists, witness name | tracks per strip: positions, visibility, confidence, cycle error | one frozen tracker, matcher or flow model; plane-sweep control written here |
+| 4 | `k0_triangulate.py` | tracks, poses | $d^{\triangle}$, $\sigma^{\triangle}$, $\epsilon^{\mathrm{rp}}$, parallax, abstention reason, on the analysis grid | `matrixcity_io.project`, `pixel_rays_world` |
+| 5 | `k0_witness.py` | depth cache, step 4 | $(a_j, b_j)$, $\varepsilon_{\mathrm{mo}}$, $x^{\mathrm{mo}}$, $\ell$, $\mathcal W$, $\mathcal A$ | `depthcache.align.align_depth` with $d^{\triangle}$ as sparse reference |
+| 6 | `k0_features.py` | images, tracker outputs | cached features, k-means strata, propensity $e$ | none |
+| 7 | `k0_head.py` | features, labels | $\zeta$ on all pixels; counterfactual-abstention scores | none; takes no path to `eval_only/` |
+| 8 | `k0_fill.py` | step 4 and 5 outputs | depth on $\mathcal A$ for alternatives (i), (iii), (iv), (v) of M6 | `baselines/openmvs_dmap.py` |
+| 9 | `k0_truth.py` | exact depth, depth cache | `eval_only/`: $f$, ignore band, classes, $\varrho$, tiles, exact correspondences and parallax | `matrixcity_io.load_block(step=4)`, `align_depth`, `WATER_Z` of `surface_dsm.py`, `baselines/_common.depth_to_normals` |
+| 10 | `k0_score.py` | all of the above | tables M1 to M6 and one line per criterion with value, interval and verdict | `eval/metrics.detection_pr`; `eval/stats.bootstrap_ci` resamples one value per scene, so a tile-resampling wrapper is added here |
+| 11 | `tests/test_k0_isolation.py` | - | fails if scripts 3 to 8 touch exact depth | - |
 
-Order of work: 1 and 9 first, and from them the prevalence, the number of fault regions and the
-size of the common-mode stratum (precondition P). If P fails on block 3, steps 2 to 8 are not
-worth writing for this block and the effort goes to K0-R. Then 2, 4, 5 (cheapest cues), 3, 6, 7, 8,
-10.
+Order: 1, 2 and 9 first. They give the regime of the block, the prevalence and the number of
+fault regions before any tracker is installed; if the precondition cannot hold, the remaining
+steps move to dense synthetic video.
 
----
+## 8. What is sharp here, and what is not
 
-## 6. What this design cannot settle
+**Not new.** Checking a monocular depth map against multi-view geometry is old, and so is
+training an image head on labels produced by geometric consistency. A paper that says only
+"triangulate, compare, distil" would be read as a multi-view-stereo check on monocular depth, and
+rightly.
 
-- **The kill test can fail to be informative.** If the depth models make few regional errors on a
-  rendered block, precondition P fails and nothing is learned about the idea. This is a likely
-  outcome for at least one model.
-- **Dependence is measured, not removed.** The test says whether the cues are close enough to
-  independent on the scenes examined. It cannot say that they will be on another scene, and the
-  dependence structure is not identifiable without labels. The stratified label model is a remedy
-  only for dependence that a visible class explains.
-- **A class detector can pass for a fault detector.** On a block where water is both half the
-  scene and possibly the main fault, a high overall score may reflect "this is water". The
-  within-class tables expose this but cannot turn it into evidence about other classes.
-- **Glass and specular facades are not tested** by nadir views at this range, rendered or real,
-  and laser references are poor on them. Claims about these classes need oblique or terrestrial
-  data that the current plan does not include beyond the two ETH3D scenes of K0-R.
-- **Thresholds are conventions.** The values in Section 1.9 and the hypothesis margins in
-  Section 3 are fixed in advance to prevent reinterpretation; they are not derived from a cost
-  model of reconstruction error.
-- **Memory figures for the backbones are estimates** until measured on the 8 GB card; the Depth
-  Pro encoder at 6.3 GB is the tightest.
+**Two ideas in the experimental design that are sharper than that.**
+
+1. *The regime map with the abstention set as the object of study.* Stating, and measuring along
+   a ladder of frame strides and window lengths, where the witness is blind, where it judges
+   without being able to replace, and where it replaces; and reporting every result separately on
+   $\mathcal W$ and $\mathcal A$, with baselines (tracks as messages, interpolation, feed-forward
+   multi-view depth) that make the monocular prior justify itself. This turns the standing
+   objection into the paper's main figure instead of a paragraph in the limitations.
+2. *Counterfactual abstention as a label-free estimate of transfer.* Making tracked pixels play
+   untracked ones gives an accuracy-against-propensity curve on any posed video. If F3 shows that
+   the curve predicts true accuracy on abstaining pixels, the method can be evaluated on real
+   water and glass, where reference depth does not exist. It is not known whether anyone has used
+   this device for depth-fault detection; the literature has not been searched for it, and
+   importance-weighted validation under covariate shift is the obvious relative.
+
+Whether these suffice for a top venue depends on results that do not exist yet. If transfer to
+$\mathcal A$ is weak or reduces to a surface-type prior, there is no method contribution and at
+most a measurement paper.
+
+## 9. What this design cannot settle
+
+- **Survey blocks sit in the replace regime.** On the available data the judge regime is absent,
+  the witness's success on tracked pixels is uninteresting, and everything rests on transfer.
+  The judge regime needs dense video with exact depth, which has to be obtained.
+- **Calibration on abstaining pixels is not identified without labels.** Ranking may transfer;
+  the fault rate does not.
+- **Planar reflectors can yield confident wrong labels**, and block 3 may be unable to show it.
+- **The flat water plane favours interpolation** over any prior; conclusions about the value of
+  the prior must come from non-planar abstaining regions, which may be few in nadir views.
+- **Tracker precision at full resolution is unmeasured**, as are memory and time of every
+  external model on 8 GB.
+- **Thresholds are conventions**, fixed in advance to prevent reinterpretation, not derived from
+  a cost model.

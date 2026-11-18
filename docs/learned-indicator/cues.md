@@ -1,718 +1,479 @@
-# Fault Cues: Definitions, Nulls, Abstention and Predicted Dependence
+# Evidence Definitions: Monocular Depth Judged by Motion Parallax
 
-This note defines the detectors ("cues") that a label-free combination model would take as input. Each
-cue is specified as a per-pixel score with a stated nuisance alignment, a null distribution that is known
-or learnable, an abstention rule, and a prediction of how it behaves on each fault class. The last part is
-the predicted dependence structure between cues, which is what decides whether a
-conditional-independence label model (Dawid-Skene type) is applicable. Notation follows the main
-document: view $j$, pixel $u$, depth map $\hat d_j$, per-view scale and offset $(a_j, b_j)$,
-shared distance bias $\beta$, cavity depth $\hat D_{-j}$, block $\mathcal B_j$, testable set $\Omega_j$,
-latent fault $f_j(u)$, surfel information $\Lambda_k$, $\Lambda_k^{(i)}$.
+This note defines the evidence that the fault indicator is built on, for the setting in which the input
+is a posed image sequence flown in strips and there is one monocular depth map per image. There are two
+sources of evidence. The first is depth consensus between views (the leave-block-out residual of the
+main document). The second, the *motion witness*, is new here: a frozen tracker or matcher gives
+correspondences, the known poses turn each correspondence into a triangulated depth with a stated
+uncertainty, and the gap between monocular and triangulated depth is a fault label that costs nothing
+and does not depend on what the other depth maps say. A light head on frozen features is trained on
+those labels and carries the result to pixels where the witness abstains.
 
-Statements about the internals of the depth models and of third-party methods are recalled from memory
-and marked "(recalled)". Nothing in this note has been measured; every entry of the behaviour table is a
-prediction to be tested.
+For each source the note gives the score, its nuisance alignment, how its null is obtained, when it
+abstains and how that is detected, what it physically responds to, and how the two sources depend on
+each other. It then states what is identified and what is not, what the code already contains, what
+would end the idea, and the cheapest test.
 
-## 1. Common Form of a Cue
+Notation follows the main document: view $j$, pixel $u$, depth map $\hat d_j$, per-view scale and
+offset $(a_j, b_j)$, shared distance bias $\beta$, cavity depth $\hat D_{-j}$, block $\mathcal B_j$,
+testable set $\Omega_j$, latent fault $f_j(u)$, nominal noise $\sigma_j(u)$.
+
+**Status of the statements.** Nothing in this note has been measured. All behaviour tables are
+predictions. Properties of third-party models (architectures, training data, outputs, licences) are
+recalled from memory and marked "(recalled)"; none could be checked, because no model code or weights
+are installed in the working environment and the model hubs were not reachable from it. Statements
+about the project's own code were checked against the source.
+
+## 1. Setting
 
 ### 1.1 Target
 
-The label is the fault of the depth map that is fused: $f_j(u) = 1$ when the aligned error of the
-*primary* model $m_0$ at $(j, u)$ exceeds $3\sigma$ inside a connected region of at least 2% of the view.
-A whole-view affine error is absorbed by $(a_j, b_j)$ and is not a fault. Two consequences hold for every
-cue below.
+$f_j(u) = 1$ when the aligned error of the depth map at $(j, u)$ exceeds $3\sigma$ inside a connected
+region of at least 2% of the view. A whole-view error inside the nuisance group of the depth model
+(scale for a metric model, affine in inverse depth for a relative one) is absorbed by the alignment
+and is not a fault. Edge mislocalisation and thin structures are not faults under this definition, but
+every source of evidence responds to them; they are excluded by a band around depth discontinuities.
 
-- Every cue compares a depth with something else after removing a nuisance transformation, so every cue
-  is blind to an error that lies in its nuisance group. This is by construction and consistent with the
-  definition of a fault.
-- Faults are regional. Edge mislocalisation by a few pixels and thin structures are not faults under the
-  definition, but all cues respond to them. They are the main source of *shared false alarms*.
+### 1.2 What "video" means for a survey flight
 
-### 1.2 Output of a cue
+The usefulness of a tracker is governed by one number, the image displacement between consecutive
+frames, $\Delta_1 = f B_1 / d$ pixels for a frame spacing $B_1$, focal length $f$ in pixels and depth
+$d$. Two regimes must be kept apart.
 
-A cue $c$ delivers three fields per view:
+- *Dense video*: $\Delta_1$ of a few to a few tens of pixels. Point trackers and optical-flow models
+  are trained for this regime (recalled).
+- *Survey stills*: frames are exposed for a fixed forward overlap. At 80% forward overlap consecutive
+  frames are displaced by 20% of the image length, which is hundreds of pixels, and a ground point is
+  seen in about five consecutive frames of a strip and again in the neighbouring strip at 60% side
+  overlap. One of the real data sets configured in the repository is of this kind (nadir, about 80 m,
+  80/60 overlap). This is the regime of wide-baseline dense matching, not of video tracking.
+
+The definitions below are written for an abstract *correspondence provider* that returns, for a query
+pixel, positions in other frames with a visibility flag and optionally a confidence. Which frozen model
+plays this role depends on $\Delta_1$ and has to be decided per data set (Section 7). The frame spacing
+of the synthetic aerial block was not checked: its images are not on disk in the working environment.
+
+The same number sets the precision. With a frame spacing of 20 m, $f = 4000$ px and $d = 80$ m
+(illustrative values consistent with the configured survey: 2 cm ground sampling distance at 80 m; the
+frame spacing is assumed), one pixel of matching error on one pair is $d^2/(f B_1) = 0.08$ m of depth,
+against an expected monocular error of the order of a metre. Where a correspondence exists, the witness
+is one to two orders of magnitude sharper than the depth it judges. The question for this evidence is
+never precision; it is coverage and the honesty of its abstention.
+
+## 2. The Motion Witness
+
+### 2.1 A track as a one-dimensional measurement plus a check
+
+Let $\mathbf x = K_j^{-1} \tilde u$ be the ray of pixel $u$ (unit $z$), $\xi = 1/d$ its inverse depth,
+and $(R_i, \mathbf t_i)$ the known motion from camera $j$ to camera $i$. The point at inverse depth
+$\xi$ projects to
 
 ```math
-q^{c}_j(u) \in \mathbb R, \qquad A^{c}_j(u) \in \{0, 1\}, \qquad \mathbf x^{c}_j(u),
+\mathbf p_i(\xi) = \pi\bigl( K_i ( R_i \mathbf x + \xi\, \mathbf t_i ) \bigr), \qquad
+\mathbf m_i(\xi) = \frac{\partial \mathbf p_i}{\partial \xi}, \qquad \mathbf e_i = \frac{\mathbf m_i}{\lVert \mathbf m_i \rVert}, \quad \mathbf n_i \perp \mathbf e_i .
 ```
 
-a standardised score, an abstention flag ($A = 1$: the cue carries no information at this pixel), and the
-covariates on which its null was conditioned. The score is standardised so that, on non-faulty pixels
-with $A = 0$, it has a known reference distribution $F^c_0$ (standard normal for signed scores, a fitted
-law for unsigned ones). The discrete vote used by a label model is
+As $\xi$ varies, $\mathbf p_i$ moves along the epipolar line of $u$ in view $i$, whose direction
+$\mathbf e_i$ is fixed. The *parallax vector* $\mathbf m_i$ is the image motion per unit inverse depth;
+for a sideways translation $\lVert \mathbf m_i \rVert = f B_i$ with $B_i$ the baseline. A track gives
+observed positions $\hat{\mathbf p}_i$ for $i$ in a set $\mathcal S(u)$ of $n$ other views. Each
+observation splits into two scalars,
 
 ```math
-\lambda^{c}_j(u) = \begin{cases} \varnothing & A^{c}_j(u) = 1,\\ \mathbb 1\bigl[\, 1 - F^{c}_0\bigl(\lvert q^{c}_j(u)\rvert\bigr) < \alpha_c \,\bigr] & \text{otherwise.} \end{cases}
+\nu_i = \mathbf n_i^\top \bigl( \hat{\mathbf p}_i - \mathbf p_i(\xi) \bigr), \qquad
+a_i(\xi) = \mathbf e_i^\top \bigl( \hat{\mathbf p}_i - \mathbf p_i(\xi) \bigr).
 ```
 
-### 1.3 Nuisance alignment
+The across-line component $\nu_i$ does not depend on $\xi$ at all: it is fixed by the poses. The
+along-line component is the measurement of depth. So a track of $n$ observations is $2n$ numbers with
+one unknown: $n$ equations for the depth, and $2n - 1$ degrees of freedom of redundancy that say
+whether the track is what it claims to be.
 
-Let $\mathcal G$ be a group of monotone maps acting on depth values. A comparison between two depth
-fields $X$ and $Y$ on a common pixel domain $\mathcal D$ is the residual after a robust fit,
+This is the structural difference from a plane sweep, the classical image-based alternative. A
+plane sweep searches along the epipolar line only. It cannot fail the epipolar test, because it never
+looks off the line, and its uncertainty is the curvature of a correlation profile up to an unknown
+constant. A correspondence found by an unconstrained two-dimensional search spends its second
+dimension on a check.
+
+### 2.2 Estimator and uncertainty
+
+With along-line standard deviations $\sigma_{a,i}$ and a robust loss $\rho$,
 
 ```math
-g^\ast = \arg\min_{g \in \mathcal G} \sum_{u \in \mathcal D} \rho\bigl( \tau(X(u)) - \tau(g \cdot Y(u)) \bigr), \qquad \Delta(u) = \tau(X(u)) - \tau(g^\ast \cdot Y(u)),
+\hat\xi(u) = \arg\min_{\xi} \sum_{i \in \mathcal S(u)} \rho\Bigl( \frac{a_i(\xi)}{\sigma_{a,i}} \Bigr), \qquad
+\operatorname{Var}\bigl(\hat\xi\bigr) = \Bigl( \sum_{i \in \mathcal S(u)} \frac{\lVert \mathbf m_i \rVert^2}{\sigma_{a,i}^2} \Bigr)^{-1},
 ```
 
-with $\tau$ a parametrisation in which $\mathcal G$ acts linearly and $\rho$ a redescending loss (or a
-consensus fit). Three groups occur.
+a scalar problem solved by a few Gauss-Newton steps from the two-view solution of the longest
+baseline. In depth, $\sigma_{\mathrm{tri}}(u) = d^2 \sqrt{\operatorname{Var}(\hat\xi)}$. For a track
+over $n_f$ equally spaced frames with the query frame in the middle and a common $\sigma_a$,
 
-| Group | Action | Linear in | Applies to |
+```math
+\sum_i \lVert \mathbf m_i \rVert^2 = f^2 B_1^2\, \frac{n_f (n_f^2 - 1)}{12}, \qquad
+\sigma_{\mathrm{tri}} = \frac{d^2\, \sigma_a}{f B_1} \sqrt{\frac{12}{n_f (n_f^2 - 1)}} ,
+```
+
+so the uncertainty falls as $n_f^{-3/2}$: the length of the track, not a fixed set of neighbours,
+decides how much baseline a pixel has, and it differs from pixel to pixel through occlusion and through
+the position in the strip. The error is close to Gaussian in $\xi$, not in $d$; scores are therefore
+formed in inverse depth.
+
+### 2.3 The null is estimated from the track's own redundancy
+
+The tracker's localisation noise is not known in advance and differs by surface type, displacement
+and model. It does not have to be assumed.
+
+- *Across-line noise.* Under the hypothesis of a static point, correct poses and a correct
+  correspondence, $\nu_i$ has zero mean and its spread is the tracker's localisation noise across the
+  line. The robust scale of $\nu_i$ over all tracks of a stratum is an estimate of $\sigma_\nu$ that
+  uses no depth and no label.
+- *Along-line noise.* For tracks with $n \ge 2$ observations the along-line misfit after estimating
+  $\xi$ has $n - 1$ degrees of freedom. Its robust scale over a stratum estimates $\sigma_a$.
+- *Anisotropy.* The two differ because of the aperture effect: a correspondence on an edge parallel to
+  the epipolar line is sharp across the line and loose along it. The strata are therefore indexed by
+  the angle between the local gradient orientation and $\mathbf e_i$, by gradient energy along
+  $\mathbf e_i$, by displacement magnitude and by the tracker's confidence where it gives one.
+  Assuming $\sigma_a = \sigma_\nu$ would make the witness overconfident exactly where it is weakest.
+
+With the scales in hand, two test statistics have a known reference distribution,
+
+```math
+E(u) = \sum_{i \in \mathcal S(u)} \frac{\nu_i^2}{\sigma_{\nu,i}^2} \ \sim\ \chi^2_{n}, \qquad
+C(u) = \sum_{i \in \mathcal S(u)} \frac{a_i(\hat\xi)^2}{\sigma_{a,i}^2} \ \sim\ \chi^2_{n-1} .
+```
+
+$E$ tests the track against the poses; $C$ tests whether one depth explains the along-line positions
+in all views. $C$ needs at least two other views and is what catches a jump by one period on repeated
+texture, since the jump is the same number of pixels at every baseline while a depth change is not.
+Pose error adds a component to $\nu$ that is smooth over the image for a given pair; it is estimated
+per pair by a low-order fit and removed, or carried as $\mathbf j_q^\top \Sigma_q \mathbf j_q$ in the
+variance. The minority assumption applies as everywhere: within a stratum, most tracks are sound.
+
+### 2.4 Score and its alignment
+
+The monocular depth is brought to scene units by its own robust alignment against the triangulated
+depths of well-conditioned tracks, in the nuisance group of the depth model: one scale for a metric
+model, an affine map in inverse depth for a relative one. No other depth map and no surface enters. The
+score is
+
+```math
+x^{\mathrm M}_j(u) = \frac{\xi^{\mathrm{al}}_j(u) - \hat\xi(u)}{\sqrt{\operatorname{Var}(\hat\xi(u)) + \sigma_j^2(u)\, \xi^{\mathrm{al}}_j(u)^4}} ,
+```
+
+with $\xi^{\mathrm{al}}_j = 1/d^{\mathrm{al}}_j$ and the second term the nominal monocular noise mapped
+to inverse depth. Under the null it is standard normal up to a scale that is learned from geometry
+strata, as for the consensus residual. For a regional decision the signed score is pooled over a
+window with the effective sample size.
+
+### 2.5 Abstention, graded by the minimum detectable fault
+
+A binary "well conditioned / abstain" mask throws information away and hides the selection that the
+head must later cross. The witness is characterised per pixel by the smallest fault it can detect. For
+a two-sided test of size $\alpha$ and power $1 - \beta_{\mathrm p}$,
+
+```math
+\delta_{\min}(u) = \bigl( z_{1 - \alpha/2} + z_{1 - \beta_{\mathrm p}} \bigr)\ \sigma_x(u), \qquad
+\sigma_x^2(u) = \sigma_{\mathrm{tri}}^2(u) + \sigma_j^2(u),
+```
+
+the minimum detectable bias of the geodetic testing literature applied to one pixel. The label
+delivered by the witness is then not "fault / no fault" but a pair
+
+```math
+y_j(u) = \mathbb 1\bigl[\, \lvert x^{\mathrm M}_j(u) \rvert > z_{1-\alpha/2} \,\bigr], \qquad \delta_{\min}(u),
+```
+
+read as "a fault larger than $\delta_{\min}(u)$ is present / is excluded with power
+$1 - \beta_{\mathrm p}$". Its false-positive rate is $\alpha$ by construction once the null is
+calibrated, and its miss rate for a fault of magnitude $\delta$ is
+$\Phi\bigl(z_{1-\alpha/2} - \delta/\sigma_x(u)\bigr)$. The labels come with a known, per-pixel error
+model, which the head's loss can use directly (Section 5.1).
+
+Hard abstention ($\delta_{\min} = \infty$) is declared when any of the following holds: no
+correspondence, or the provider reports the point occluded; $E(u)$ or $C(u)$ above its $\chi^2$
+quantile; forward-backward inconsistency of the correspondence; the track is prior-driven
+(Section 2.6); the alignment of the view has too few inliers; the pixel lies in the discontinuity band.
+
+### 2.6 What the epipolar check does not catch
+
+The check $E$ is necessary for a sound label and far from sufficient. Three cases pass it with a wrong
+depth, and each is tied to a surface class that matters.
+
+**Planar reflections and transparent surfaces.** The virtual image of a static scene in a planar
+mirror is itself a rigid static scene, the mirror image. A track on a reflection in a flat window, a
+glass roof or calm water therefore stays on its epipolar line in every view and triangulates
+consistently, at the virtual depth behind the reflector. The same holds for the interior seen through
+clear glass, and for a sun glint on a flat surface, which triangulates at infinity. Only *non-rigid*
+virtual images leave the line: rippled water, curved reflectors. From parallax alone a planar mirror
+cannot be distinguished from an opening onto a mirrored scene; this is not a weakness of a particular
+tracker but a non-identifiability. The consequence for labels: on a flat reflector whose monocular
+depth is correct (the reflector's plane), the witness reports a confident fault. The false label is
+systematic and attached to exactly the appearance class to which the head is supposed to carry the
+result. A one-sided plausibility test (triangulated depth far behind a surface established by
+surrounding tracks) reduces the damage but cannot be exact, because a real pit or courtyard has the
+same geometry. Whether the exact depth of a synthetic scene records the reflector or what lies behind a
+translucent material is also not known and must be checked before such scenes are used for evaluation.
+
+**Motion along the epipolar line.** A vehicle driving parallel to the flight line stays on the line and
+triangulates at a wrong depth. With three or more views at unequal time-to-baseline ratios $C$ catches
+it; on a strip flown at constant speed and constant frame interval the object's displacement is
+proportional to the baseline, exactly like parallax, and $C$ does not.
+
+**Prior-driven tracks.** A learned tracker "holds" on weak texture by propagating the motion of the
+surrounding structure. On a texture-free surface the reported correspondence is then an interpolation,
+not a measurement. An interpolated motion field is epipolar-consistent whenever its support is, so $E$
+and $C$ pass. The triangulated depth is the depth of the interpolant (in effect, the plane through the
+textured surroundings), and $\operatorname{Var}(\hat\xi)$ computed from the stratum's localisation noise
+understates its error. This is the same kind of inference from context that the monocular model makes,
+which is the opposite of what a witness should be. It is detected by measuring how much of the
+along-line information the local appearance actually supports. Let $\varphi$ be the feature map the
+correspondence was computed on (or the image) and
+
+```math
+\mathcal E_i(u) = \sum_{u' \in \mathcal P(u)} \bigl( \mathbf e_i^\top \nabla \varphi(u') \bigr)^2, \qquad
+\epsilon(u) = \frac{\min_{i \in \mathcal S(u)} \mathcal E_i(u)}{\mathcal E_{\mathrm{ref}}} ,
+```
+
+the feature gradient energy along the epipolar direction in a patch, relative to a reference level at
+which the stratum's noise was calibrated. A complementary diagnostic is the similarity profile along
+the epipolar line around the reported position: if it is flat, the position was not chosen by the
+data. Tracks with small $\epsilon$ form their own stratum, are excluded from label generation by
+default, and their triangulation error against exact depth is one of the first things to measure.
+Qualified in this way, the statement that learned tracking extends coverage to weak texture may hold;
+unqualified, it converts a prior into a label.
+
+### 2.7 What the witness responds to
+
+A displacement of the surface along the ray that moves its image in other views, on a surface that is
+static, has appearance that a correspondence can lock onto, and is seen in at least one other view with
+baseline. It does not use any other depth map, so an error that every depth map repeats is as visible
+as one that a single view makes. That property is the reason for the witness.
+
+## 3. Depth Consensus (unchanged)
+
+The standardised leave-block-out residual
+
+```math
+z_j(u) = \frac{\hat d_j(u) - a_j \tilde D_{-j}(u) - b_j}{\sqrt{v_j(u)}}, \qquad \tilde D_{-j} = \hat D_{-j} + \beta_{-j} \hat D_{-j}^2 ,
+```
+
+together with a free-space score along rays for surfels that only the tested block supports, forms one
+detector: both channels are depth maps of other views compared through the same poses. It abstains
+outside $\Omega_j$. It responds to disagreement between depth maps whatever the cause and is blind to an
+error that the views outside the block repeat.
+
+## 4. Dependence between the Two Sources
+
+### 4.1 Predicted behaviour
+
+F fires on a true fault, M misses, A abstains, FA fires where the depth is correct. Predictions only.
+
+| Case | Depth consensus | Motion witness | Head on frozen features |
 | --- | --- | --- | --- |
-| $\mathcal G_{\mathrm s}$ | $d \mapsto a d$ | $\tau = \log d$ (one offset) | pairs of metric models (Depth Pro, Metric3D v2, UniDepthV2) |
-| $\mathcal G_{\mathrm{ai}}$ | $1/d \mapsto \alpha/d + \gamma$ | $\tau = 1/d$ | any pair that involves Depth Anything V2, whose output is affine-invariant inverse depth |
-| $\mathcal G_{\mathrm{ad}}$ | $d \mapsto a(d + \beta d^2) + b$ | $\tau = d$ | depth map against a rendered surface (the main document's measurement model) |
+| Fault on textured, diffuse surface, single view | F | F | not needed |
+| Fault on textured, diffuse surface, repeated by all views | M | F: the case the witness exists for | not needed |
+| Fault repeated within a block only | M unless the block is longer | F | not needed |
+| Weak texture, track supported by the data at coarse scale | M if repeated | F for faults above a large $\delta_{\min}$ | interpolates in $\delta_{\min}$ |
+| Texture-free, prior-driven track | M if repeated | A if detected by $\epsilon$; otherwise an unfounded label | extrapolates |
+| Flat glass, calm water, depth map correct | silent | FA at the virtual depth; passes $E$ and $C$ | trained on false labels |
+| Flat glass, calm water, depth map wrong | F if view dependent | fires, but for the wrong reason and at the wrong depth | label right by accident |
+| Rippled water, curved reflector | F if inconsistent | A through $E$ | extrapolates |
+| Moving object across the line | silent or F | A through $E$ | not needed |
+| Moving object along the line, constant speed | silent or F | FA | none |
+| Thin structure, depth edge | FA | A or FA | excluded by the band |
+| Whole-view error in the nuisance group | M by construction | M by construction | M |
+| Pose error of the view | FA, regional | FA unless removed by the per-pair fit; visible in $\nu$ | none |
+
+### 4.2 Where independence is defensible and where it is not
+
+The measurement noises come from different sources: depth networks applied to other images on one side,
+correspondence positions on the other. Three shared causes remain.
+
+1. **Poses.** Both sources use the pose of view $j$ and of its neighbours. The witness has the
+   advantage that pose error shows in $\nu$ and can be estimated per pair; the consensus residual has
+   no such channel.
+2. **The image of view $j$.** The depth map is a function of it and the track starts from it. Where
+   the image carries little information, the depth is more often wrong *and* the witness more often
+   abstains or is prior-driven. This couples the fault to the abstention of the witness, not to its
+   error; it is the selection problem of Section 5.
+3. **Shared learned priors.** If the correspondence model and the depth model use encoders of the same
+   family (recalled as likely for several candidates; not verified), their regions of weak evidence
+   coincide. With the $\epsilon$ rule this again affects coverage, not the validity of the labels that
+   remain.
+
+With two sources, agreement cannot identify their accuracies; the witness is therefore not treated as
+one noisy voter among several but as a calibrated measurement with its own null (Section 2.3). That is
+the role the self-calibration plays in the overall argument: it replaces the third independent detector
+that identifiability from agreement would require.
+
+## 5. From Labels to an Indicator: Selection and Transfer
+
+### 5.1 Labels with a known error model
+
+On the labelled set the head $h$ on frozen features $\phi_j(u)$ is fitted to $y_j(u)$ with the
+per-pixel error rates of Section 2.5: false-positive rate $\alpha$, and a miss rate that depends on
+$\delta_{\min}(u)$. A fault indicator at a stated magnitude $\delta$ uses only labels with
+$\delta_{\min}(u) \le \delta$; smaller magnitudes have fewer labels. The head never sees the score or
+the depth residual of the pixel it labels, only features, so it cannot copy the label function.
+
+### 5.2 The selection is on the variable that matters
+
+Whether a pixel is labelled is decided by trackability, and trackability is decided by appearance. The
+features are functions of the same appearance. The unlabelled pixels therefore do not differ from the
+labelled ones by chance: they occupy a region of feature space that the labelled set does not reach.
+Three statements follow.
+
+- *Abstention is observed everywhere.* The propensity $\pi(u) = \Pr\bigl(\delta_{\min}(u) \le \delta \mid \phi_j(u)\bigr)$
+  can be fitted on all pixels without any label. It measures how far a pixel is from the labelled
+  support.
+- *Reweighting cannot bridge a gap in support.* Importance weights $1/\pi$ correct a shift only where
+  $\pi > 0$. On glass and water $\pi$ is near zero and there is nothing to reweight.
+- *What can be tested is the trend.* $\delta_{\min}$ orders the pixels from sharply labelled to barely
+  labelled. A head fitted on pixels with small $\delta_{\min}$ and evaluated on pixels with large
+  $\delta_{\min}$, using their coarse labels, measures transfer across the conditioning axis inside the
+  data, without ground truth. If accuracy falls towards chance as $\delta_{\min}$ grows, extrapolation
+  to $\delta_{\min} = \infty$ is not supported, and the indicator on such pixels must be reported as
+  prior-only with $\pi(u)$ attached. If it holds, the claim is still an extrapolation, and only exact
+  depth can confirm it.
+
+Weakly textured surfaces are the bridge. They are matchable at coarse scale with a large localisation
+error, and long tracks and cross-strip pairs compensate: $\sigma_{\mathrm{tri}}$ scales with
+$\sigma_a / (f \sqrt{\sum B_i^2})$. Such pixels can be labelled for large faults, and regional faults of
+many $\sigma$ are large. How much of the texture-free area this recovers is a question of geometry and
+of the correspondence model, to be measured.
+
+### 5.3 Video and multi-view features cut both ways
+
+A frozen video or multi-view encoder sees parallax in its features. For the head this is an advantage
+on labelled pixels and a hazard for transfer: such features can encode "local depth from parallax
+disagrees with the single-image impression", which is the label function itself, and that content is
+absent exactly where the witness abstains. A head on multi-view features may thus score well on the
+labelled set by a route that does not exist on the unlabelled set. The per-image features of the query
+frame do not have this property. The comparison of the two feature sets across the $\delta_{\min}$ axis
+is the direct test: multi-view features should win at small $\delta_{\min}$ and may lose their margin,
+or fall below per-image features, at large $\delta_{\min}$.
+
+## 6. Why Keep the Monocular Depth
+
+In terms of the quantities above, the objection is sharp: where $\delta_{\min}(u)$ is small, the
+triangulated depth is far more precise than the monocular one and makes it redundant; where
+$\delta_{\min}(u)$ is large, the witness cannot judge. The monocular depth is needed only where it
+cannot be checked. The answers that survive are these.
+
+1. **Coverage.** The monocular depth is dense; the witness exists on a subset. The quantity that
+   decides the matter is the fraction of the surface, by area, whose final geometry rests mainly on
+   monocular depth. For a survey with 80/60 overlap over textured terrain this fraction may be small,
+   and then the method addresses a small residual of the scene. For low overlap, single strips,
+   corridor flights, forward motion (no parallax near the focus of expansion) and scenes dominated by
+   glass, water or uniform surfaces it is large. The contribution is defined on that fraction and
+   should be reported against it.
+2. **Judging is cheaper than replacing.** A sparse, noisy witness suffices to *rate* a dense prior:
+   the pooled regional test needs many fewer correspondences than a dense reconstruction, and a rating
+   with a stated $\delta_{\min}$ is useful where a depth with that uncertainty is not.
+3. **The label is the product.** The triangulated depths train an indicator that applies where
+   triangulation is absent. This holds only as far as Section 5 holds.
 
-The groups are not interchangeable. An offset in inverse depth is not an offset in depth:
+A tension has to be resolved in the design and is noted here because it concerns the evidence. If the
+triangulated depths are also fused into the surface, they are the best measurements available, but the
+witness is then no longer independent of the surface it helps to judge. If they are kept out of the
+fusion, good data are discarded. The clean construction is to split the correspondences (for instance
+by alternating frames) into a part that is fused as sparse depth messages with variance
+$\sigma_{\mathrm{tri}}^2$ and a part that judges, with roles exchanged across folds.
 
-```math
-\frac{1}{\alpha/d + \gamma} = \frac{d}{\alpha} - \frac{\gamma}{\alpha^2} d^2 + O(\gamma^2 d^3),
-```
+## 7. Frozen Models
 
-so a Depth Anything V2 map aligned with $\mathcal G_{\mathrm{ai}}$ and then compared under
-$\mathcal G_{\mathrm{ad}}$ carries a *per-view* quadratic term, which the *shared* $\beta$ cannot absorb.
-With a relief of tens of metres at a flying height of a few hundred metres the term is small but
-systematic over the whole view; the consistent choice is to align that model in inverse depth wherever
-it is involved.
+All entries are recalled and unverified, including availability, outputs and licences. Several of the
+models are recalled to be released under non-commercial licences.
 
-Requirements for the fit to be well-posed: (i) breakdown point above the largest fault fraction of
-interest (a least-median or consensus fit tolerates just under 50%; the affine-inverse consensus fit in
-the code is documented to hold up to 40% corrupted reference pixels); (ii) enough depth range in
-$\mathcal D$ to separate scale from offset, since on a flat nadir scene $\alpha$ and $\gamma$ are nearly
-collinear and the fit is ill-conditioned, in which case the group must be reduced to scale only; (iii) a
-report of the inlier count, used for abstention. When the fault covers more than the breakdown fraction,
-the alignment locks onto the fault and the cue is inverted on the whole view. This failure is common to
-all cues that share an alignment.
-
-### 1.4 Learning the null
-
-Each raw residual $\Delta$ is divided by a scale $s^c(\mathbf x^c)$ estimated from the bulk of the data
-with a robust estimator (median absolute deviation, or the lower half of the distribution for unsigned
-scores), stratified by covariates that describe geometry only: range, local depth slope, distance to
-the nearest depth edge, number of supporting views. This is the main document's scale head applied per cue.
-It rests on the same assumption: within a stratum, faults are a minority. A fault class tied to a
-stratum is absorbed into the null.
-
-### 1.5 Spatial support
-
-Faults are regional, noise is not. Each signed score is pooled over a window of the fault scale before
-voting, $\bar q(u) = \sum_{u' \in W(u)} q(u') / \sqrt{n_{\mathrm{eff}}}$, and unsigned scores by a local
-median. All cues are pooled at the same scale so that their votes refer to the same support. Votes at
-neighbouring pixels are not independent samples; the unit of evidence for estimating detector accuracies
-is a pooled cell, not a pixel.
-
-### 1.6 Transfer to (view, surfel) pairs
-
-A pixel score becomes a score on the pair $(i, k)$ by splatting with the compositing weights,
-$q^c_{ik} = \sum_u w_{uk}\, q^c_i(u) / \sum_u w_{uk}$, with abstention when the non-abstaining weight is
-below a threshold. Cues c2 and c3 and the plane-sweep form of c4 are defined on rays and need no surfel
-map; they therefore also exist for surfels that a fault spawned for itself.
-
-## 2. Cue c1: Leave-Block-Out Depth Residual
-
-**Definition.** The standardised cavity residual of the main document,
-
-```math
-q^{1}_j(u) = z_j(u) = \frac{\hat d_j(u) - a_j \tilde D_{-j}(u) - b_j}{\sqrt{v_j(u)}}, \qquad \tilde D_{-j} = \hat D_{-j} + \beta_{-j} \hat D_{-j}^2 ,
-```
-
-with nuisance group $\mathcal G_{\mathrm{ad}}$ fitted robustly on $\Omega_j$. Null: zero mean, scale
-$s_j(u)$ learned from geometry; the nominal value is one.
-
-**Ray form (c1r).** The cavity residual exists only where the cavity surface covers the pixel. A fault
-can create surfels that only faulty views support; they are dropped from the cavity and the pixel
-becomes untestable, or the cavity renders the surface behind them. The conflict is then along the ray.
-With $X_j(u)$ the back-projection of pixel $u$ at its aligned depth, $u_i = \pi_i(X_j(u))$ its
-projection into a view $i \notin \mathcal B_j$, and $\delta_i$ the depth of $X_j(u)$ in view $i$,
-
-```math
-e_{j \to i}(u) = \frac{d^{\mathrm{al}}_i(u_i) - \delta_i\bigl(X_j(u)\bigr)}{\sqrt{\sigma_i^2 + \sigma_j^2}}, \qquad
-q^{1r}_j(u) = \operatorname{med}_{i \notin \mathcal B_j}\ \max\bigl(e_{j \to i}(u),\ 0\bigr).
-```
-
-A positive value means view $i$ sees through the point (free-space violation); a negative value means the
-point is occluded in $i$, which is no evidence. This is the visibility test of depth-map fusion. It
-needs aligned depth $d^{\mathrm{al}}_i$ for all views, so it depends on the same per-view alignments as
-c1.
-
-**Abstains** when $u \notin \Omega_j$ (accumulated cavity opacity below threshold), when the removed
-information share $\Phi_{-j}(u)$ is above the support threshold, when the alignment has too few inliers,
-and for c1r when fewer than two views outside the block see the point unoccluded.
-
-**Responds to** disagreement between the depth of view $j$ and the depth of views outside its block,
-whatever the cause: depth-model error in $j$, depth-model error in the others, pose error of $j$,
-unrepresented structure in the surfel map, linearisation error of the one-step cavity.
-
-**Dependence between c1 and c1r.** Same information (depth maps of other views, same poses, same
-alignments). They are two channels of one detector, not two detectors, and must enter a label model as
-one cue (for example the maximum of the two tail probabilities).
-
-**Cost and code.** The machinery exists: per-view information blocks
-(`eval/gaussian_uncertainty.view_information`, `SurfelBackend.view_information`), subtraction and Newton
-step (`leave_view_out_newton`, `leave_block_out_newton`, `block_for_view`), support rules, cavity render
-with variance (`render_cavity`), distance-bias downdate, all driven by `gs/gate.ViewGateTest`, which
-accepts a block map. Missing: (a) `ViewGateTest._stats` forms the residual and its weight per pixel but
-returns only the energy and the region-scan values, so the map $z_j(u)$ and the mask must be exported;
-(b) the nominal noise is a single scalar `sigma`, not a field $\sigma_j(u)$; (c) the robust (reweighted)
-alignment: the gate projects the affine nuisance out by weighted least squares; (d) the rendered removed
-share $\Phi_{-j}$; (e) the ray form, for which `baselines/merrell_visibility.stability_counts` and
-`baselines/consistency_voting.support_counts` already contain the projection and free-space logic but
-return counts, not standardised per-pixel values. Cost per tested view: one information pass per view of
-the block (dense, $O(K \cdot \text{chunk})$ memory in the reference implementation) and one cavity
-render; the ray form is one projection per neighbour.
-
-## 3. Cue c2: Cross-Model Disagreement
-
-**Setting.** $M$ depth models run on the *same* image, so the pixel grids coincide (all wrappers return
-depth at input resolution) and no warp is needed. The nuisance is one element of $\mathcal G$ per pair
-and view.
-
-**Pairwise residual.** For models $m, m'$,
-
-```math
-\Delta^{mm'}_j(u) = \tau\bigl(\hat d^{m}_j(u)\bigr) - \tau\bigl(g^\ast_{mm'j} \cdot \hat d^{m'}_j(u)\bigr), \qquad
-\mathcal G = \begin{cases} \mathcal G_{\mathrm s},\ \tau = \log & \text{both metric},\\ \mathcal G_{\mathrm{ai}},\ \tau(d) = 1/d & \text{otherwise.}\end{cases}
-```
-
-In inverse depth the residual is divided by $1/\hat d^m_j(u)$ so that both cases are relative errors.
-
-**Attribution to the primary model.** A pairwise residual is symmetric: it does not say which model is
-wrong. The score for $m_0$ is its residual against the consensus of the others, the analogue of the
-cavity in model space,
-
-```math
-q^{2}_j(u) = \frac{1}{s^{2}_j(u)}\ \operatorname{med}_{m' \neq m_0} \Delta^{m_0 m'}_j(u).
-```
-
-With three other models the median is wrong only if two of them share an error.
-
-**Null scale without labels.** If the model errors were mutually uncorrelated, the per-model variances
-would follow from the pairwise variances (three-cornered hat),
-
-```math
-\operatorname{Var}(\epsilon^{a}) = \tfrac12 \bigl( V_{ab} + V_{ac} - V_{bc} \bigr), \qquad V_{mm'} = \operatorname{Var}\bigl(\Delta^{mm'}\bigr),
-```
-
-evaluated with robust variances per geometry stratum. This is the continuous counterpart of estimating
-detector accuracies from agreement. The assumption is doubtful: a negative estimate is the signature of
-correlated errors and must be reported, not clipped. Independently of that, $s^2$ can always be set to
-the robust scale of the consensus residual itself.
-
-**Abstains** where fewer than two other models are valid (saturation at Metric3D's depth clamp, invalid
-or sky pixels), where an alignment failed or has few inliers (`AlignmentError`, `n_inliers`), and in a
-band around depth edges if edge sharpness differs between models.
-
-**Responds to** content on which the models' learned priors differ. It is a statement about the models,
-not about the scene.
-
-**Limits.** (i) Common-mode error: all four models use a ViT encoder pretrained in the DINOv2 family and
-overlapping training data (recalled; to be verified per checkpoint), so on glass and water a shared
-error is plausible. Then the consensus is wrong with $m_0$ and c2 misses. How large this share is, is the
-first thing the MatrixCity measurement must answer. (ii) One model is poor after alignment: on the cached
-MatrixCity block, Metric3D v2 keeps 9.5 to 14% median relative error after per-view scaling, against
-under 1% for UniDepthV2. Its residuals widen the null; the median over three and the variance estimate
-limit the damage. (iii) The error of the *other* models leaks into the score of $m_0$: where two others
-fail together, c2 false-alarms on a correct $m_0$.
-
-**Cost and code.** No new inference: the cache holds raw outputs of all four models
-(`depthcache/cache.py`), 0.22 to 1.35 s per view and model on the recorded GPU run. The alignment
-exists: `depthcache/align.align_depth(result, ref_depth)` accepts any reference depth, so passing another
-model's depth as reference gives $\mathcal G_{\mathrm s}$ (median ratio, `fit_scale`) or
-$\mathcal G_{\mathrm{ai}}$ (consensus fit plus least squares, `fit_affine_inverse`) directly. Missing: a
-function that forms the six pairwise residuals and the consensus score, the stratified scales, and the
-edge band. Storage: the default cache precision is float16 (a 0.25 m step at 256 to 512 m), coarse next
-to small disagreements; float32 is needed. Cost per view: a few robust fits on subsampled pixels, CPU
-seconds.
-
-## 4. Cue c3: Instability under Input Transformations
-
-**Setting.** One model $F$, a set $\mathcal T$ of $S$ input transformations $T$ with geometric action
-$\psi_T$ on pixel coordinates: horizontal and vertical flip, rotation by multiples of 90 degrees,
-centred crop (less context), rescale by a factor $\rho$ (other resolution), and photometric changes
-(gamma, colour balance) with $\psi_T = \mathrm{id}$. The prediction transported back is
-
-```math
-\hat d^{T}_j(u) = F\bigl(T[I_j]\bigr)\bigl(\psi_T(u)\bigr), \qquad u \in \mathcal D_T = \{u : \psi_T(u) \text{ inside the transformed image}\}.
-```
-
-**Nuisance.** Each forward pass has its own gauge. A metric model's scale depends on the assumed field of
-view; under a rescale by $\rho$ the focal length in pixels must be passed as $\rho f$, under a crop it
-stays $f$ with a shifted principal point, under a flip the principal point is mirrored. Even with correct
-intrinsics the predicted scale moves, and for the affine-invariant model the gauge is arbitrary per
-pass. The comparison is therefore made after alignment on the overlap,
-
-```math
-\Delta^{T}_j(u) = \tau\bigl(\hat d_j(u)\bigr) - \tau\bigl(g^\ast_{T} \cdot \hat d^{T}_j(u)\bigr), \quad u \in \mathcal D_T ,
-```
-
-with the same group as for the model in c2. Resampling is needed for crop and rescale; to keep sub-pixel
-shifts at depth edges out of the score, the residual is taken with a one-pixel tolerance,
-$\Delta^{T}_{\mathrm{tol}}(u) = \min_{\lVert u' - u \rVert_\infty \le 1} \lvert \tau(\hat d_j(u)) - \tau(g^\ast_T \cdot \hat d^T_j(u')) \rvert$.
-
-**Score.** The dispersion over transformations, standardised by a learned scale,
-
-```math
-q^{3}_j(u) = \frac{1}{s^{3}_j(u)} \Bigl( \frac{1}{S_u} \sum_{T :\, u \in \mathcal D_T} \Delta^{T}_{\mathrm{tol}}(u)^2 \Bigr)^{1/2}.
-```
-
-The score is unsigned; its null law is fitted empirically per stratum and per transformation family,
-because the transformations are not exchangeable: a flip of a nadir image is nearly a symmetry of the
-scene statistics, whereas a model trained mostly on ground-level images has a gravity prior, and
-rotations may change clean predictions by a large systematic amount. If so, that family has no
-usable null and is discarded.
-
-**Abstains** where fewer than two transformations cover the pixel, where an alignment failed, and in the
-edge band.
-
-**Responds to** predictions that are weakly determined by local evidence and therefore depend on
-position, context or resolution. This is *ambiguity*, not *error*. A confident systematic error, which
-is the description of the glass failure (the model reads the reflected or transmitted scene), is
-equivariant and produces no score. Instability on correct predictions is a false alarm. Whether
-ambiguity predicts error in this domain is an empirical question; the evidence from test-time
-augmentation in other tasks is that it captures part of the error and misses confident mistakes
-(recalled).
-
-**By-product.** The spread of the fitted gauges $g^\ast_T$ over crops measures how well the whole-view
-scale is determined. It is a view-level quantity about the nuisance, not a fault cue.
-
-**Cost and code.** $S$ additional forward passes per view and model (four passes with UniDepthV2: about
-0.9 s per view on the recorded run). Nothing exists: the wrappers expose
-`predict(rgb, focal_px)` with a centred principal point, so off-centre crops cannot be expressed and
-crops must be centred or the shift left to the alignment; `View.load_rgb` gives the image. To add: the
-transformation and inverse-warp functions, focal handling, cache entries per transformation (the cache
-accepts any model identifier matching `[A-Za-z0-9._-]+`, but `depthcache/run.py` validates against the
-four known names), and the score.
-
-## 5. Cue c4: Photometric Evidence
-
-Colour is used as a judge. It never moves geometry.
-
-### 5.1 Variant (i): multi-view photo-consistency of the depth
-
-**Why a single-depth score is not a cue.** Reprojecting pixel $u$ of view $j$ through its depth into a
-neighbour and scoring the patch similarity gives a number with no reference distribution: on a
-texture-free surface the patch matches at every depth, on repeated texture at many. The well-posed
-quantity is the *profile* of the similarity along the ray, compared at the hypothesised depth and at its
-alternatives.
-
-**Definition.** Let $\mathcal N_j$ be neighbouring views with sufficient baseline. For a depth
-hypothesis $d$ and a local plane through $X_j(u, d)$ (fronto-parallel, or with the normal of the depth
-map), let $H_{ji}(u, d)$ be the plane-induced homography and
-
-```math
-\rho_{ji}(u, d) = \operatorname{ZNCC}\bigl( I_j[\mathcal P(u)],\ I_i[H_{ji}(u, d)\, \mathcal P(u)] \bigr), \qquad
-\bar\rho_j(u, d) = \frac{1}{\kappa} \sum_{i \in \text{best-}\kappa \text{ of } \mathcal N_j} \rho_{ji}(u, d),
-```
-
-the zero-mean normalised cross-correlation on a patch $\mathcal P$, averaged over the $\kappa$ best
-neighbours to tolerate occlusion. Normalisation removes gain and offset of brightness per patch, which
-is the photometric nuisance. The profile is evaluated on $H$ hypotheses uniform in inverse depth over
-the depth range of the view, at a spacing of about one pixel of disparity. Let
-$d^\star(u) = \arg\max_d \bar\rho_j(u, d)$, refined by a parabola. The score is the standardised
-difference between the aligned monocular depth and the photometric optimum,
-
-```math
-q^{4}_j(u) = \frac{\log d^{\mathrm{al}}_j(u) - \log d^\star(u)}{\sqrt{\sigma^2_{\mathrm{ph}}(u) + \sigma_j^2(u) / d^{\mathrm{al}}_j(u)^2}}, \qquad
-\sigma^2_{\mathrm{ph}}(u) \propto \Bigl( - \partial^2_{\log d}\, \bar\rho_j(u, d) \big|_{d^\star} \Bigr)^{-1} .
-```
-
-The curvature of the profile at its peak is the product of the image gradient energy along the epipolar
-direction and the squared disparity sensitivity $f B / d$; it plays the role of the rendered variance in
-c1. The proportionality constant is learned as part of the null scale. Variant (i) is thus the residual
-of the monocular depth against a local triangulation, a measurement from a different physical principle.
-
-**Alignment.** $d^{\mathrm{al}}_j$ needs $(a_j, b_j)$. Taking them from the cavity alignment of c1 would
-couple the two cues through a shared nuisance estimate. The cue has its own: the robust regression of
-$\hat d_j$ on $d^\star$ over pixels with a distinctive peak,
-
-```math
-(a^{\mathrm{ph}}_j, b^{\mathrm{ph}}_j) = \arg\min_{a, b} \sum_{u :\, A^4_j(u) = 0} \rho\bigl( \hat d_j(u) - a\, d^\star(u) - b \bigr),
-```
-
-so that variant (i) uses images, poses and the depth map of view $j$ and nothing else: no surfel map, no
-other depth map.
-
-**Abstains** when the peak is not distinctive (ratio of best to second-best local maximum below a
-threshold, or $\bar\rho(d^\star)$ below a floor), when the epipolar gradient energy of the patch is below
-a floor, when fewer than two neighbours see the point, and when the alignment has too few inliers.
-
-**Responds to** a displacement of the surface along the ray that changes the appearance in other views:
-it requires texture, a Lambertian surface, a static scene and correct poses.
-
-**Failure modes.** On specular and transparent surfaces the photometric optimum is the depth of the
-virtual image, not of the surface; if the monocular depth is correct there, the cue false-alarms, and if
-both are wrong they are wrong differently. On water, glint and waves leave no stable peak and the cue
-abstains. On texture-free surfaces it abstains. So on the three fault classes that motivate the work,
-variant (i) mostly abstains. Its value is elsewhere: it is the only multi-view cue that does not use the
-other views' depth maps, so it can see an error that every view repeats, provided the surface is
-textured (for example building heights flattened consistently in nadir views).
-
-**Abstention is informative.** The cue abstains where texture is absent, which is where monocular faults
-are more frequent. Abstention is not missing at random, and a label model must carry class-conditional
-abstention rates or condition on the texture covariate.
-
-**Cost and code.** $H \cdot \lvert \mathcal N_j \rvert$ image warps per view at reduced resolution; with
-tens of hypotheses and four neighbours this is of the order of a second on a GPU and feasible on a CPU at
-quarter resolution. Nothing exists on the image side: `types.DepthFrame` has no image field, the surfel
-fit renders constant colours, and the only image access is `depthcache/datasets.View.load_rgb`, which is
-not connected to the frames used by `gs/`. Available building blocks: `baselines/_common`
-(`backproject_cam`, `project`, `project_into`, `depth_to_normals`). To add: an image-carrying frame or a
-side loader keyed by view identifier, the plane sweep, the peak statistics, the alignment.
-
-### 5.2 Variant (ii): influence through the surfel map
-
-**Setup.** Linearise the depth likelihood of view $i$ at the fitted surface $\bar\theta$. With
-$\delta_k$ the perturbation of the geometric coordinates of surfel $k$ and the block-diagonal
-approximation of the main document,
-
-```math
-\mathcal L_i(\bar\theta + \delta) \approx \mathcal L_i(\bar\theta) - \sum_k \eta_{ik}^\top \delta_k + \tfrac12 \sum_k \delta_k^\top \Lambda_{ik} \delta_k, \qquad
-\eta_{ik} = \sum_u \frac{a_i\, \mathbf g_{uk}^\top e_i(u)}{\sigma_i^2(u)}, \quad \Lambda_{ik} = \Lambda_k^{(i)},
-```
-
-where $e_i(u) = \hat d_i(u) - a_i \tilde D_i(u) - b_i$ is the residual against the *full* surface. Give
-each message a gate $w_{ik}$. The gated estimate is in closed form,
-
-```math
-\Lambda_k(w) = \Lambda_0 + \sum_i w_{ik} \Lambda_{ik}, \qquad \delta_k(w) = \Lambda_k(w)^{-1} \sum_i w_{ik}\, \eta_{ik},
-```
-
-with the prior centred at $\bar\theta_k$. Differentiating,
-
-```math
-\frac{\partial \delta_k}{\partial w_{ik}} = \Lambda_k^{-1} \bigl( \eta_{ik} - \Lambda_{ik} \delta_k \bigr) = \Lambda_k^{-1} \eta_{ik} \quad \text{at } w = \mathbf 1,\ \delta_k = 0 ,
-```
-
-because at the fitted surface $\sum_i \eta_{ik} = 0$. Removing the message entirely gives
-$\delta_k^{(-ik)} = -(\Lambda_k - \Lambda_{ik})^{-1} \eta_{ik}$, the cavity step, of which the derivative
-is the first-order form.
-
-**Influence.** Let $\mathcal L^{\mathrm{rgb}}_j(\theta, \mathbf c)$ be the photometric loss of a held-out
-view $j$, with appearance parameters $\mathbf c$ fitted on other views with the geometry frozen. Then
-
-```math
-I(i \to j, k) = \frac{\partial \mathcal L^{\mathrm{rgb}}_j}{\partial w_{ik}} = \nabla_k \mathcal L^{\mathrm{rgb}\,\top}_j\ \Lambda_k^{-1}\ \eta_{ik} .
-```
-
-A positive value says that giving the message more weight makes the held-out image worse.
-
-**Pixel form.** Substituting $\eta_{ik}$ and summing over surfels,
-
-```math
-\sum_k I(i \to j, k) = - \sum_u \frac{a_i\, e_i(u)}{\sigma_i^2(u)}\ \delta D^{\mathrm{rgb}, j}_i(u), \qquad
-\delta D^{\mathrm{rgb}, j}_i(u) = \sum_k \mathbf g_{uk}\, \delta\theta^{\mathrm{rgb}, j}_k, \quad \delta\theta^{\mathrm{rgb}, j}_k = - \Lambda_k^{-1} \nabla_k \mathcal L^{\mathrm{rgb}}_j .
-```
-
-The influence of pixel $u$ of view $i$ is the product of two things: its depth residual against the full
-surface, and the change of rendered depth at that pixel if the surface followed the colour gradient,
-preconditioned by the depth information. It is positive when the depth datum pulls the surface one way
-and colour pulls it the other way.
-
-**Three structural consequences.**
-
-1. *Zero sum.* Since $\sum_i \eta_{ik} = 0$, the influences of the views on a surfel sum to zero,
-   $\sum_i I(i \to j, k) = 0$. The influence ranks messages against each other; it is not an absolute
-   statement about the surface. When two views disagree one gets a positive and the other a negative
-   value. When all views agree, every $\eta_{ik}$ is near zero and every influence is near zero, however
-   large the photometric gradient is. As a per-message score, variant (ii) is therefore blind to an
-   error that all views repeat, exactly like depth consensus. The information about such an error is in
-   $\nabla_k \mathcal L^{\mathrm{rgb}}_j$ alone.
-2. *It contains the non-cavity residual.* The factor $e_i(u)$ is measured against a surface that view
-   $i$ helped to fit. A view that dominates a surfel has a small residual there and a small influence.
-   The self-confirmation that the leave-out removes from c1 is present in variant (ii).
-3. *No known null as it stands, but one is available.* The influence is a loss derivative with units
-   that depend on contrast and noise. Under the hypothesis that the geometry is correct and the
-   photometric noise is independent with variance $\sigma_c^2$, the gradient
-   $\nabla_k \mathcal L^{\mathrm{rgb}}_j$ has zero mean and covariance equal to the photometric Fisher
-   information $\mathcal F_k = \sigma_c^{-2} \sum_{u'} \mathbf J_{u'k}^\top \mathbf J_{u'k}$, with
-   $\mathbf J_{u'k}$ the Jacobian of the rendered colour. Conditional on the depth data,
-
-```math
-\frac{I(i \to j, k)}{\sqrt{\mathbf v_{ik}^\top \mathcal F_k\, \mathbf v_{ik}}} \sim \mathcal N(0, 1), \quad \mathbf v_{ik} = \Lambda_k^{-1} \eta_{ik}; \qquad
-T_k = \nabla_k \mathcal L^{\mathrm{rgb}\,\top} \mathcal F_k^{-1} \nabla_k \mathcal L^{\mathrm{rgb}} \sim \chi^2_{\operatorname{rank} \mathcal F_k}.
-```
-
-   The first is a score test of the photometric fit along the direction in which message $i$ pushes
-   surfel $k$. The second is the omnibus score test on the surfel, with no reference to any message; it
-   is the form that can see an error repeated by all views. Both need $\mathcal F_k$, and both are
-   exact only for a correct appearance model.
-
-**What the gradient contains.** With rendered colour $\hat C(u') = \sum_l w_{u'l}\, \mathbf c_l$ and
-front-to-back compositing,
-
-```math
-\nabla_k \mathcal L^{\mathrm{rgb}}_j = \sum_{u'} \underbrace{\rho'\bigl(\hat C(u') - I_j(u')\bigr)}_{\text{photometric residual}}\ \underbrace{\bigl(\mathbf c_k - \hat C^{\,\mathrm{behind}}_{k}(u')\bigr)}_{\text{colour contrast}}\ \underbrace{T_{u'k}\, \nabla_k\bigl(\alpha_k G_k(u')\bigr)}_{\text{footprint change}} ,
-```
-
-where $\hat C^{\mathrm{behind}}_k$ is the colour composited behind surfel $k$, $T_{u'k}$ the
-transmittance in front of it and $G_k$ its footprint. The footprint depends on the geometry through the
-intersection of the pixel ray with the surfel plane. A displacement $\nu$ along the normal shifts that
-intersection in the tangent plane by $\nu \tan\vartheta$, with $\vartheta$ the angle between ray and
-normal. Hence:
-
-- **Zero without contrast.** Where a surfel has the colour of its surroundings the gradient vanishes
-  whatever the geometric error. Detected by a small $\mathcal F_k$; the cue abstains there.
-- **Zero at normal incidence.** For a held-out view that looks along the surfel normal ($\vartheta = 0$,
-  the centre of a nadir image over flat ground) a normal offset produces no image motion. The
-  information comes from oblique rays only, so it depends on the angular spread of the held-out views.
-- **Local validity.** The gradient is a first-order statement, correct while the image motion caused by
-  the geometric error is below the correlation length of the texture, in practice one to two pixels of
-  parallax. A fault of many $\sigma$ moves the projection by many pixels; the gradient then has a large
-  norm and an arbitrary direction. Its sign, and so the sign of the influence, is unreliable for gross
-  faults, which are the faults of interest. An image pyramid extends the range at the cost of
-  resolution.
-- **Appearance absorbs geometry.** The colours are fitted on images rendered through the wrong
-  geometry. A constant colour per surfel becomes a blur; a view-dependent colour can represent the
-  parallax of a misplaced surface as view dependence, and the held-out residual of a nearby view is then
-  small with wrong geometry. The judge must use view-independent colour, and the held-out view must be
-  outside the block of views that fitted the colour.
-- **Non-Lambertian surfaces.** At the true geometry of a specular or transparent surface the residual is
-  not zero. The gradient is non-zero for correct geometry and points towards the virtual image: a false
-  alarm with a misleading direction.
-- **Exposure.** Brightness differences between frames produce residuals at correct geometry. A
-  per-view gain and offset, or a normalised patch loss, is needed: one more nuisance alignment.
-- **Self-supported surfels.** A surfel that only faulty views support takes its colour from them and
-  occludes the true surface in a held-out view. The loss is high, but the relevant derivative is with
-  respect to existence (opacity), not position; the geometric gradient says nothing useful.
-
-**A finite-difference form.** The sum over surfels $\sum_k I(i \to j, k)$ is the directional derivative
-of the held-out loss along the field $\mathbf v_i$. Its finite form is the difference of two renders,
-
-```math
-\Delta \mathcal L^{(-\mathcal B_i)}_j(u') = \ell_j\bigl(u';\ \theta^{(-\mathcal B_i)}\bigr) - \ell_j\bigl(u';\ \theta\bigr),
-```
-
-the per-pixel photometric loss of the held-out view rendered from the cavity surface without the block
-of view $i$, minus that from the full surface. It asks whether removing the depth of the block improves
-the prediction of an image, it is valid beyond the linear range, and it handles self-supported surfels
-because the cavity drops them. It has no analytic null; its scale would be learned.
-
-**Cost and code.** Everything is missing: images in the frames, an appearance model (the fit calls the
-rasteriser with constant colours), the colour fit with frozen geometry (linear least squares for
-view-independent colour, one solve per fold of held-out views), the geometric gradient of the colour
-render in the gate's nine local coordinates (the fit already parametrises rotation by a local
-perturbation, so the chain rule is in place for that path), and $\mathcal F_k$, which needs per-pixel
-Jacobians: either a diagonal estimate by random probing (a forward-mode and a reverse-mode pass per probe
-and held-out view) or the empirical Fisher from per-view gradients. Cost per view: one backward pass
-through the colour renderer per held-out view for the gradient, several more for $\mathcal F_k$; the
-finite-difference form costs one colour render of the cavity per pair $(i, j)$. This is the most
-expensive cue and the one with the most new code.
-
-### 5.3 Relation between the two variants
-
-Both ask whether a depth is compatible with the images. Variant (i) searches along the ray, has a wide
-range of validity, a natural abstention rule and no dependence on the surfel map. Variant (ii) is the
-local derivative of the same criterion through the surfel map: it lives on (view, surfel) pairs, which is
-the domain the gate needs, but it is valid only near the correct surface, it inherits the map's model
-error and the appearance model's ambiguities, and as an influence it is blind to common errors.
-
-## 6. Cues from Frozen Foundation-Model Features
-
-The learned component is a light head on frozen features, so it is natural to ask which cues can be
-computed in feature space, and whether that makes them more or less independent of the others. Let
-$\phi(I)$ be a frozen patch-feature map (a DINO-family image encoder, or the encoder of the depth model
-itself), upsampled to the working resolution.
-
-**c4f: cross-view feature consistency.** Replace the patch correlation of variant (i) by the cosine
-similarity of features, $\rho^{\phi}_{ji}(u, d) = \cos\bigl(\phi(I_j)(u),\ \phi(I_i)(\pi_i X_j(u, d))\bigr)$,
-with the same profile, peak and abstention statistics.
-
-- *Gains.* Invariance to exposure and partly to specular highlights; a wider basin; some signal on
-  weakly textured surfaces, because features encode context.
-- *Losses.* Resolution: features live on a patch grid of the order of 14 pixels (recalled), so the
-  disparity precision is several pixels against a fraction of a pixel for patch correlation, and
-  $\sigma_{\mathrm{ph}}$ grows by the same factor. The cue remains useful only for faults whose parallax
-  exceeds a few feature cells; whether regional faults at aerial baselines do, has to be computed from
-  the geometry of each data set before implementing. Features also carry positional information and are
-  not viewpoint invariant, so the similarity has a bias that depends on image position; it must be
-  learned as part of the null.
-- *Independence.* Less independent of c2 and c3 than the pixel version. If the depth models' encoders
-  are of the same family as $\phi$ (recalled, to be verified), the regions where the features are
-  ambiguous are the regions where the depth prediction is weakly determined: c4f degrades or abstains
-  where c3 fires and where the models tend to fail. The pixel version shares only the image with the
-  depth models. With respect to c1 both versions are equally independent, since neither uses depth maps
-  of other views. The pixel version stays the primary judge; c4f is a coarse complement that narrows
-  the abstention region, entered as a separate channel of the same cue, not as a further detector.
-
-**c3f: feature-space instability.** With the depth model's own frozen encoder $\phi_F$,
-
-```math
-q^{3f}_j(u) = \frac{1}{s^{3f}_j(u)} \Bigl( \frac{1}{S_u} \sum_{T} \bigl[ 1 - \cos\bigl( \phi_F(I_j)(u),\ \phi_F(T[I_j])(\psi_T(u)) \bigr) \bigr] \Bigr) .
-```
-
-Features have no scale or offset gauge, so no nuisance alignment is needed, which removes the weakest
-step of c3 (the alignment per pass) and its breakdown. The price is a null that is far from zero: a
-vision transformer with positional embeddings is not equivariant to flips, crops or rescaling by
-construction, and the patch grid shifts under crop and rescale. The null is learned per transformation
-as for c3. As a detector c3f is *not* independent of c3: the depth output is a function of these
-features, so the two share their cause. It is a replacement for c3 or a second channel of it, with one
-distinct property: it can show instability that the decoder smooths away, and it can be insensitive to
-instability the decoder creates. The same forward passes serve both, so computing both costs only a
-hook on the encoder.
-
-**c2f: cross-model feature disagreement.** Feature spaces of different models are not comparable
-directly. A linear map fitted without labels (ridge regression of $\phi^{m'}$ on $\phi^{m}$ over all
-pixels of a scene) gives a residual that marks content the two models encode differently. Its relation
-to a depth fault is indirect, and it is strongly dependent on c2 and c3f. Not recommended as a cue.
-
-**Features of a frozen multi-view model.** A frozen two-view or multi-view geometry model that outputs
-point maps (recalled: such models exist; none is in the code) would give a depth for view $j$ that uses
-its neighbours' images; the residual of the monocular depth against it, after alignment, is a learned
-counterpart of variant (i) that does not abstain on texture-free surfaces. Its errors there come from
-learned priors of the same kind as the monocular models', so it is predicted to be dependent on c2
-exactly where it adds coverage. It should be judged by the same measurement as the other cues before
-any use.
-
-**Features as covariates.** The uncontroversial use of frozen features is as the appearance input
-$\mathbf x^a$ of the head and of the distilled network, and as stratification variables of the nulls.
-Two cautions. Conditional independence is then required given the fault *and* the features, which is a
-weaker and more plausible requirement than unconditional independence. And a null that is stratified by
-appearance can absorb a fault class tied to appearance (all glass), which the main document avoids by giving the
-scale head geometry only. Appearance features may inform priors and abstention, not null scales.
-
-**Summary of frozen-feature use.**
-
-| Component | Frozen features | Purpose | Independence against pixel version |
+| Role | Candidates (recalled) | Fits which regime | Open point |
 | --- | --- | --- | --- |
-| c4f | image encoder (DINO family) | coarse cross-view consistency | lower against c2, c3; equal against c1 |
-| c3f | encoder of the depth model | alignment-free instability | same cause as c3: a channel, not a detector |
-| c2f | encoders of two depth models | not recommended | dependent on c2 and c3f |
-| head, student | image encoder | priors, abstention, distillation | not a cue |
+| Point tracker | CoTracker family, TAPIR family | dense video; visibility and, for some, confidence output | behaviour at displacements of hundreds of pixels; cost of dense queries |
+| Dense optical flow | RAFT family | dense video, pairwise | large displacement; no visibility output |
+| Dense wide-baseline matcher | RoMa, LoFTR family | survey stills; dense warp with a certainty map | pairwise only, so tracks must be chained; uses frozen image-encoder features |
+| Multi-view geometry model | DUSt3R and MASt3R, VGGT | survey stills; point maps and matching features | its depth is a learned prior as much as a measurement, so only its correspondences may serve as witness |
+| Features for the head | per-image encoder of the DINO family; video encoder; multi-view model encoder | per-image always; video encoders need small inter-frame motion | Section 5.3 |
 
-## 7. Predicted Behaviour per Fault Class
+Two rules follow from Section 2. The correspondence must come from an unconstrained search, so that the
+across-line residual is a test; a model that is given the poses and searches along the line has no
+check. And the depth output of a multi-view model must not be used in place of triangulation: its
+uncertainty is not set by parallax, and its errors on texture-free surfaces come from priors of the
+same kind as the monocular model's.
 
-F: fires on a true fault. M: misses. A: abstains. FA: fires where the primary depth is correct. Entries
-are predictions. "c4(ii)" refers to the per-message influence; the omnibus score test $T_k$ behaves like
-c4(i) within its linear range.
+## 8. Cost and Code
 
-| Fault class | c1 cavity (and c1r) | c2 cross-model | c3 instability | c4(i) plane sweep | c4(ii) influence |
-| --- | --- | --- | --- | --- | --- |
-| Specular, glass | F if the error changes with viewpoint beyond the block; M if consistent | F if models differ; M on common-mode error (share unknown) | M for confident errors; partial F at region borders | A (weak peak) or FA (optimum at the virtual image while the depth is right) | FA, misleading direction |
-| Water | F if inconsistent across views; M within a block | partial F | F (weakly determined prediction) | A (no stable texture) | A (no contrast) or FA (glint) |
-| Texture-free | M within a strip (context repeats); F across strips | partial F | F: the best case | A, detected by gradient energy | A, detected by small $\mathcal F_k$ |
-| Thin structures | FA (the surfel map cannot represent them); M if every view omits them | FA (sharpness differs between models) | FA under rescale | A or FA (patch straddles) | FA, large gradients |
-| Depth discontinuities | FA unless the scale head absorbs it | FA in the edge band | FA from resampling | A or FA (occlusion) | FA |
-| Whole-view scale or offset | M by construction (in the nuisance) | M by construction | M by construction; visible only in the spread of gauges | M by construction | M: the alignment enters $e_i$ |
-| Repeated in neighbouring frames | M unless the block is longer than the repetition | as for a single view; its own errors repeat too | as for a single view | F if textured and Lambertian | M: $\eta_{ik}$ is small for all views of the run |
-| Repeated by all views | M | F unless common to the models | as for a single view | F if textured and Lambertian: the only multi-view cue that can | M (zero sum); $T_k$ can fire within its linear range |
+| Item | Exists in the code | To add |
+| --- | --- | --- |
+| Poses and intrinsics per view | `types.DepthFrame` (`K`, `T_wc`) | nothing |
+| Images | `depthcache/datasets.View.load_rgb`; scripts under `experiments/` that prepare the synthetic block's images at half resolution | an image path into the frames used by `gs/`, which carry depth only |
+| Projection, back-projection | `baselines/_common` (`backproject_cam`, `project`, `project_into`, `world_to_cam`) | epipolar split, parallax vectors |
+| Alignment of a depth map to sparse reference depth | `depthcache/align.align_depth`: robust scale for metric depth, consensus fit affine in inverse depth for relative depth; written for sparse references with invalid pixels | call it with triangulated depth as reference; export inlier sets |
+| Correspondence provider | nothing; no deep-learning framework is installed in the checked environment | a wrapper and an on-disk cache in the pattern of `depthcache/`; chaining of pairwise matches into tracks |
+| Triangulation, $E$, $C$, strata, $\delta_{\min}$, $\epsilon$, propensity | nothing | a small array-level module; no learning except the propensity and the head |
+| Consensus residual | `gs/gate.ViewGateTest` with block leave-out, cavity render, bias downdate | export of the per-pixel residual, which is formed internally but reduced to test statistics; the noise level is a single scalar, not a field |
 
-Three readings of the table.
+The triangulation and its statistics are scalar problems per track and negligible in cost. The cost of
+the witness is the cost of the correspondence model: for pairwise matchers, one forward pass per pair,
+with about $2 n_f$ pairs per view for a track over $n_f$ frames plus cross-strip pairs. No timing is
+known; for reference, the depth models cost 0.2 to 1.4 s per view on the recorded run.
 
-- No cue fires reliably on glass or water. c1 depends on view dependence of the error, c2 on diversity of
-  the models, c3 on the error being unconfident, and c4 abstains or misleads. The coverage of the union
-  on these classes is an open empirical question, not a property of the design.
-- On thin structures and discontinuities every cue false-alarms. These are not faults by definition, so
-  they are joint false alarms on the negative class.
-- A whole-view affine error is missed by all cues by construction. For Depth Anything V2 the nuisance is
-  not affine in depth, so a cue aligned with the wrong group reports a view-wide residual on a clean
-  view.
+## 9. What Is New, and What Is Not
 
-## 8. Predicted Violations of Conditional Independence
+Stated plainly: triangulating tracks with known poses, the across-epipolar residual as an outlier
+test, and uncertainty from parallax are textbook material, and using multi-view geometry to supervise
+or check monocular depth is established practice. The following points are, to the best of recalled
+knowledge, not standard, and are where the contribution of this part lies.
 
-A label model that estimates detector accuracies from agreement assumes that the votes are independent
-given the latent class. Where this is predicted to fail:
+1. **A witness that calibrates itself.** The epipolar split gives a depth measurement with $2n - 1$
+   degrees of freedom of redundancy, from which the tracker's anisotropic noise is estimated per
+   stratum with no labels. The resulting fault labels carry a per-pixel false-positive rate and a
+   per-pixel minimum detectable fault. This replaces both the unknown constant of a correlation profile
+   and the third independent detector that agreement-based identification would need.
+2. **The minimum detectable fault as the axis of transfer.** Abstention is graded, the propensity is
+   learned from frozen features without labels, and transfer from textured to untextured surfaces is
+   measured inside the data along $\delta_{\min}$ before any claim is made beyond the labelled support.
+3. **Limits of the epipolar self-check, with remedies.** Planar reflections, motion along the line and
+   prior-driven tracks pass the check; the first is a non-identifiability, the third is detected by the
+   evidence fraction $\epsilon$. A method that takes "on the epipolar line" for "trustworthy" trains
+   its indicator on systematic false labels on reflective surfaces.
 
-1. **Edges and thin structures: all cues, given $f = 0$.** A common cause (a depth edge within the
-   pooling window) raises the false-alarm probability of every cue together. Left untreated, the label
-   model reads the agreement as a fault class of its own and may attach the "fault" label to it. Remedy:
-   a common abstention band around depth edges for all cues, or estimation of accuracies stratified by
-   distance to the nearest edge.
-2. **c2 and c3 (and c3f), given $f = 1$.** Both are functions of depth networks on the same image.
-   Faults come in at least two kinds: weakly determined predictions, on which both fire, and confident
-   systematic errors, on which both miss if the error is shared between models. A hidden sub-class
-   induces positive dependence within the fault class. With binary classes the pair is expected to
-   count closer to one detector than to two.
-3. **c1 and c1r.** The same data. One cue.
-4. **c1 and c4, given $f = 0$.** Both use the pose of view $j$ and the poses of its neighbours; a pose
-   error gives both a regional residual. If c4 took its alignment from the cavity, an alignment error
-   would also be shared; the separate photometric alignment of Section 5.1 removes that path. Their
-   measurement noise is otherwise from different sources (depth maps of other views against images of
-   other views).
-5. **c1 and c4(ii).** The influence contains the full-surface depth residual $e_i$ and the information
-   blocks $\Lambda_k$; it is a function of the same quantities as c1 multiplied by a photometric factor.
-   Strong dependence by construction.
-6. **c4 against the fault class, through abstention.** Texture-free and non-Lambertian regions make
-   monocular faults likelier and make c4 abstain. If abstention is treated as uninformative, the
-   accuracy of c4 is estimated on textured regions and extrapolated to regions where it never votes.
-7. **Pairwise c2 residuals.** The six residuals share models pairwise and are dependent by construction;
-   only the consensus score per target model is a cue.
-8. **Shared alignment breakdown.** A fault covering more than the breakdown fraction of a view inverts
-   every cue that aligns on that view (c1, c2, c3, c4), jointly.
-9. **Spatial dependence.** Votes of neighbouring pixels are not independent replicates. This does not
-   bias accuracy estimates but makes their uncertainty far larger than the pixel count suggests.
+Whether the first two are sufficient for a strong venue depends on the measurements below; the third is
+a necessary correction, not a contribution on its own.
 
-The pairs for which approximate conditional independence is defensible are (c1, c2), (c1, c3) and
-(c2, c4), (c3, c4) outside the edge band: in each pair one cue uses other views and the other does not,
-or one uses depth networks and the other does not. A triple with pairwise independence needs one cue
-from each of three groups: multi-view depth (c1), single-image network (c2 or c3, not both as separate
-detectors), multi-view image (c4(i)). That is exactly three groups, the minimum for identifiability, and
-the third is the one with the largest abstention region. Where c4 abstains, only two independent groups
-remain and the accuracies are not identifiable from agreement alone at those pixels; they must be
-carried over from pixels where all three vote, which assumes that accuracies do not depend on the
-texture that governs abstention. That assumption is unlikely to hold exactly.
+## 10. What Would End the Idea, and the Cheapest Test
 
-**What a small labelled set buys for the cues.** With a few labelled views (exact-depth fault masks of
-one synthetic scene) and no change to the cue definitions: the null scales $s^c$ can be checked on
-known-clean pixels in place of the minority assumption; the class-conditional firing and abstention
-rates of each cue can be anchored, which fixes the label-swap ambiguity and the problem of point 6; the
-pairwise dependence of the cues given the true class can be measured directly, which decides whether c2
-and c3 are merged; and the orientation of model confidence maps, which is not consistent between models
-or even between views for one of them in the recorded run, can be fixed. Rates anchored on a synthetic
-scene transfer to real data only as far as the fault mechanisms do.
+1. **No labelled faults of the kind that matter.** If faults that every view repeats occur almost only
+   where $\delta_{\min} = \infty$, the witness labels nothing that consensus cannot already see, and the
+   whole weight rests on extrapolation.
+2. **Transfer fails along $\delta_{\min}$.** Head accuracy decays to chance as conditioning worsens.
+3. **Prior-driven tracks cannot be separated.** Triangulation error on low-$\epsilon$ tracks is large
+   and no diagnostic predicts it, so labels on weak texture are unfounded.
+4. **Reflective surfaces poison the labels.** False labels at virtual depth dominate the positive class
+   in scenes with glass and water.
+5. **No frozen correspondence model works at the frame spacing of the data.**
+6. **The monocular share is negligible.** The area whose geometry rests on monocular depth is a few
+   percent on the target data.
 
-## 9. Further Candidate Cues
+**Cheapest test, no network and no GPU.** On the synthetic block with exact depth, poses and cached
+monocular depth, build *oracle* tracks by reprojecting each pixel through the exact depth into the
+other frames, with occlusion from the exact depth maps. This gives the true track geometry
+$\mathcal S(u)$ and $\sum_i \lVert \mathbf m_i \rVert^2$. For assumed localisation noise of 0.5, 1 and 2
+pixels compute $\delta_{\min}(u)$, and from the images the evidence fraction $\epsilon(u)$ with plain
+gradients. Then tabulate the true faults of the cached monocular depth, split into "repeated by all
+views" and the rest, against $\delta_{\min}$ and $\epsilon$. This is an upper bound on coverage: it
+answers item 1 and item 6 directly, bounds item 3, and costs array arithmetic on data that are already
+cached. If repeated faults lie almost entirely at low $\epsilon$, the idea is reduced to its
+extrapolation before any model is run. The second step, only if the first passes, is one frozen
+matcher on a single strip, to compare real tracks with the oracle tracks: coverage, calibration of $E$
+and $C$, and triangulation error against $\epsilon$.
 
-- **Model confidence.** Two of the four models output a confidence. On the cached block one reads as
-  predicted error and the other changes direction between views. It is a model-specific input for the
-  head, not a cue with a null.
-- **Sparse triangulated points.** Where poses come from bundle adjustment, the tie points give
-  residuals $\hat d_j(u_p) - a_j d_p - b_j$ at sparse textured pixels. This is a sparse, cheap instance
-  of c4(i) with an exactly known variance, absent in synthetic data with given poses. It belongs to the
-  c4 group.
-- **Cross-strip residual.** c1 with the whole strip as block. It is a setting of c1, and the direct
-  answer to errors repeated along a strip, at the price of a smaller testable set.
+## 11. Not Known
 
-None of these adds a fourth independent group.
-
-## 10. Cost and Code Summary
-
-| Cue | Per view | Exists | To add |
-| --- | --- | --- | --- |
-| c1 | information pass per block view, one cavity render | blocks, subtraction, Newton step, support rules, cavity render, bias downdate, gate driver | export of the residual map; noise field; robust alignment; removed share; ray form from the visibility baselines |
-| c2 | CPU seconds; inference already cached (0.2 to 1.4 s per model) | four cached models; scale and affine-inverse robust alignment against any reference depth | pairwise residuals, consensus score, stratified scales, edge band; float32 cache |
-| c3, c3f | $S$ forward passes (about 0.2 to 1.4 s each) | wrappers with `predict(rgb, focal_px)`, image loader | transformations and inverse warps, focal handling, cache keys, encoder hook, score |
-| c4(i), c4f | tens of warps times neighbours; one encoder pass for c4f | projection helpers, normals from depth | images in frames, plane sweep, peak statistics, own alignment |
-| c4(ii) | colour fit per fold; backward passes per held-out view; more for $\mathcal F_k$ | local rotation parametrisation in the fit | appearance model, colour fit, geometric gradient of colour, Fisher estimate |
-
-## 11. Recommendation
-
-**Carry forward:** c1 (with the ray form as a channel), c2, c4(i), and c3 on probation.
-
-**Order of implementation.**
-
-1. **c2.** No inference and no new geometry; the alignment code exists. It is the cheapest test of the
-   whole approach: on the scene with exact depth it answers at once how much of the models' error is
-   common-mode. If the consensus of the other models fails wherever the primary model fails, the
-   single-image group contributes little and the plan must change before anything else is built.
-2. **c1.** The computation exists; the work is exporting the per-pixel residual, making the alignment
-   robust and adding the ray form. With c1 and c2 the first pairwise dependence measurement is possible.
-3. **c4(i).** The third independent group and the only one that can see errors common to all depth
-   maps. It needs the image path, which the head and the distilled network need anyway. Its abstention
-   map should be measured before the score: if it abstains on nearly all true faults, it serves as a
-   check on textured regions and not as a third voter.
-4. **c3 with c3f.** Implemented last and kept only if, given the true class, it is not redundant with
-   c2 and it has a usable null for at least one transformation family. Otherwise it is merged into the
-   single-image group as a channel.
-
-**Drop:** c4(ii) as a cue. As a per-message influence it sums to zero over views, contains the
-non-cavity depth residual, is valid only within a pixel or two of parallax, and needs an appearance
-model that can hide the error it should reveal; it is dependent on c1 by construction and is the most
-expensive to build. Its sound core is the score test $T_k$ and the finite-difference form on the cavity
-render; these are a later, surfel-domain refinement of c4(i), worth building only if c4(i) proves
-informative.
-
-**Not known.** The share of common-mode error between depth models on glass and water; whether
-instability predicts error in nadir imagery; the abstention rate of c4(i) on true faults; whether
-parallax at the given baselines is large enough for feature-resolution matching; whether any triple of
-cues is close enough to conditional independence for the accuracies to be identifiable. All five are
-decided by the measurement on exact depth, and none by argument.
+- The frame spacing and overlap of the synthetic block, and so which correspondence regime it is in.
+- Whether any frozen tracker or matcher delivers usable correspondences at survey frame spacing, and at
+  what cost per view.
+- The localisation noise of such a model on aerial imagery, its anisotropy, and whether the strata of
+  Section 2.3 make it stationary enough for a $\chi^2$ reference.
+- How often tracks on weak texture are prior-driven, and whether $\epsilon$ predicts their error.
+- How the exact depth of the synthetic data treats glass and water.
+- Whether faults repeated by all views exist in useful number on surfaces the witness can label.
+- Whether accuracy along $\delta_{\min}$ says anything about accuracy at $\delta_{\min} = \infty$.
