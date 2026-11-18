@@ -18,7 +18,7 @@ one scene of UrbanScene3D \cite{data_urbanscene3d} may be added for comparabilit
 splatting work. All sets are licensed for non-commercial use only.
 Residuals are measured on development scenes of UseGeo and ETH3D. Poses are the given exterior
 orientation or registration, refined as a trajectory spline (Section~\ref{sec:method:poses});
-perturbed starting poses are an ablation. Licences are listed in Supplement~\ref{sup:setup}.
+perturbed starting poses are an ablation. Licences are listed in Supplement~\ref{S-sup:setup}.
 \emph{Depth models.} Only off-the-shelf models with released weights are used; no unreleased or in-house
 model. Depth Pro \cite{est_depthpro} gives one prediction per image; Metric3D v2 and UniDepthV2, which
 output a confidence, supply the confidence baseline, and all three enter the altitude comparison, which
@@ -33,7 +33,7 @@ either independent per view or repeated across views. \emph{Baselines.} SpotLess
 Geman--McClure) in the fit; as view tests, the per-view aligned RMS residual against the other
 views' render and the depth model's confidence; no gate and an oracle gate. \emph{Metrics.}
 Detection power at 5\% per-view false alarm, false-alarm and untestable rates, held-out laser-depth
-AbsRel, and surface accuracy, completeness and F-score. Details are in Supplement~\ref{sup:setup}.
+AbsRel, and surface accuracy, completeness and F-score. Details are in Supplement~\ref{S-sup:setup}.
 
 \subsection{Hypotheses}
 \label{sec:setup:hyp}

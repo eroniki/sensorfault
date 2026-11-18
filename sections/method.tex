@@ -1,7 +1,7 @@
 \section{Method}
 \label{sec:method}
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
 \input{\mfigdir/fig_overview.tex}
 \caption{Method overview. Posed survey images with one depth map each (data) and a trajectory spline
@@ -12,7 +12,7 @@ is whitened by $\Sigma_r$ of \eqref{eq:res} and scanned over regions (test). Aft
 Holm step-down decides; if a view is flagged, the outer loop drops the top flagged view and retrains,
 otherwise the kept views and their fused surface are returned.}
 \label{fig:pipeline}
-\end{figure}
+\end{figure*}
 
 \subsection{Setting, Measurement Model and Faults}
 \label{sec:method:setting}
@@ -69,7 +69,7 @@ refinement pulls them back. On ETH3D the registered poses are used as given. Fig
 sketches the aerial setting: strips, a held-out block of neighbouring frames
 (Section~\ref{sec:method:block}) and the spline with its pose-graph factors.
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
 \input{\mfigdir/fig_aerial.tex}
 \caption{Aerial setting (schematic, not to scale of any dataset). (\textbf{a})~A lawnmower flight of
@@ -82,7 +82,7 @@ pose graph with smoothness, GNSS/IMU and render-and-compare depth factors (red s
 surfel map. When view $j$ is tested its own render-and-compare factor is removed (grey), so its pose
 cannot absorb its depth fault.}
 \label{fig:aerial}
-\end{figure}
+\end{figure*}
 
 \subsection{Surfels with an Uncertainty That Renders}
 \label{sec:method:surfels}
@@ -120,7 +120,7 @@ point $\mathbf{x}$, and to first order
 Opacity acts through the compositing weights: the rasteriser's backward pass gives
 $\partial\hat D_i(u)/\partial\,\mathrm{logit}\,\alpha_k$, including the transmittance of the surfels
 behind $k$. The scale columns vanish, so the scales keep a weak prior
-(Supplement~\ref{sup:derivations}). The rasteriser composites $\hat D_i(u)=\sum_k w_{uk}d_k$ with
+(Supplement~\ref{S-sup:derivations}). The rasteriser composites $\hat D_i(u)=\sum_k w_{uk}d_k$ with
 normalised alpha weights $w_{uk}$; with opacity frozen, the rendered depth variance is
 \begin{equation}
   V_i(u)=\sum_k w_{uk}^{2}\,J_{uk}\,P_k\,J_{uk}^{\top},
@@ -131,7 +131,7 @@ marginal of $(\nu,\tau_1,\tau_2)$ enters. Figure~\ref{fig:surfel}(a) draws one s
 offset moves every pixel's depth alike, the tilt moves it in proportion to the lever arm, so the rendered
 band is narrowest at the centre and widens towards the rim.
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
 \input{\mfigdir/fig_surfel.tex}
 \caption{One surfel's uncertainty (schematic). (\textbf{a})~The surfel in section: its shape (black) is
@@ -144,7 +144,7 @@ support. (\textbf{c})~The same surfel in its $(\nu,\tau)$ plane, $1\sigma$: a vi
 constrains a mix of offset and tilt (black dashed), the block the rest (red dashed); fused, they give the
 small $P_k$ (black), without the block the cavity $P_k^{(-j)}$ (orange).}
 \label{fig:surfel}
-\end{figure}
+\end{figure*}
 
 \subsection{Bayesian Fusion on Rendering and Leave-View-Out}
 \label{sec:method:fusion}
@@ -168,7 +168,7 @@ Leaving view $j$ out is a subtraction plus one Newton step on the mean,
 taken on the nine geometric coordinates, with $\mathcal{L}_j$ the depth loss of view $j$. Both
 $\Lambda^{(j)}$ and $\nabla\mathcal{L}_j$ come from one backward pass of view $j$, so nothing per view
 and surfel has to be stored. The step is the infinitesimal jackknife; it is exact for the linear
-Gaussian model (Supplement~\ref{sup:derivations}). The statistic of a view against the rest equals the
+Gaussian model (Supplement~\ref{S-sup:derivations}). The statistic of a view against the rest equals the
 solution-separation statistic \cite{flt_raim_joerger}. The shared bias $\beta$ is a weighted least-squares
 fit over all views, and its leave-view-out value is again a subtraction of view $j$'s normal equations.
 
@@ -189,7 +189,7 @@ reference. Gaussian belief propagation for spatial AI \cite{mp_davison_gbp}, whi
 messages on factor graphs, is the closest relative in vision. Figure~\ref{fig:cavity} follows one
 strip through fuse, cavity and test.
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
 \input{\mfigdir/fig_cavity.tex}
 \caption{The cavity test along one strip (schematic; one roof is glass, which view $j$ reads 4~m too
@@ -201,7 +201,7 @@ cavity render with $\pm2\sqrt{(\Sigma_r)_{uu}}$ against the depth of view $j$. (
 residual: each pixel of the faulty region (shaded) is within about $3\sigma$, but the region statistic
 $z_{\mathcal{R}}$ under the full $\Sigma_r$ is far beyond any threshold.}
 \label{fig:cavity}
-\end{figure}
+\end{figure*}
 
 \subsection{The View Gate}
 \label{sec:method:gate}
@@ -244,7 +244,7 @@ Two statistics are used. The energy $T_j=\mathbf{r}_j^{\top}M\mathbf{r}_j$, with
 $\Sigma_r^{-1}$ projected orthogonally to the alignment, has $m_j$ degrees of freedom based on
 $n_{\mathrm{eff}}=\mathrm{tr}(C)^{2}/\mathrm{tr}(C^{2})$, not on the pixel count. With $m$ of order $10^{3}$
 it is as much a test of the noise level as of faults: a clean view whose noise is 2\% above the scene
-temperature already has a 23\% false-alarm rate at a nominal 5\% (Supplement~\ref{sup:derivations}).
+temperature already has a 23\% false-alarm rate at a nominal 5\% (Supplement~\ref{S-sup:derivations}).
 Its threshold therefore absorbs the per-view heterogeneity $\omega$ of the noise level, measured on
 development views after temperature scaling. The region scan $\max_{\mathcal{R}}|z_{\mathcal{R}}|$ over candidate regions $\mathcal{R}$
 (appearance segments of view $j$),
@@ -257,7 +257,7 @@ as in Baarda's reliability theory \cite{stat_teunissen_dia}. Thresholds are set 
 false alarm and calibrated on clean development views (H5). A view is kept, flagged, or reported
 untestable; flagged views are handled by the outer loop below.
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
 \input{\mfigdir/fig_upu.tex}
 \caption{Why the surface term must keep $UP^{(-j)}U^{\top}$: an analytic example, not a measurement. Thirty
@@ -271,9 +271,9 @@ over the first $w$ pixels of the weak surfel, with the full $\Sigma_r$ (red) and
 a region statistic under the diagonal model understates it by a factor that grows with the region, 6.1 over
 the whole surfel here.
 On E1, this ratio per region-scan tile had median 1.54 and maximum 9.3 on a weakly supported view
-(Figure~\ref{fig:e1qualunc}).}
+(Figure~\ref{S-fig:e1qualunc}).}
 \label{fig:upu}
-\end{figure}
+\end{figure*}
 
 \subsection{Leave-$B$-Out: Blocks of Neighbouring Frames}
 \label{sec:method:block}
@@ -285,8 +285,10 @@ aerial data a stretch of the same flight strip, centred on $j$ and shifted inwar
 an image sequence, the neighbouring frames. Because the views' messages add, the block is removed by
 subtracting its summed information and taking one Newton step with its summed gradient,
 \begin{equation}
-  \Lambda_k^{(-\mathcal{B}_j)}=\Lambda_k-\sum_{i\in\mathcal{B}_j}\Lambda_k^{(i)},\qquad
-  \boldsymbol\mu_k^{(-\mathcal{B}_j)}=\boldsymbol\mu_k+\bigl(\Lambda_k^{(-\mathcal{B}_j)}\bigr)^{-1}\sum_{i\in\mathcal{B}_j}\nabla_k\mathcal{L}_i ,
+  \begin{aligned}
+  \Lambda_k^{(-\mathcal{B}_j)}&=\Lambda_k-\textstyle\sum_{i\in\mathcal{B}_j}\Lambda_k^{(i)},\\
+  \boldsymbol\mu_k^{(-\mathcal{B}_j)}&=\boldsymbol\mu_k+\bigl(\Lambda_k^{(-\mathcal{B}_j)}\bigr)^{-1}\textstyle\sum_{i\in\mathcal{B}_j}\nabla_k\mathcal{L}_i ,
+  \end{aligned}
   \label{eq:block}
 \end{equation}
 which is exact for the linear Gaussian model, as for a single view. Only view $j$ is tested against this
@@ -296,7 +298,7 @@ whole blocks instead would give $\lceil N/B\rceil R_{\max}$ tests, an alternativ
 outer loop, a rejected view is dropped alone, not with its block, and its neighbours are re-tested in the
 next round against a cavity that no longer contains it. Figure~\ref{fig:scene3d} shows the block in a survey.
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
 \input{\mfigdir/fig_scene3d.tex}
 \caption{Leave-block-out in a survey (schematic). Three strips of frames; the block $\mathcal{B}_j$ of
@@ -305,7 +307,7 @@ $B=3$ frames around view $j$ is left out (hollow red), and the cavity is rendere
 along the middle strip, where only the adjacent strips and the strip's farther frames remain. The centre of
 the roof, which only the block saw, keeps no support and its pixels are untestable (grey).}
 \label{fig:scene3d}
-\end{figure}
+\end{figure*}
 
 The price is a weaker cavity. Removing $B$ views removes more information, so the rendered variance
 grows and the minimum detectable bias rises; pixels seen only within the block become untestable, so

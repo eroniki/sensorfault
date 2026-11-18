@@ -17,12 +17,12 @@ independent; H1, H2, H4, H5 and H7 are therefore not addressed. Faults are recta
 by $\delta\sigma$ on one view, or the same $8\sigma$ offset on a 25~m ground patch in three neighbouring
 frames of a strip. Holm runs over $M=NR_{\max}=1850$ tests; the region scan uses $4\times6$ image tiles.
 Table~\ref{tab:e1} summarises the outcomes, Figures~\ref{fig:e1grid}--\ref{fig:e1repeated} compare
-the variants, and the runtime is in Supplement~\ref{sup:results} (Figure~\ref{fig:e1runtime}); qualitative
-checks of the test, the residual uncertainty and the surfel map are in Supplement~\ref{sup:e1qual}
-(Figures~\ref{fig:e1qualviews}--\ref{fig:e1qualtop}); the data behind them are in the code repository
+the variants, and the runtime is in Supplement~\ref{S-sup:results} (Figure~\ref{S-fig:e1runtime}); qualitative
+checks of the test, the residual uncertainty and the surfel map are in Supplement~\ref{S-sup:e1qual}
+(Figures~\ref{S-fig:e1qualviews}--\ref{S-fig:e1qualtop}); the data behind them are in the code repository
 (\texttt{results/e1}).
 
-\begin{table}[!htbp]
+\begin{table*}[!t]
 \caption{E1 summary on MatrixCity block~3 (exact depth, independent noise, linearised gate). Clean
 scenes: 20 seeds per condition; one faulty view: 160 scenes (4 magnitudes $\times$ 4 areas $\times$ 10
 seeds), detection at a per-view threshold matched to 5\% false alarm on clean scenes; three neighbouring
@@ -31,9 +31,9 @@ wall-clock per stage; a gate pass tests every active view once.}
 \label{tab:e1}
 \centering\footnotesize\setlength{\tabcolsep}{3pt}
 \input{\efigdir/e1_summary_table.tex}
-\end{table}
+\end{table*}
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \input{\efigdir/fig_e1_grid.tex}
 \caption{E1, one faulty view: share of seeds in which the faulty view was detected (10 seeds per bar), by
@@ -42,18 +42,18 @@ fault magnitude and by the share of the view the fault covers, (\textbf{a})~for 
 scenes. The grid is too easy to separate them: both detect every case except one, where the baseline
 misses 3 of 10 at $2\sigma$ over 5\% of the view.}
 \label{fig:e1grid}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \input{\efigdir/fig_e1_clean.tex}
 \caption{E1, clean scenes (20 seeds per condition), with the noise at its calibrated level and at
 $1.3\times$: share of views flagged by a single test at $p<0.05$, and share of seeds in which the
 Holm-controlled loop excluded any view, with and without the scene temperature.}
 \label{fig:e1clean}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \input{\efigdir/fig_e1_repeated.tex}
 \caption{E1, the same $8\sigma$ error on a 25~m patch in three neighbouring frames of a strip (10 seeds per
@@ -62,9 +62,9 @@ excluded and (\textbf{b})~share of the clean views excluded, for leave-block-out
 leave-out ($B=1$), with the loop (one view per round) or a single pass (all rejected views at once), and
 for the loop without the scene temperature or without whitening.}
 \label{fig:e1repeated}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \input{\mfigdir/fig_e1_compact.tex}
 \caption{E1, the test on single views of one grid scene ($8\sigma$ on 40\% of view 59). Rows: a clean view far
@@ -73,9 +73,9 @@ still shapes its cavity. Columns: (\textbf{a})~true depth; (\textbf{b})~the cavi
 (\textbf{c})~the residual standardised by $\sqrt{(\Sigma_r)_{uu}}$; and (\textbf{d})~the region-scan $|z|$ per
 tile ($\geq$20 clipped), with the tiles above the first Holm threshold (red mark on the colour bar) outlined
 in black. The verdict and the number of flagged tiles are given at the end of each row. Once the faulty view
-is dropped, the neighbour has none (Figure~\ref{fig:e1qualviews}, which also shows the raw residuals).}
+is dropped, the neighbour has none (Figure~\ref{S-fig:e1qualviews}, which also shows the raw residuals).}
 \label{fig:e1compact}
-\end{figure}
+\end{figure*}
 
 The Holm-controlled loop kept the family-wise false alarm at zero in 20 clean scenes, and the scene
 temperature was what kept it there when the noise was 30\% above its calibrated level. Without the
@@ -104,19 +104,19 @@ dropped before the faulty view.
 \label{sec:results:rgb}
 The gate uses depth only. To check that the same block also supports a photometric surfel model, one
 2DGS model was trained with gsplat on the 185 clean RGB training images of MatrixCity block~3 at
-$960\times540$ (Supplement~\ref{sup:rgb}). On the 19 held-out views, which lie between the training
+$960\times540$ (Supplement~\ref{S-sup:rgb}). On the 19 held-out views, which lie between the training
 positions and point in headings that the training views do not use, PSNR was $23.1\pm4.3$~dB and SSIM
-$0.778\pm0.096$ (Table~\ref{tab:rgb}). Figure~\ref{fig:rgbcompact} shows the median test view; the
-weakest views look beyond the area that the training views cover (Figure~\ref{fig:rgbviews}).
+$0.778\pm0.096$ (Table~\ref{S-tab:rgb}). Figure~\ref{fig:rgbcompact} shows the median test view; the
+weakest views look beyond the area that the training views cover (Figure~\ref{S-fig:rgbviews}).
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \input{\mfigdir/fig_rgb_compact.tex}
 \caption{2DGS RGB render of MatrixCity block~3 against ground truth for the median held-out test view
 (frame 13); right: absolute error averaged over the colour channels. Further views, including the worst,
-are in Figure~\ref{fig:rgbviews}.}
+are in Figure~\ref{S-fig:rgbviews}.}
 \label{fig:rgbcompact}
-\end{figure}
+\end{figure*}
 
 \FloatBarrier
 
@@ -125,7 +125,7 @@ are in Figure~\ref{fig:rgbviews}.}
 Both models of MatrixCity block~3 were also compared as surfaces. Each view's depth was back-projected,
 each view kept its highest point per grid cell, and the surface model (DSM) is the median of these over
 the views that see the cell; the same operator, applied to the exact depth of the 185 frames, gives the
-ground truth (Supplement~\ref{sup:surface}). For the RGB 2DGS model (median depth, 2~m cells), the
+ground truth (Supplement~\ref{S-sup:surface}). For the RGB 2DGS model (median depth, 2~m cells), the
 height residual on land had median $+0.49$~m, RMSE 6.0~m, and 81\% of cells within 1~m. Water, 46\% of
 the covered area and a flat plane in the ground truth, was not recovered: median $+5.7$~m, 95th percentile
 $+48$~m, 5\% of cells within 1~m (Figure~\ref{fig:surfacecompact}b). The textureless water surface is the
@@ -136,7 +136,7 @@ residual was $-2.16$~m with the faulty view and $-0.16$~m without it, against $-
 noise without a fault; 18\%, 54\% and 57\% of these cells were within 1~m. Over the whole block the three
 surfaces differ by at most 0.03~m in median and RMSE, because the fault covers 3\% of the cells.
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \input{\sfigdir/fig_surface_compact.tex}
 \caption{Surfaces of MatrixCity block~3 against the exact-depth ground truth (north up). (\textbf{a})~Ground-truth
@@ -145,9 +145,9 @@ reconstructed metres to tens of metres too high. (\textbf{c}, \textbf{d})~E1 sur
 cells) for the fault scene of Figure~\ref{fig:e1compact}, fused with all views and without the view that the
 gate excluded, enlarged to the window marked in (a) ($x$ 170--402~m, $y$ $-712$ to $-508$~m); dashed: the convex
 hull of the cells under the injected fault. Grey: no surface. Statistics are in
-Table~\ref{tab:surface}; the full set is in Figures~\ref{fig:surfacergb}--\ref{fig:surfacenormals}.}
+Table~\ref{S-tab:surface}; the full set is in Figures~\ref{S-fig:surfacergb}--\ref{S-fig:surfacenormals}.}
 \label{fig:surfacecompact}
-\end{figure}
+\end{figure*}
 
 \FloatBarrier
 
@@ -167,7 +167,7 @@ each strip's spline to the input poses and refines it in a pose graph with the G
 (0.3~m, 0.02$^{\circ}$), a second-difference smoothness prior (0.3~m, 0.02$^{\circ}$) and robust
 render-and-compare depth factors with the per-view alignment; these settings, and the criteria (a detection
 rate and a median removed fraction of at least 80\% at every level in range), were fixed before the run
-(Supplement~\ref{sup:h7}).
+(Supplement~\ref{S-sup:h7}).
 
 Prediction (a) holds: the gate flagged every perturbed clean view at every level, 100\% in all nine levels
 at or above 0.5$^{\circ}$ or 10~GSD, and also at the smallest sizes, 0.05$^{\circ}$ and 1~GSD, which are within the
@@ -193,7 +193,7 @@ perturbations stay below 80\% because the refinement leaves a floor: at size 0 i
 of 0.005$^{\circ}$ and 0.4~GSD, and after a 0.05$^{\circ}$ rotation 0.02$^{\circ}$ remains. The faulty view, whose own
 depth is wrong, was moved by 0.07$^{\circ}$ and 6.1~GSD when its pose was not perturbed.
 
-\begin{figure}[!htbp]
+\begin{figure*}[!t]
 \centering
 \input{\hfigdir/fig_h7.tex}
 \caption{H7 on MatrixCity block~3 (E1 setting; 16 perturbed clean views per point, two seeds). Top: share of
@@ -203,9 +203,9 @@ removed by spline, pose-graph and render-and-compare refinement, per perturbed c
 range of each prediction; dotted: the 80\% target. In (c) and (f) rotation and translation are perturbed
 together at paired levels (grey labels: translation in GSD).}
 \label{fig:h7}
-\end{figure}
+\end{figure*}
 
-\begin{table}[!htbp]
+\begin{table*}[!t]
 \caption{H7 per level: perturbed clean views $n$; share flagged by the gate; median share of the error removed
 by the refinement as specified (rotation/translation) and in the exploratory variant without the perturbed
 frame's prior; median error after refinement; unperturbed views rejected by Holm in the same round, mean per
@@ -213,7 +213,7 @@ perturbed group. a: in the range of prediction (a); b: in the range of predictio
 \label{tab:h7}
 \centering\scriptsize\setlength{\tabcolsep}{2.5pt}
 \input{\hfigdir/tab_h7.tex}
-\end{table}
+\end{table*}
 
 \FloatBarrier
 
@@ -221,9 +221,9 @@ perturbed group. a: in the range of prediction (a); b: in the range of predictio
 The first result on real data will be the residual measurement of H1 (Figure~\ref{fig:residuals}), including the altitude comparison
 of off-the-shelf depth models (Table~\ref{tab:altitude}); H7 on UseGeo is planned as on MatrixCity
 (Section~\ref{sec:results:h7}); the planned tables and figures for H2--H6 are in
-Supplement~\ref{sup:results}.
+Supplement~\ref{S-sup:results}.
 
-\begin{table}[t]
+\begin{table*}[!t]
 \caption{\textbf{[TODO]} Altitude comparison: how off-the-shelf depth models, trained mostly near the
 ground, fail on nadir views from survey altitude compared with near-ground views. Fraction of views
 with a regional failure, median failure area, median magnitude after alignment (in $\sigma$), and
@@ -242,7 +242,7 @@ UniDepthV2   & nadir, altitude & \todocell & \todocell & \todocell & \todocell \
              & near ground     & \todocell & \todocell & \todocell & \todocell \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 
 \todofig{residuals}{Natural regional failures of Depth Pro on UseGeo and ETH3D development scenes after per-view alignment, nadir views from altitude and near-ground views shown separately: area fraction against magnitude (in units of the fitted $\sigma$), by appearance class (reflective or glass, textureless wall, other), with the harm to the fused-surface F-score as marker size; the fitted $\ell$, $\nu_{\mathrm{nug}}$ and tail index in the legend (H1).}

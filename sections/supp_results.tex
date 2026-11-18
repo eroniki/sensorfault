@@ -134,7 +134,7 @@ grid of positions flown in four headings. Red: the views in Figures~\ref{fig:e1q
 \subsection{RGB Rendering Check}
 \label{sup:rgb}
 The gate uses depth only. As a check that the same block also supports a photometric surfel model, one
-2D Gaussian splatting model~\citep{gs_2dgs} was trained with gsplat~\citep{gs_gsplat} on the 185 RGB training images of
+2D Gaussian splatting model~\cite{gs_2dgs} was trained with gsplat~\cite{gs_gsplat} on the 185 RGB training images of
 MatrixCity block~3, all clean, at half resolution ($960\times540$). Training ran for 30\,000 iterations with an
 L1 plus 0.2 D-SSIM loss and, after the first third, the normal-consistency and distortion terms of 2DGS. It
 started from the 81\,152 E1 surfel centres, used the default gsplat densification, and was capped at
@@ -250,7 +250,7 @@ poses the gate rejects only view 59, as in E1.
 consecutive frames, and view 59, each perturbed on its own; a block shares one perturbation. Rotation axes and
 translation directions are drawn at random per group. A first attempt that perturbed all groups at once
 swamped 69 unperturbed views at 1$^{\circ}$ and 25~GSD and was replaced before any result was used.
-\emph{Gate.} $\Sigma_r$ of \eqref{eq:res} with the pose term, rank six, added by a second Woodbury step;
+\emph{Gate.} $\Sigma_r$ of \eqref{M-eq:res} with the pose term, rank six, added by a second Woodbury step;
 $J_q$ by central differences with the surfel assignment held fixed; $\Sigma_q$ from the strip spline with the
 GNSS/IMU and smoothness priors only. Because a perturbed group changes the statistics only of views that
 share surfels with it, those are recomputed and the others reused; this is exact.

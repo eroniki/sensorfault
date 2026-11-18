@@ -71,10 +71,10 @@ development scenes) the centres, rotations, scales and opacities are fitted on t
 views, $(a_i,b_i)$ in closed form and $\beta$ by least squares; densification needs at least two
 supporting views and pruning removes surfels below a minimum opacity. Opacity receives depth gradients
 only. The opacity is then frozen, densification and pruning stop, and the geometry and the poses are fitted
-to convergence while the colours train on the frozen geometry. The Laplace information \eqref{eq:info}
-is accumulated at the MAP, and each view is tested by Algorithm~\ref{alg:gate}.
+to convergence while the colours train on the frozen geometry. The Laplace information \eqref{M-eq:info}
+is accumulated at the MAP, and each view is tested by Algorithm~\ref{M-alg:gate}.
 
-\runin{Outer loop.} Rounds of train, freeze, fuse, test as in Algorithm~\ref{alg:gate}. Each round warm-starts
+\runin{Outer loop.} Rounds of train, freeze, fuse, test as in Algorithm~\ref{M-alg:gate}. Each round warm-starts
 from the previous fit, unfreezes opacity and re-enables densification and pruning, and trains only on
 the active views. Defaults: one view dropped per round, no readmission, $R_{\max}=10$, Holm step-down over
 $M=NR_{\max}$ tests. Ablations: loop off ($R_{\max}=1$), $R_{\max}=3$, dropping all rejected views per
@@ -99,7 +99,7 @@ distance. Detection rate and recovery error are reported against perturbation si
 Depth Pro, Metric3D v2 and UniDepthV2 are run as released on nadir views from survey altitude and on
 near-ground views (ETH3D, and low oblique frames where available). For each, the fraction of views with a
 regional failure, the failure area, its magnitude after alignment and the fitted noise level are
-compared between the two regimes (H1, Table~\ref{tab:altitude}).
+compared between the two regimes (H1, Table~\ref{M-tab:altitude}).
 
 \subsection{Faults}
 \runin{Natural.} A view region is a natural failure if its aligned error against the laser depth

@@ -1,11 +1,19 @@
-\clearpage
-\appendix
+% Supplementary material, submitted as a separate PDF alongside the RA-L letter.
+\documentclass[letterpaper,journal,onecolumn]{IEEEtran}
+\input{preamble}
+\usepackage{xr}
+\externaldocument[M-]{build/main}
+
+\begin{document}
+\title{Supplementary Material for ``View-Level Fault Rejection for Monocular-Depth Reconstruction via a
+Shared Gaussian Surface''}
+\author{Murat Ambarkutuk}
+\maketitle
+
 \renewcommand{\thesection}{S\arabic{section}}
 \renewcommand{\thefigure}{S\arabic{figure}}
 \renewcommand{\thetable}{S\arabic{table}}
 \setcounter{section}{0}\setcounter{figure}{0}\setcounter{table}{0}
-\begin{center}\Large\bfseries Supplementary Material\end{center}
-\medskip
 \noindent The supplement holds the related work, the derivations, the experimental setup and the
 hypotheses in full, and the planned tables and figures.
 
@@ -13,3 +21,8 @@ hypotheses in full, and the planned tables and figures.
 \input{sections/supp_derivations}
 \input{sections/supp_setup}
 \input{sections/supp_results}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs/references}
+
+\end{document}
