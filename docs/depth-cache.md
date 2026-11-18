@@ -52,8 +52,11 @@ which is the reader's fallback name.
   float32 at full resolution (6048x4032), `.JPG` name but not a JPEG, inf = no depth. **It matches the
   distorted images** (6048x4032), not the undistorted ones the models see (about 6200x4135, size and
   PINHOLE intrinsics vary per camera): warp one into the other's geometry before comparing. The
-  distorted calibration (`dslr_calibration_jpg`, THIN_PRISM_FISHEYE) ships with
-  `multi_view_training_dslr_jpg.7z` (4.7 GB), not with the undistorted archive. 454 views in total
+  distorted calibration `<scene>/dslr_calibration_jpg/{cameras,images}.txt` (THIN_PRISM_FISHEYE,
+  6048x4032; NAME `dslr_images/<NAME>` = the GT file name) is the reference for that warp: GT depth
+  lives in the distorted geometry. It ships only with `multi_view_training_dslr_jpg.7z` (5.0 GB);
+  we extract just the `dslr_calibration_jpg` folders and keep the archive (distorted JPGs not
+  extracted). 454 views in total
   (38/44/45/76/31/15/26/14/38/31/31/23/42 in the order of `configs/datasets/eth3d.yaml`); GT valid
   pixels about 10-12% at full resolution. Sizes in `configs/datasets/eth3d.yaml`.
 - UseGeo: stub that raises (download server's TLS certificate expired 2024-08-30; waiting on M).
