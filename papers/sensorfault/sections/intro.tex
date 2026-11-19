@@ -48,8 +48,13 @@ surface is unsupported.
 \TODO{Replace the list by result-bearing contributions once the experiments of Section~\ref{sec:results}
 are run.}
 
-\todofig{teaser}{A depth-only map is confidently wrong where the depth model repeats its error; the
-per-source record says where and by how much. Top: signed placement error of the depth-only map with its
-stated $2\sigma$ contour, and the energy between depth prior and pixels on the same footprint. Bottom: a
-transect with the true surface, the depth-only surface with its stated band, and the fused surface with
-its band.}
+\begin{figure}[!t]
+\centering
+\input{\lfigdir/fig_teaser.tex}
+\caption{A depth-only map is confidently wrong where the depth model repeats its error (schematic). Top: a
+transect through a roof that all $n=12$ frames place 2.5~m too low; their mean, the depth-only map, misses
+the true surface by four times its stated $2\sigma$, whereas the per-source estimate with the prior capped at
+the repeated share keeps the truth inside its band. Bottom: the energy $E_m$ between the depth prior and the
+pixels per 8~m entity; the dotted line is the 5\% threshold.}
+\label{fig:teaser}
+\end{figure}
