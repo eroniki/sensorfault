@@ -11,15 +11,20 @@ Procedure (no ground truth anywhere):
    the known poses: frame i's points at depth k x_i, projected into an overlapping frame j, must
    land at the depth k x_j that j reports there. The median relative disagreement over pairs is
    scanned over k (log grid, then refined). Parallax between frames is what fixes k.
-2. Initial fit. Each frame's (s_i, o_i) is fitted (Huber) to the median depth of the other
-   overlapping frames rendered into it at the gauge k.
-3. Alternations. Render the current fused map into each frame (all other frames' aligned points,
-   front surface, per-pixel median), refit (s_i, o_i), then beta from all frames. Five alternations
-   by default; the largest relative parameter change of the last one is reported. After each
-   alternation the common factor is reset to the gauge of step 1 (the median over frames of the
-   aligned median depth is held), since frame-to-frame fits cannot see it.
-
-The rendering of frame i leaves frame i out, so a frame does not anchor itself.
+2. Relative scales. Every overlapping pair (i, j), of any heading, gives the log median ratio of
+   frame i's depth seen from j to the depth j reports there. With frame i too large by a_i the
+   ratio is a_i / a_j, so the log a are one robust weighted least-squares solve on the pair graph
+   (median pinned to 0, so the common factor stays at the gauge). A few rounds, since rescaling
+   a frame also moves its points through parallax; the largest change of each round is reported.
+   A global solve does not inherit the errors of the neighbours a frame is compared with, which
+   matters when per-frame scale errors are tens of percent (Depth Pro on MatrixCity block 3).
+3. Alternations (optional, ``n_alt``; off by default). Render the current fused map into each
+   frame (all other frames' aligned points, front surface, per-pixel median), refit the frame's
+   scale, then beta from all frames. After each alternation the common factor is reset to the
+   gauge of step 1 (the median over frames of the aligned median depth is held), since
+   frame-to-frame fits cannot see it. The rendering of frame i leaves frame i out, so a frame
+   does not anchor itself. Without beta, these refits move the scales away from the pair-graph
+   solution when frames also carry shape errors, and do not bring them closer to the truth.
 
 Offsets. With ``fit_offset=False`` (default) each frame gets a scale only (metric: o = 0;
 relative: b = 0). In nadir strips the label-free target is itself noisy and the depth spread
@@ -51,7 +56,9 @@ class AlignResult:
     params: np.ndarray  # (F, 2): (s, o) or (a, b) per frame, in the frame order given
     beta: float
     depth: list  # aligned depth per frame
-    history: list = field(default_factory=list)  # max relative change per alternation
+    history: list = field(
+        default_factory=list
+    )  # max relative change per graph round, then alternation
     neighbours: dict = field(default_factory=dict)
 
 
@@ -259,17 +266,96 @@ def global_gauge(
     return float(kb), np.r_[grid, fine, finer], np.r_[c, cf, cff]
 
 
+def _pair_log_ratio(K, vi, vj, di, dj, step=2):
+    """log median of (frame i's depth seen from j) / (frame j's depth there), and the point count.
+
+    Pixels of i are subsampled by ``step``. Returns (nan, 0) when fewer than ``MIN_OVERLAP`` of
+    i's points land in j's view."""
+    d = di[::step, ::step]
+    rays = pixel_rays_world(K, vi["R"], *di.shape)[::step, ::step]
+    X = (vi["c"] + d[..., None] * rays).reshape(-1, 3)
+    X = X[np.isfinite(X).all(1)]
+    if not len(X):
+        return np.nan, 0
+    u, v, z = project(K, vj["R"], vj["c"], X)
+    h, w = dj.shape
+    ui, vi_ = np.rint(u).astype(int), np.rint(v).astype(int)
+    ok = (ui >= 0) & (ui < w) & (vi_ >= 0) & (vi_ < h) & (z > 0)
+    if ok.sum() < max(MIN_OVERLAP * len(X), 20):
+        return np.nan, 0
+    zj = dj[vi_[ok], ui[ok]]
+    zz = z[ok]
+    fin = np.isfinite(zj) & (zj > 0)
+    if fin.sum() < 20:
+        return np.nan, 0
+    return float(np.median(np.log(zz[fin] / zj[fin]))), int(fin.sum())
+
+
+def relative_scales(K, views, depths, nb, huber=0.05, iters=20, step=2):
+    """Per-frame scale corrections g (median 1) that make overlapping frames agree.
+
+    Each overlapping pair (i, j), in both directions, gives l_ij = log median(z_i->j / z_j); with
+    frame i too large by a_i, l_ij = log a_i - log a_j. The log a are a robust (Huber IRLS)
+    weighted least-squares solve on the pair graph with the median pinned to 0; frames outside the
+    largest connected component keep g = 1. Frames are then divided by g. This is a global solve,
+    so it does not inherit the bias of a median target drawn from neighbours with large errors."""
+    F = len(views)
+    rows = []
+    for i in range(F):
+        for j in nb[i]:
+            lij, n = _pair_log_ratio(K, views[i], views[j], depths[i], depths[j], step)
+            if n:
+                rows.append((i, j, lij, n))
+    if not rows:
+        return np.ones(F), 0
+    I = np.array([r[0] for r in rows])
+    J = np.array([r[1] for r in rows])
+    L = np.array([r[2] for r in rows])
+    W0 = np.sqrt(np.array([r[3] for r in rows], float))
+    # largest connected component of the pair graph
+    lab = np.arange(F)
+    for _ in range(F):
+        a = np.minimum(lab[I], lab[J])
+        new = lab.copy()
+        np.minimum.at(new, I, a)
+        np.minimum.at(new, J, a)
+        new = new[new]
+        if np.array_equal(new, lab):
+            break
+        lab = new
+    comp = lab == np.bincount(lab[np.unique(np.r_[I, J])]).argmax()
+    keep = comp[I] & comp[J]
+    I, J, L, W0 = I[keep], J[keep], L[keep], W0[keep]
+    idx = np.flatnonzero(comp)
+    pos = -np.ones(F, int)
+    pos[idx] = np.arange(len(idx))
+    A = np.zeros((len(L) + 1, len(idx)))
+    A[np.arange(len(L)), pos[I]] = 1.0
+    A[np.arange(len(L)), pos[J]] = -1.0
+    A[-1] = 1.0  # mean of log a = 0 (re-centred to the median below)
+    b = np.r_[L, 0.0]
+    w = np.r_[W0, W0.sum()]
+    for _ in range(iters):
+        x = np.linalg.lstsq(A * w[:, None], b * w, rcond=None)[0]
+        r = A[:-1] @ x - L
+        w = np.r_[W0 * _huber_w(r, huber), W0.sum()]
+    loga = np.zeros(F)
+    loga[idx] = x - np.median(x)
+    return np.exp(loga), len(L)
+
+
 def align_block(
     K: np.ndarray,
     views: Sequence[Mapping],
     raw: Sequence[np.ndarray],
     mode: str = "metric",
-    n_alt: int = 5,
+    n_alt: int = 0,
     huber: float = 0.05,
     radius: float | None = None,
     fit_beta: bool = True,
     tol: float = 0.02,
     fit_offset: bool = False,
+    n_graph: int = 6,
 ) -> AlignResult:
     """Label-free alignment of ``raw`` (one array per view, model output on the view grid)."""
     F = len(views)
@@ -304,11 +390,18 @@ def align_block(
     params = np.tile([k, 0.0] if mode == "metric" else [1.0 / k, 0.0], (F, 1))
     beta = 0.0
     depths = [aligned_depth(mode, xs[i], params[i], beta) for i in range(F)]
-    eff_gauge = _effective_scale(mode, xs, params)
+    # global relative scales from the pair graph (a few rounds, since moving a frame's scale also
+    # moves its points through parallax), before any frame is fitted to a rendered target
     hist = []
-    for it in range(
-        n_alt + 1
-    ):  # iteration 0 is the initial fit to the median of overlapping frames
+    for _ in range(n_graph):
+        g, _ = relative_scales(K, views, depths, nb, huber)
+        params = np.array([_apply_common(mode, params[i], 1.0 / g[i]) for i in range(F)])
+        depths = [aligned_depth(mode, xs[i], params[i], beta) for i in range(F)]
+        hist.append(float(np.max(np.abs(g - 1))))
+        if hist[-1] < 1e-3:
+            break
+    eff_gauge = _effective_scale(mode, xs, params)
+    for _ in range(n_alt):
         targets = [render_into(K, views[i], views, depths, nb[i], tol) for i in range(F)]
         new = np.array(
             [
@@ -316,7 +409,7 @@ def align_block(
                 for i in range(F)
             ]
         )
-        if fit_beta and it > 0:
+        if fit_beta:
             bases = [_base(mode, xs[i], new[i]) for i in range(F)]
             beta = _fit_beta(bases, targets, huber, beta)
         eff_old = _effective_scale(mode, xs, params)

@@ -5,6 +5,7 @@ from sensorfault.stagea import align as alg
 from sensorfault.stagea import consensus as cg
 from sensorfault.stagea import records as rc
 from sensorfault.stagea import repetition as rp
+from sensorfault.stagea import synth
 from sensorfault.stagea import tiles as tl
 from sensorfault.stagea.synth import make_block
 
@@ -98,7 +99,7 @@ def test_label_free_alignment_recovers_scale(block):
     rng = np.random.default_rng(2)
     s = 1 + 0.1 * rng.normal(size=len(views))
     raw = [v["depth"] / s[i] / 60.0 for i, v in enumerate(views)]
-    res = alg.align_block(K, views, raw, "metric", fit_beta=False, n_alt=8)
+    res = alg.align_block(K, views, raw, "metric", fit_beta=False)
     assert res.history[-1] < 1e-3
     # the common factor comes from parallax only and is the least determined part (a few
     # percent on this small block); per-frame scales relative to it are recovered to 1%
@@ -109,6 +110,19 @@ def test_label_free_alignment_recovers_scale(block):
     q = np.median(ratio)
     rel = [np.nanmedian(np.abs(d / q - v["depth"]) / v["depth"]) for d, v in zip(res.depth, views)]
     assert np.median(rel) < 0.01
+
+
+def test_label_free_alignment_oblique_large_errors():
+    # block-3-like: four 30 deg oblique headings per centre, per-frame scale errors of ~30%
+    K, views, _ = synth.make_oblique_block(nx=4, ny=3)
+    rng = np.random.default_rng(1)
+    s = np.exp(0.3 * rng.normal(size=len(views)))
+    raw = [v["depth"] / s[i] / 70.0 for i, v in enumerate(views)]
+    res = alg.align_block(K, views, raw, "metric", fit_beta=False)
+    assert res.history[-1] < 1e-3
+    ratio = res.params[:, 0] / 70.0 / s
+    assert abs(np.median(ratio) - 1) < 0.06
+    assert np.max(np.abs(ratio / np.median(ratio) - 1)) < 0.005
 
 
 def test_rho_and_permutation_null():

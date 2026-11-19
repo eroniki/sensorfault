@@ -126,3 +126,58 @@ def make_block(
                 )
                 frame += 1
     return K, views, hf
+
+
+def tilt_R(yaw_deg: float, tilt_deg: float) -> np.ndarray:
+    """Camera tilted ``tilt_deg`` off nadir about its own x axis, then rotated by yaw."""
+    t = np.deg2rad(tilt_deg)
+    Rx = np.array([[1.0, 0.0, 0.0], [0.0, np.cos(t), -np.sin(t)], [0.0, np.sin(t), np.cos(t)]])
+    return yaw_R(yaw_deg) @ Rx
+
+
+def make_oblique_block(
+    seed: int = 0,
+    altitude: float = 200.0,
+    tilt_deg: float = 30.0,
+    headings=(-90.0, -180.0, -270.0, -360.0),
+    fov_x_deg: float = 60.0,
+    w: int = 96,
+    h: int = 54,
+    spacing: float = 35.0,
+    nx: int = 5,
+    ny: int = 4,
+):
+    """Block-3-like geometry: a grid of camera centres, one oblique frame per heading at each."""
+    hf = make_heightfield(seed=seed)
+    f = 0.5 * w / np.tan(0.5 * np.deg2rad(fov_x_deg))
+    K = np.array([[f, 0, (w - 1) / 2.0], [0, f, (h - 1) / 2.0], [0, 0, 1.0]])
+    views = []
+    frame = 0
+    for yaw in headings:
+        axis = 0 if abs(yaw % 180) == 90 else 1
+        for ix in range(nx):
+            for iy in range(ny):
+                c = np.array(
+                    [(ix - (nx - 1) / 2) * spacing, (iy - (ny - 1) / 2) * spacing, altitude]
+                )
+                R = tilt_R(yaw, tilt_deg)
+                d = raycast(
+                    hf,
+                    c,
+                    pixel_rays_world(K, R, h, w),
+                    float(hf.z.min()) - 1,
+                    float(hf.z.max()) + 1,
+                )
+                views.append(
+                    {
+                        "frame": frame,
+                        "R": R,
+                        "c": c,
+                        "depth": d,
+                        "yaw": yaw,
+                        "strip": (yaw, round(float(c[axis]), 1)),
+                        "along": float(c[1 - axis]),
+                    }
+                )
+                frame += 1
+    return K, views, hf

@@ -279,7 +279,7 @@ def main(argv=None):
     ap.add_argument("--tile", type=float, default=64.0)
     ap.add_argument("--group", type=int, default=2)
     ap.add_argument("--huber", type=float, default=0.05)
-    ap.add_argument("--alternations", type=int, default=5)
+    ap.add_argument("--alternations", type=int, default=0)
     ap.add_argument("--beta", choices=["on", "off"], default="off")
     ap.add_argument("--datum", choices=["parallax", "calibration"], default="calibration")
     ap.add_argument("--water-level", type=float, default=-3.0)
