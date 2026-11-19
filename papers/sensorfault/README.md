@@ -22,7 +22,7 @@ about the closest prior work rest on abstracts (`refs/EVIDENCE.md`).
 scripts/build.sh             # output: build/main.pdf (TeX Live; uses ./latexmkrc)
 scripts/build_viewgate.sh    # the earlier view-gate letter and its supplement (see below)
 ```
-`draft_v4.pdf` is the last committed build of this letter and the only PDF kept in the repository.
+`sensorfault.pdf` is the committed build of this letter (`scripts/build.sh` refreshes it); versions live in the git history.
 Class and bibliography style `IEEEtran`, from TeX Live (`texlive-publishers`). RA-L allows 6 pages plus up to 2 paid
 extra pages, references included, and **no supplementary PDF** (video only), so the letter stands alone. The abstract
 limit is 1,200 characters in the submission form; the current text is 1,181 with one-letter placeholders. Set
