@@ -9,6 +9,7 @@ Synthetic block.
 - **H2** (realised/predicted fused variance in [0.67, 1.5] per n-bin): **inconclusive**.
 - A8 single-frame calibration on held-out land: s_z = 0.993 [0.966, 1.02], pass.
 - Noise model: white pixel noise sigma (global 0.001879) plus a record floor tau (global 0.0003063, per-frame median 0.0003063, p10-p90 2.611e-05-0.0004613).
+- A8 s_z by pixels per record (held-out land): 4-9 px 1.01, 10-12 px 0.977, 13-16 px 0.91.
 
 ## Alignment (A5)
 

@@ -29,7 +29,8 @@ Common settings for every block 3 run:
   - **exact_repeated:** one frame cycles, frame 56 (yaw 270, end of strip 26). It swings by about 0.20 in log scale each round.
   - **DAv2:** most frames cycle, by 0.2–0.3 in log scale. The scale-only inverse model probably does not fit DAv2's affine-invariant disparity.
 - **A8.** The single-frame calibration fails on held-out land for every real model (s_z 1.2–1.8). It also fails for the repeated control. It passes for the independent control, whose fused held-out land s_z is 1.12 [1.05, 1.23] at b886adb (1.25 at def370d, before the record-weight fix).
-- **Two folders sharing a name.** `synthetic_control_*` are the synthetic-block controls from the earlier commit. They are not block 3 results.
+- **Two folders sharing a name.** `synthetic_control_*` are the synthetic-block controls. They are not block 3 results. They were regenerated with the record-floor noise model (`--noise floor`, the default).
+- **Noise model.** The block 3 runs above used white pixel noise only (the model before `--noise floor`); they are superseded once the block 3 runs are repeated with the record floor.
 
 ### H1 decisions in the block 3 summaries
 

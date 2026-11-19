@@ -236,6 +236,22 @@ def calibrate_noise(rec, ent, land, model="floor", min_rec=30):
     )
 
 
+def _by_tertile(z2v, npix):
+    if not len(z2v):
+        return []
+    q = np.percentile(npix, [100 / 3, 200 / 3])
+    bins = np.digitize(npix, q, right=True)
+    return [
+        {
+            "pixels": f"{int(npix[bins == k].min())}-{int(npix[bins == k].max())}",
+            "records": int((bins == k).sum()),
+            "s_z": cal.robust_scale(z2v[bins == k]),
+        }
+        for k in range(3)
+        if (bins == k).any()
+    ]
+
+
 def single_frame_z2(rec, sigma, tau=None):
     return rc.record_z2(rec, sigma, tau)
 
@@ -489,6 +505,8 @@ def main(argv=None):
         "frames_with_own_sigma": noise_info["frames_with_own"],
         "s_z_heldout_land": sz1,
         "pass": bool(0.9 <= sz1["estimate"] <= 1.1),
+        # a noise model that ignores shared pixel errors shows s_z growing with pixels per record
+        "s_z_by_pixel_tertile": _by_tertile(z1[lr], rec.npix[lr]),
     }
 
     # A9: H1
@@ -695,6 +713,11 @@ def render_summary(log) -> str:
         f"- A8 single-frame calibration on held-out land: s_z = {_ci(log['single_frame']['s_z_heldout_land'])}, "
         f"{'pass' if log['single_frame']['pass'] else 'FAIL (noise model at fault, H1 undefined)'}.",
         _noise_line(log["single_frame"]["noise"]),
+        "- A8 s_z by pixels per record (held-out land): "
+        + ", ".join(
+            f"{t['pixels']} px {_f(t['s_z'])}" for t in log["single_frame"]["s_z_by_pixel_tertile"]
+        )
+        + ".",
         "",
     ]
     al = log["alignment"]
