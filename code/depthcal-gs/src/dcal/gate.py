@@ -123,7 +123,10 @@ def window_T(win: Window, cov: str, *, rel_sigma_r: float = 0.005, fault: str | 
     if fault is not None and kappa:
         M = S.shape[0]
         clean = fault_statistic(S, D, Sr, Sigma_u=Su, robust=robust)
-        sd_tot = np.sqrt(np.median((1 + 1 / M) * np.diag(Su) + np.diag(Sr) / clean["s"] ** 2))   # in sample units
+        # fault size from the empirical per-bin sample variance, not from diag(Su): the same kappa must mean the
+        # same injected fault for every covariance, or the comparison with ``iso`` is not at equal fault size
+        var_u = A[:, k].var(0, ddof=1)
+        sd_tot = np.sqrt(np.median((1 + 1 / M) * var_u + np.diag(Sr) / clean["s"] ** 2))   # in sample units
         f = fault_pattern(fault, win.grid, A.mean(0), area, rng)[k]
         S = S + kappa * sd_tot * f[None]
     r = fault_statistic(S, D, Sr, Sigma_u=Su, robust=robust)
@@ -148,7 +151,6 @@ def calibration(win: Window) -> dict | None:
 def run_gate(windows: list[Window], *, covs=COVS, faults=FAULTS, kappas=(0.5, 1.0, 2.0, 4.0), alpha: float = 0.05,
              rel_sigma_r: float = 0.005, area: float = 0.12, seed: int = 0, min_keep: float = 0.5) -> dict:
     wins = [w for w in windows if w.keep.mean() >= min_keep]
-    rng = np.random.default_rng(seed)
     res = {"n_windows": len(wins), "n_views": len({w.view for w in wins}), "alpha": alpha, "rel_sigma_r": rel_sigma_r}
     cal = [c for c in (calibration(w) for w in wins) if c is not None]
     if cal:
@@ -169,6 +171,7 @@ def run_gate(windows: list[Window], *, covs=COVS, faults=FAULTS, kappas=(0.5, 1.
         views = np.array([w.view for w in wins])
         thr = {v: empirical_threshold(nT[views != v], alpha) for v in np.unique(views)}
         fa = float(np.mean([t > thr[v] for t, v in zip(nT, views)]))
+        rng = np.random.default_rng(seed)   # same fault placements for every covariance
         out = {"null_T_over_dof_median": float(np.median(ratio)), "null_T_over_dof_mean": float(ratio.mean()),
                "false_alarm_loo": fa, "power": {}}
         for fault in faults:
