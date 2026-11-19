@@ -5,11 +5,11 @@ Tables use one block only and are marked **same scene**.
 
 ## Decisions
 
-- **H1** (lower bound of s_z on held-out land, n >= 5, above 1.25): **undefined (A8 failed)** (without the A8 gate: supported).
+- **H1** (lower bound of s_z on held-out land, n >= 5, above 1.25): **supported**.
 - **H2** (realised/predicted fused variance in [0.67, 1.5] per n-bin): **inconclusive**.
-- A8 single-frame calibration on held-out land: s_z = 1.16 [1, 1.38], FAIL (noise model at fault, H1 undefined).
-- Noise model: white pixel noise sigma (global 0.001814) plus a record floor tau (global 0.007289, per-frame median 0.007289, p10-p90 0.006538-0.008388).
-- A8 s_z by pixels per record (held-out land): 4-5 px 1.08, 6-8 px 1.08, 9-184 px 1.52.
+- A8 single-frame calibration on held-out land: s_z = 1.05 [1, 1.09], pass.
+- Noise model (class): white pixel noise sigma (global 0.001814) plus a record floor tau (global 0.007643, per-frame median 0.007643, p10-p90 0.007005-0.00816); floor shape log g: roof +0.069, steep +0.372, log_pixels +0.021, log_incidence -0.268, log_depth -0.668 (g p10-p90 0.829-1.56).
+- A8 s_z by pixels per record (held-out land): 4-5 px 1.03, 6-8 px 1.03, 9-184 px 1.09; by class: roof 1.03, ground 1.05.
 
 ## Alignment (A5)
 
@@ -19,31 +19,31 @@ Median relative depth residual: label-free with parallax datum 0.0101, after dat
 
 ## Records (A7)
 
-100686 records, 6639 entities seen, median n = 12, median pixels per record 6, median shape remainder 0.33 m; additivity max relative difference 5.21e-16.
+100686 records, 6639 entities seen, median n = 12, median pixels per record 6, median shape remainder 0.33 m; additivity max relative difference 5.09e-16.
 
 ## H1: depth-only map on held-out tiles, n >= 5 (A9)
 
 | group | entities | s_z | s_z tail | cov 0.683 | cov 0.95 | ECE | log-score | calib. loss |
 |---|---|---|---|---|---|---|---|---|
-| all | 1129 | 2.42 [2.16, 2.7] | 6.96 | 0.136 | 0.318 | 0.394 | 70 | 65.3 |
-| land | 628 | 2.6 [2.2, 2.98] | 9.09 | 0.129 | 0.29 | 0.403 | 121 | 116 |
-| water | 501 | 2.19 [1.92, 2.47] | 2.34 | 0.144 | 0.353 | 0.382 | 6.28 | 4.15 |
-| roof | 162 | 2.47 [1.83, 2.86] | 2.93 | 0.13 | 0.34 | 0.394 | 10.7 | 8.14 |
-| ground | 466 | 2.7 [2.27, 3.08] | 10.4 | 0.129 | 0.273 | 0.407 | 159 | 154 |
-| contrast_q1 | 134 | 2.29 [2.12, 2.56] | 3.91 | 0.179 | 0.351 | 0.378 | 21 | 17.3 |
-| contrast_q2 | 139 | 2.5 [1.94, 3.27] | 3.93 | 0.129 | 0.324 | 0.402 | 20.5 | 17.5 |
-| contrast_q3 | 163 | 2.7 [2, 3.53] | 4.7 | 0.141 | 0.282 | 0.392 | 29.5 | 27 |
-| contrast_q4 | 107 | 2.9 [2.09, 3.92] | 4.85 | 0.0841 | 0.243 | 0.437 | 31.5 | 29.1 |
-| contrast_q5 | 85 | 3.33 [2.33, 4.06] | 22.1 | 0.0824 | 0.212 | 0.428 | 730 | 723 |
+| all | 1129 | 2.39 [2.2, 2.57] | 2.63 | 0.143 | 0.33 | 0.389 | 8.01 | 5.97 |
+| land | 628 | 2.36 [2.04, 2.6] | 2.68 | 0.164 | 0.352 | 0.376 | 8.28 | 6.31 |
+| water | 501 | 2.41 [2.11, 2.72] | 2.57 | 0.116 | 0.303 | 0.404 | 7.68 | 5.56 |
+| roof | 162 | 2.22 [1.79, 2.57] | 2.43 | 0.167 | 0.377 | 0.378 | 7.02 | 4.67 |
+| ground | 466 | 2.41 [2.13, 2.66] | 2.76 | 0.163 | 0.343 | 0.376 | 8.71 | 6.89 |
+| contrast_q1 | 134 | 2.36 [2.25, 2.49] | 2.75 | 0.149 | 0.336 | 0.385 | 9.47 | 6.83 |
+| contrast_q2 | 139 | 2.42 [1.84, 2.69] | 2.69 | 0.158 | 0.36 | 0.38 | 8.58 | 6.37 |
+| contrast_q3 | 163 | 2.52 [1.93, 2.7] | 2.61 | 0.172 | 0.325 | 0.371 | 7.42 | 5.82 |
+| contrast_q4 | 107 | 2.17 [1.75, 2.67] | 2.54 | 0.196 | 0.421 | 0.366 | 7.12 | 5.4 |
+| contrast_q5 | 85 | 2.37 [1.89, 2.58] | 2.84 | 0.141 | 0.329 | 0.382 | 8.99 | 7.48 |
 
 Consensus gate (A12), land, after removing flagged frames:
 
 | B | frames removed | temperature | s_z | cov 0.95 |
 |---|---|---|---|---|
-| 1 | 81 | 1.42 | 2.06 [1.84, 2.42] | 0.421 |
-| 3 | 81 | 1.42 | 2.06 [1.84, 2.42] | 0.421 |
-| 5 | 81 | 1.42 | 2.06 [1.84, 2.42] | 0.421 |
-| 9 | 81 | 1.42 | 2.06 [1.84, 2.42] | 0.421 |
+| 1 | 51 | 0.845 | 1.95 [1.8, 2.12] | 0.442 |
+| 3 | 52 | 0.841 | 1.96 [1.8, 2.12] | 0.442 |
+| 5 | 51 | 0.843 | 1.97 [1.82, 2.12] | 0.435 |
+| 9 | 51 | 0.843 | 1.97 [1.82, 2.12] | 0.435 |
 
 ## Repetition (A10)
 
@@ -67,10 +67,10 @@ Fused error for the law: equal-weight mean of the frames' errors. The last colum
 |---|---|---|---|---|---|---|
 | 1 | 108 | 1 | 1 | 1 | 1 [1, 1] | 1 |
 | 2 | 95 | 0.673 | 0.613 | 0.5 | 1.1 [0.913, 1.24] | 1.05 |
-| 3-4 | 228 | 0.403 | 0.446 | 0.284 | 0.903 [0.731, 1.1] | 0.882 |
-| 5-8 | 230 | 0.362 | 0.346 | 0.155 | 1.05 [0.87, 1.22] | 0.994 |
-| 9-16 | 275 | 0.221 | 0.29 | 0.0823 | 0.763 [0.582, 1.18] | 0.633 |
-| 17+ | 624 | 0.291 | 0.258 | 0.0412 | 1.13 [0.976, 1.37] | 1.05 |
+| 3-4 | 228 | 0.403 | 0.446 | 0.284 | 0.903 [0.731, 1.1] | 0.876 |
+| 5-8 | 230 | 0.362 | 0.346 | 0.155 | 1.05 [0.87, 1.22] | 0.971 |
+| 9-16 | 275 | 0.221 | 0.29 | 0.0823 | 0.763 [0.582, 1.18] | 0.634 |
+| 17+ | 624 | 0.291 | 0.258 | 0.0412 | 1.13 [0.976, 1.37] | 1.06 |
 
 ## Residual parallax on textured land (A15)
 
