@@ -1,0 +1,33 @@
+\section{Experimental Design and Hypotheses}
+\label{sec:setup}
+The protocol, hypotheses and thresholds are tagged in the code repository before any test scene is run;
+only public data, released models and public code are used.
+
+\runin{Data, baselines and metrics.} The main real set is UseGeo \cite{data_usegeo}, UAV nadir strips with
+per-image LiDAR depth; MatrixCity \cite{data_matrixcity} gives exact depth for fault injection, and ETH3D
+\cite{data_eth3d} is a sanity check. Depth Pro \cite{est_depthpro} is the default model; Metric3D v2 and
+UniDepthV2 supply the confidence baseline. Natural failures are labelled against the reference depth;
+injected faults cover 2--40\% of a view at 2--16$\sigma$. Baselines are SpotLessSplats \cite{gs_spotless},
+RobustNeRF \cite{gs_robustnerf}, robust depth losses, the aligned RMS residual and the model's confidence.
+Metrics are detection power at 5\% false alarm, untestable rate, AbsRel and surface F-score
+(Supplement~\ref{S-sup:setup}).
+
+\runin{Hypotheses.} Each states what would falsify it (full text and thresholds in
+Supplement~\ref{S-sup:hyp}).
+\begin{description}\setlength{\itemsep}{1pt}
+  \item[H1] \emph{Go/no-go:} on UseGeo and ETH3D development scenes, $\ge10\%$ of views carry a failure
+        covering $\ge2\%$ of pixels at $>3\sigma$, and keeping them costs $\ge2$ points of F-score.
+  \item[H2] \emph{Repetition:} cross-view error correlation is $\ge0.5$ on textureless regions and
+        $\le0.3$ on specular ones, and decays along the strip; the decay sets $B$.
+  \item[H3] \emph{Detection:} at 5\% false alarm the gate beats the best baseline by $\ge15$ points of power
+        on specular failures; no gain is predicted on textureless ones.
+  \item[H4] \emph{Reconstruction:} AbsRel and F-score improve by $\ge10\%$ on failure scenes and change by
+        $\le2\%$ on clean scenes.
+  \item[H5] \emph{Calibration:} the per-view false-alarm rate stays within $[0.5\alpha,1.5\alpha]$ on test
+        scenes without retuning.
+  \item[H6] \emph{Ablations:} each design choice (cavity, whitening, scene temperature, outer loop,
+        leave-block-out) earns a stated margin.
+  \item[H7] \emph{Poses:} (a)~the gate flags $\ge80\%$ of views perturbed by $\ge0.5^{\circ}$ or 10 ground
+        sampling distances (GSD); (b)~refinement removes $\ge80\%$ of perturbations up to $1^{\circ}$ and
+        25~GSD.
+\end{description}

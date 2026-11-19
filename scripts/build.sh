@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Build the RA-L letter (build/main.pdf) and its supplement (build/supplement.pdf).
-# The two documents cross-reference each other through xr, so each is built twice.
+# Build the RA-L letter (build/main.pdf). RA-L accepts no supplementary PDF, so the letter stands alone.
+# The earlier view-gate letter and its supplement are built by scripts/build_viewgate.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-for pass in 1 2; do
-  latexmk -pdf -interaction=nonstopmode -halt-on-error supplement.tex
-  latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
-done
+latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex

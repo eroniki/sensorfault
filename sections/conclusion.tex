@@ -1,10 +1,8 @@
-\section{Conclusion}
+\section{Limitations and Conclusion}
 \label{sec:conclusion}
-We have proposed a depth-only view gate in which each surfel's uncertainty is rendered into depth variance,
-leave-out is an exact subtraction, and views are tested against the others' surface at a stated false-alarm
-rate under a Holm schedule. With exact depth, the loop held the false alarm at zero and avoided swamping;
-pose errors were detected but not fully recovered. The rendered variance is overconfident because
-cross-surfel correlations are ignored, errors repeated across whole strips are invisible, and pixels seen
-by no other view are untestable (Supplement~\ref{S-sup:limits}).
-\TODO{Rewrite around the real-data results; if H1 is a no-go, reframe as an analysis of the depth model's
-failures.}
+The pixels judge the prior only where they have stiffness: on blank or specular surfaces, where monocular
+depth fails most often, the map can report that a surface is unsupported but cannot correct it. The
+coupling is first-order and reaches only as far as a surfel footprint, so a prior that is far off is
+outside its range. Both sources read the same images, so their errors are not strictly independent. The
+entity is a fixed tile, not a surface found in the data.
+\TODO{Conclusion after the results; if H1 is refuted, reframe as a negative result on the data at hand.}

@@ -1,33 +1,52 @@
 \section{Introduction}
 \label{sec:intro}
 
-\IEEEPARstart{M}{onocular} metric depth models \cite{est_metric3dv2,est_unidepth,est_depthpro} are accurate
-enough to supervise Gaussian splatting with one depth map per image \cite{gs_3dgs,gs_2dgs,gs_dnsplatter},
-which for aerial survey imagery could complement dense multi-view stereo. Their failures, however, are
-\emph{regional} and \emph{appearance-driven}: on glass and water they return the depth of the reflection,
-on textureless roofs and roads a smooth guess, many times the nominal noise, while the rest of the depth map
-is accurate. Nadir views from survey altitude are also far from their mostly near-ground training data.
-Depth supervision bakes such regions into the surface, and nothing in a single image says which depth map
-to distrust. Robust losses \cite{rob_blackrangarajan,rob_barron} and distractor-aware splatting
-\cite{gs_robustnerf,gs_spotless} down-weight outlying pixels, mostly on photometric evidence; none states a
-false-alarm rate, and none uses the fact that the other views observe the same surface with known
-uncertainty.
+\IEEEPARstart{M}{onocular} metric depth models \cite{est_depthpro,est_metric3dv2,est_unidepth,est_dav2} are
+accurate enough to place a surface from one image, and one depth map per frame can supervise Gaussian
+splatting \cite{gs_3dgs,gs_2dgs,gs_dnsplatter} of an aerial survey without matching a single feature. The
+map that results looks complete, and it says nothing about what it knows. Opacity is not confidence: a
+surfel on a blank roof is drawn with the same certainty as one on a textured wall.
 
-We propose a \emph{depth-only view gate} (Fig.~\ref{fig:pipeline}). Each 2DGS surfel carries a
-$10\times10$ information block, kept apart from its rendering shape, to which every view adds the
-alpha-weighted rasteriser information $J^{\top}R^{-1}J$. Fusion is sparse and needs no correspondences,
-unlike TSDF fusion \cite{fus_curless,fus_kinectfusion} or cost volumes \cite{rec_mvsnet}, and leaving out a
-view, or a block of neighbouring frames that tend to share its errors, is a subtraction and one Newton
-step. The gate renders the remaining views' surface and its variance into the tested view and tests its
-whitened depth residuals at a stated false-alarm rate. The testing theory is classical
-\cite{stat_teunissen_dia,flt_raim_joerger}; to our knowledge, what is new is a per-Gaussian uncertainty that
-the rasteriser renders into depth variance, used with exact leave-out to test whole views. We contribute:
+The danger is an error that repeats. On a given surface a depth model tends to make the same mistake in
+every frame, so the depth maps agree with each other and averaging them removes only the part of the error
+that differs between frames. If a share $\varrho$ of the error variance is common to the $n$ frames that
+see a surface, the variance of their fused estimate is $\varrho+(1-\varrho)/n$ times that of one frame,
+whereas the fused information claims $1/n$. Tests that compare each depth map with the others
+\cite{stat_teunissen_dia,flt_raim_joerger,fus_colmap_mvs} are blind to the common part by construction.
+
+The pixels are the only independent witness, and they speak about geometry only through a coupling: an
+image constrains a surface if moving the surface would change the image, which needs texture contrast and
+views from different directions. The strength of that coupling is a stiffness that can be computed only
+where geometry and appearance meet, in the renderer. For a planar surfel \cite{gs_2dgs} the two sources
+meet exactly: to first order the derivative of the rendered image with respect to the surfel's placement
+factors through the derivative of its depth, so the depth prior and the pixels are quadratic forms on the
+same three coordinates, an offset along the normal and two tilts (Fig.~\ref{fig:teaser}). Their
+disagreement is then a statistic with units and a null distribution.
+
+Stiffness computed from rendering residuals is not honest as it stands, because residuals are model misfit
+and neighbouring pixels are not independent; uncertainty fields derived from the rendering Hessian
+\cite{unc_fisherrf,unc_pup3dgs,unc_ougs} are used to rank views or prune primitives, where only the order
+matters. We calibrate it on the scene, without labels, from frame replicates and from displacements
+injected through the renderer, and we cap the information of the prior at what its repeated error allows.
+
+We contribute:
 \begin{itemize}
-  \item a depth-only view gate with untestable pixels, no surfels spawned by the tested view, and a
-        Holm-controlled outer loop (Sections~\ref{sec:method:gate}--\ref{sec:method:loop});
-  \item leave-block-out, designed so that neighbours that repeat a view's error cannot mask it; it is
-        untested so far on real repeated failures (H2) (Section~\ref{sec:method:fusion});
-  \item controlled experiments on false-alarm control, swamping and pose errors, and a pre-registered
-        protocol for real depth models (Sections~\ref{sec:setup}--\ref{sec:results}).
+  \item per-source information records on planar surfels, built on the factorisation of the image Jacobian
+        through the depth Jacobian; records add over frames and tiles (Section~\ref{sec:method:records});
+  \item the overconfidence law $\varrho+(1-\varrho)/n$ for depth-only fusion and a score test at the
+        depth-placed surface that detects repeated depth faults, both compared with a depth-consensus gate
+        (Sections~\ref{sec:method:honest}--\ref{sec:method:test});
+  \item a label-free calibration of the pixel information, scored by a proper rule, the surface log-score
+        (Sections~\ref{sec:method:honest} and~\ref{sec:setup}).
 \end{itemize}
-\TODO{Replace the last item by result-bearing contributions once H1--H6 are evaluated.}
+We do not claim to be more accurate than matching-based pipelines. The pixel coupling has a short capture
+range, which the depth prior supplies, and where the pixels have no stiffness the map reports that the
+surface is unsupported.
+\TODO{Replace the list by result-bearing contributions once the experiments of Section~\ref{sec:results}
+are run.}
+
+\todofig{teaser}{A depth-only map is confidently wrong where the depth model repeats its error; the
+per-source record says where and by how much. Top: signed placement error of the depth-only map with its
+stated $2\sigma$ contour, and the energy between depth prior and pixels on the same footprint. Bottom: a
+transect with the true surface, the depth-only surface with its stated band, and the fused surface with
+its band.}

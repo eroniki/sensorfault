@@ -7,7 +7,7 @@ reference to a letter label is written M-<label>. Run this after moving text bet
 """
 import glob, re, os
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
-MAIN = ['main.tex'] + ['sections/%s.tex' % n for n in 'intro related method setup results conclusion'.split()]
+MAIN = ['main_viewgate.tex'] + ['sections/vg_%s.tex' % n for n in 'intro related method setup results conclusion'.split()]
 SUPP = ['supplement.tex'] + sorted(glob.glob('sections/supp_*.tex'))
 FIGS = glob.glob('figures/**/*.tex', recursive=True)
 REF = re.compile(r'\\(ref|eqref|pageref)\{([^}]+)\}')

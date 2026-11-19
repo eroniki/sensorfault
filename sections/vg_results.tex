@@ -1,0 +1,36 @@
+\section{Results}
+\label{sec:results}
+\textcolor{red}{\textbf{Only controlled experiments on one MatrixCity block have been run; H1--H6 on real
+data are pending (planned tables and figures in Supplement~\ref{S-sup:results}).}}
+
+\subsection{E1: Controlled Fault Injection with Exact Depth}
+\label{sec:results:e1}
+E1 tests the statistical gate with exact truth on MatrixCity block~3 \cite{data_matrixcity}: 185 frames in
+four headings, $30^{\circ}$ off nadir at 300~m, rendered at $96\times54$ pixels. Surfels are placed on the
+exact geometry (81{,}152 surfels), and the measured depth is their rendered depth plus independent noise of
+1\% of depth plus injected faults, so the linearised fusion is exact. Faults are rectangular offsets of
+$\delta\sigma$ on one view, or one $8\sigma$ offset on a 25~m patch in three neighbouring frames. Holm runs
+over $M=1850$ tests. Full results are in Supplement~\ref{S-sup:e1full}.
+
+The loop kept the family-wise false alarm at zero in 20 clean scenes, also with noise 30\% above its
+calibrated level, where without the scene temperature every view was flagged. All single-view faults of
+2--16$\sigma$ over 5--40\% of a view were detected, so this grid does not separate the gate from the
+aligned-RMS baseline, which missed 3 of 10 only at $2\sigma$ over 5\%. Two predictions of H6 do not hold
+here: leave-block-out ($B=3$) detected no more repeated faulty frames than $B=1$, because three frames
+supply only a small share of the patch's coverage, and the outer loop did not raise detection. The loop
+instead prevented \emph{swamping}: a single pass that excludes every rejected view excluded 5--8\% of clean
+views, the loop none. Two of 30 repeated faulty frames were missed. Fused without the excluded view, the
+surface under the fault had a median height error of $-0.16$~m, against $-2.16$~m with it.
+
+\subsection{H7: Pose Perturbation Check}
+\label{sec:results:h7}
+In the E1 setting, the input poses of chosen views were perturbed by $0.05$--$2^{\circ}$ and 1--50 ground
+sampling distances (GSD, 0.141~m), tested with the pose term of \eqref{eq:res}, and refined with the
+spline, GNSS/IMU prior and render-and-compare factors, all fixed before the run (Supplement~\ref{S-sup:h7}).
+Prediction (a) holds: the gate flagged every perturbed view at every level and none in the size-0 control,
+although its sensitivity at the smallest sizes comes from building edges in point-sampled exact depth.
+Perturbed views also swamped up to 67 others in the same round, which the outer loop is designed to
+prevent. Prediction (b) is falsified: the refinement removed 63--64\% of a rotation and 38--80\% of a
+translation, below the 80\% target, because the perturbed frame's own GNSS/IMU prior holds its pose;
+dropping that prior, as if the gate's flag marked it faulty, removed 85--89\% of rotations of $0.5^{\circ}$
+and more (Supplement~\ref{S-sup:h7full}).

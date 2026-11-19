@@ -1,0 +1,33 @@
+\section{Introduction}
+\label{sec:intro}
+
+\IEEEPARstart{M}{onocular} metric depth models \cite{est_metric3dv2,est_unidepth,est_depthpro} are accurate
+enough to supervise Gaussian splatting with one depth map per image \cite{gs_3dgs,gs_2dgs,gs_dnsplatter},
+which for aerial survey imagery could complement dense multi-view stereo. Their failures, however, are
+\emph{regional} and \emph{appearance-driven}: on glass and water they return the depth of the reflection,
+on textureless roofs and roads a smooth guess, many times the nominal noise, while the rest of the depth map
+is accurate. Nadir views from survey altitude are also far from their mostly near-ground training data.
+Depth supervision bakes such regions into the surface, and nothing in a single image says which depth map
+to distrust. Robust losses \cite{rob_blackrangarajan,rob_barron} and distractor-aware splatting
+\cite{gs_robustnerf,gs_spotless} down-weight outlying pixels, mostly on photometric evidence; none states a
+false-alarm rate, and none uses the fact that the other views observe the same surface with known
+uncertainty.
+
+We propose a \emph{depth-only view gate} (Fig.~\ref{fig:pipeline}). Each 2DGS surfel carries a
+$10\times10$ information block, kept apart from its rendering shape, to which every view adds the
+alpha-weighted rasteriser information $J^{\top}R^{-1}J$. Fusion is sparse and needs no correspondences,
+unlike TSDF fusion \cite{fus_curless,fus_kinectfusion} or cost volumes \cite{rec_mvsnet}, and leaving out a
+view, or a block of neighbouring frames that tend to share its errors, is a subtraction and one Newton
+step. The gate renders the remaining views' surface and its variance into the tested view and tests its
+whitened depth residuals at a stated false-alarm rate. The testing theory is classical
+\cite{stat_teunissen_dia,flt_raim_joerger}; to our knowledge, what is new is a per-Gaussian uncertainty that
+the rasteriser renders into depth variance, used with exact leave-out to test whole views. We contribute:
+\begin{itemize}
+  \item a depth-only view gate with untestable pixels, no surfels spawned by the tested view, and a
+        Holm-controlled outer loop (Sections~\ref{sec:method:gate}--\ref{sec:method:loop});
+  \item leave-block-out, designed so that neighbours that repeat a view's error cannot mask it; it is
+        untested so far on real repeated failures (H2) (Section~\ref{sec:method:fusion});
+  \item controlled experiments on false-alarm control, swamping and pose errors, and a pre-registered
+        protocol for real depth models (Sections~\ref{sec:setup}--\ref{sec:results}).
+\end{itemize}
+\TODO{Replace the last item by result-bearing contributions once H1--H6 are evaluated.}

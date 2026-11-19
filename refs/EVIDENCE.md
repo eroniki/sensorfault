@@ -48,3 +48,13 @@ evidence logs (removed in the clean-up; see git history). Re-check all entries b
 | fus_kinectfusion | https://doi.org/10.1109/ISMAR.2011.6092378 / ISMAR 2011, pp. 127-136 (carried over from the earlier evidence log). |
 | data_urbanscene3d | https://api.crossref.org/works (search) -> 10.1007/978-3-031-20074-8_6 ; arXiv 2107.04286 / ECCV 2022, LNCS, pp. 93-109; six authors (record; checked 2026-11-15). Terms: non-commercial, no dissemination (vcc.tech/UrbanScene3D). |
 | stat_holm | Scand. J. Statist. 6(2):65-70, 1979 (JSTOR 4615733). Entered from the standard record on 2026-11-18; Crossref is blocked from the build container, so not yet checked against a resolver. |
+| unc_gaussmi | https://arxiv.org/abs/2504.21067 / title and five authors from the abstract page; v1 2025-04-29; no journal reference on the page (checked 2026-11-19). Published venue not checked. |
+| unc_pup3dgs | https://arxiv.org/abs/2406.10219 / title and six authors from the abstract page; v1 2024-06-14; no journal reference on the page (checked 2026-11-19). Published venue not checked. |
+| unc_ougs | https://arxiv.org/abs/2511.09397 / title and four authors from the abstract page; v1 2025-11-12 (checked 2026-11-19). |
+| dep_indepthwetrust | https://arxiv.org/abs/2604.05715 / title and seven authors from the abstract page; v1 2026-04-07 (checked 2026-11-19). |
+| dep_reliability | https://arxiv.org/abs/2607.02554 / title and three authors from the abstract page; v1 2026-06-27 (checked 2026-11-19). |
+| gs_hierarchical | https://arxiv.org/abs/2406.12080 / title and six authors from the abstract page; v1 2024-06-17; the page shows no journal reference or DOI, so the ACM TOG record is NOT entered (checked 2026-11-19). |
+| stat_gneiting_scoring | **NOT CHECKED.** JASA 102(477):359-378, 2007, DOI 10.1198/016214506000001437, entered from the standard record on 2026-11-19; the DOI page could not be fetched from the build container. Check against a resolver before submission. |
+| fus_julier_ci | **NOT CHECKED.** ACC 1997, pp. 2369-2373, DOI 10.1109/ACC.1997.609105, entered from the standard record on 2026-11-19; the IEEE Xplore page returned no content. Check against a resolver before submission. |
+
+Abstract-level reading only (2026-11-19): unc_gaussmi, unc_pup3dgs, unc_ougs, dep_indepthwetrust, dep_reliability and the statements made about them and about unc_fisherrf in the Related Work section rest on abstracts and project pages. Read the full texts before the related work is final.

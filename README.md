@@ -1,42 +1,49 @@
 # sensorfault-manuscript
 
-Draft v0 of *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface* (aerial survey
-setting; UseGeo, MatrixCity, ETH3D as a sanity check; off-the-shelf depth models only; all datasets non-commercial,
-see the data statement), in the
-IEEE Robotics and Automation Letters (RA-L) template (`IEEEtran`, journal mode), for the RA-L submission path with the IROS
-presentation option. The supplement is a separate document. Companion code
-and plan: `eroniki/sensorfault`; reference design: `docs/design-3dgs-bayes.md` in that repo.
+Draft of *Auditing Monocular Depth with Per-Source Information on Gaussian Surfels*, in the IEEE Robotics and
+Automation Letters (RA-L) template (`IEEEtran`, journal mode), for the RA-L submission path with the IROS
+presentation option. Companion code and plan: `eroniki/sensorfault` (`PLAN.md`, design v4.0; method
+`docs/learned-indicator.md`; protocol `docs/learned-indicator/experiment-design.md`; paper design
+`docs/learned-indicator/paper-plan.md`).
 
-The paper proposes a depth-only view gate for depth-supervised Gaussian splatting. Each 2DGS surfel keeps its shape for
-rendering and a separate 10x10 uncertainty over mean, rotation error, log scales and opacity (opacity frozen after a
-warm-up). In the fuse step each view sends the surfels an information-form message (alpha-weighted J^T R^-1 J); leaving
-a view, or a block of neighbouring strip frames, out is a subtraction plus one Newton step (the cavity step of expectation propagation, used once, without moment
-matching). The tested view is compared with the other views' surface rendered into it, with one free noise variable
-(a scene temperature) and a shared distance bias. Training, freezing, fusing and testing repeat in rounds that drop
-flagged views (one per round by default), with a Holm step-down schedule across rounds.
+The paper stores, on each planar Gaussian surfel patch, a Fisher information record on its placement (an offset and
+two tilts) separately for the monocular depth prior and for the pixels. To first order the image Jacobian factors
+through the depth Jacobian, so both records are quadratic forms on the same coordinates and their disagreement is a
+statistic with a null distribution. It claims that a depth-only map is overconfident by the share of depth error that
+all frames repeat, that the pixel-against-depth test detects repeated faults that depth consensus cannot see, and
+that the pixel information can be calibrated on the scene without labels.
 
-**Status: controlled experiments only.** E1 (fault injection with exact depth) and the H7 pose check have been
-run on one MatrixCity block; H1-H6 on real data are pre-registered and pending. Placeholders are marked `TODO` in red.
+**Status: no experiment of this paper has been run.** Every number is a red placeholder (`\ph{...}`, `\TODO{...}`,
+`\todocell`), the four figures are placeholder boxes, and the letter builds to 5 pages in that state. Statements
+about the closest prior work rest on abstracts (`refs/EVIDENCE.md`).
 
 ## Build
 ```
-scripts/build.sh             # output: build/main.pdf (letter) and build/supplement.pdf (TeX Live; uses ./latexmkrc)
+scripts/build.sh             # output: build/main.pdf (TeX Live; uses ./latexmkrc)
+scripts/build_viewgate.sh    # the earlier view-gate letter and its supplement (see below)
 ```
-Class `IEEEtran` (`journal`, two-column letter; the supplement uses `onecolumn`) and bibliography style `IEEEtran`, both
-from TeX Live (`texlive-publishers`). `preamble.tex` is shared by both documents. They cross-reference each other with
-`xr`: in the letter, labels from the supplement carry the prefix `S-` (e.g. `\ref{S-sup:h7}`); in the supplement, labels
-from the letter carry `M-`. The build script runs each document twice so these resolve.
-`draft_v0.pdf` (letter) and `draft_v0_supplement.pdf` are the last committed builds.
-RA-L allows 6 pages plus up to 2 paid extra pages, references included; the letter is 6 pages. Material cut from the letter lives in the supplement (method details, results in full, hypotheses and limitations in full). After moving text between the two documents, run `scripts/xref_prefixes.py` to re-derive the S-/M- prefixes.
+Class and bibliography style `IEEEtran`, from TeX Live (`texlive-publishers`). RA-L allows 6 pages plus up to 2 paid
+extra pages, references included, and **no supplementary PDF** (video only), so the letter stands alone. The abstract
+limit is 1,200 characters in the submission form; the current text is 1,181 with one-letter placeholders. Set
+`\anonymoustrue` in `main.tex` for double-anonymous review.
 
 ## Outline
-Letter (6 pages): Abstract, Index Terms; I Introduction; II Related Work; III Method (setting and measurement
-model; poses; surfels with an uncertainty that renders; fusion and leave-out by subtraction, incl.
-leave-block-out; the view gate; the outer loop with Algorithm 1); IV Experimental Design and Hypotheses (H1-H7,
-short form); V Results (E1, H7); VI Conclusion; Acknowledgment; References.
-Supplement: S1 related work; S2 method details; S3 derivations; S4 experimental setup; S5 hypotheses, limitations
-and future work in full; S6 results in full (E1, RGB and surface checks, H7, planned real-data results);
-S7 planned tables and figures. Section numbers follow the build; check `build/supplement.pdf`.
+Abstract, Index Terms; I Introduction; II Related Work; III Method (setting; two records on one placement; honest
+information; tension and the score test; fusion and scoring); IV Experimental Design (data, faults, baselines,
+hypotheses H1-H7); V Results (overconfidence law; pixel information; detection; fused map; real scenes);
+VI Limitations and Conclusion; Acknowledgment; References. Planned: four figures (teaser, overview, law and honesty,
+detection) and three tables (detection, maps, real scenes).
+
+The letter numbers its hypotheses consecutively. They map to the protocol's IDs as: letter H1, H2, H3, H4 = protocol
+H1, H2, H3, H4; letter H5 = protocol H9; letter H6 = protocol H10; letter H7 = protocol H7.
+
+## The earlier view-gate letter
+`main_viewgate.tex` with `sections/vg_*.tex`, and `supplement.tex` with `sections/supp_*.tex`, are the previous
+paper, *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface*, kept intact.
+Its depth-only view gate is the depth-consensus baseline of the new letter, and its controlled experiments (E1, the
+pose check) are the source of the figures under `figures/`. `draft_v0.pdf` and `draft_v0_supplement.pdf` are its last
+committed builds. The two documents cross-reference each other with `xr` (prefix `S-` in the letter, `M-` in the
+supplement); run `scripts/xref_prefixes.py` after moving text between them.
 
 ## Double-anonymous review
 Set `\anonymoustrue` near the top of `main.tex` and `supplement.tex` to replace the author block and running

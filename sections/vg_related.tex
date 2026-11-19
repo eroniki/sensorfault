@@ -1,0 +1,19 @@
+\section{Related Work}
+\label{sec:related}
+\runin{Robust and uncertainty-aware reconstruction.} Robust losses \cite{rob_blackrangarajan,rob_barron} and
+distractor-aware methods \cite{gs_robustnerf,gs_spotless,gs_robustsplat} down-weight outlying pixels;
+multi-view filters test pixels by correspondence \cite{fus_merrell,fus_colmap_mvs}. FisherRF
+\cite{unc_fisherrf} and Bayes' Rays \cite{unc_bayesrays} quantify radiance-field uncertainty. None decides
+on a whole view at a stated false-alarm rate; H6 compares their uncertainties inside our test.
+
+\runin{Surfels and splatting.} Point-based fusion associates depth to surfels projectively
+\cite{fus_keller_surfels}; Gaussian splatting uses a differentiable rasteriser \cite{gs_3dgs,gs_gsplat},
+2DGS planar Gaussians \cite{gs_2dgs}, and monocular priors are aligned per view \cite{gs_dnsplatter,rec_monosdf}.
+We fuse through the rasteriser's Jacobians and keep the uncertainty apart from the rendering shape.
+
+\runin{Testing and message passing.} Data snooping and the DIA procedure test a linear Gaussian model for
+misspecified observations \cite{stat_teunissen_dia}; solution separation is equivalent
+\cite{flt_raim_joerger}; removing a Gaussian message is the cavity step of expectation propagation
+\cite{mp_minka_ep}, and Gaussian belief propagation serves spatial AI \cite{mp_davison_gbp}. Our gate is
+such a test with pixels as observations and a rendered surface as the leave-one-out solution
+(Supplement~\ref{S-sup:related}).
