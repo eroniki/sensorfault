@@ -18,6 +18,18 @@ and eps_mi = Lambda_mi^-1 sum_k phi_k dh_k / (...)^2. Records store Lambda at si
 (``Lam0``); the calibrated information is Lam0 / sigma_i^2. The fused depth-only entity is the
 information-weighted combination, which is exactly the least-squares fit of all frames' pixels
 pooled, so records are additive by construction.
+
+Correlated pixel errors. Monocular depth errors are smooth: within one record the pixel errors
+share most of their size, so the information sum above grows with the pixel count while the actual
+error does not. A record-level floor models the shared part: with h = (mean of 1 / (d_hat |n.r|)^2
+over the record's pixels)^-1/2 the metres per unit relative depth error,
+
+    Sigma_mi = sigma_i^2 Lambda0_mi^-1 + (tau_i h_mi)^2 I_3,
+
+where sigma_i is the within-record (white) relative noise and tau_i the relative error shared by
+the record's pixels. ``record_information`` returns Sigma_mi^-1; tau = 0 gives Lam0 / sigma^2.
+Records also keep the white noise estimate ``white`` (weighted residual sum of squares about the
+plane per degree of freedom, at sigma = 1) and ``h``.
 """
 
 from __future__ import annotations
@@ -155,6 +167,14 @@ class Records:
     npix: np.ndarray  # (R,)
     shape_rms: np.ndarray  # (R,) weighted rms of dh about the fitted plane (shape remainder)
     M: int = 0
+    white: np.ndarray | None = None  # (R,) weighted rss / (npix - 3): within-record sigma^2
+    h: np.ndarray | None = None  # (R,) metres per unit relative depth error
+
+    def __post_init__(self):
+        if self.white is None:
+            self.white = np.full(len(self.entity), np.nan)
+        if self.h is None:
+            self.h = np.full(len(self.entity), np.nan)
 
     def subset(self, mask: np.ndarray) -> Records:
         return Records(
@@ -165,6 +185,8 @@ class Records:
             self.npix[mask],
             self.shape_rms[mask],
             self.M,
+            self.white[mask],
+            self.h[mask],
         )
 
     def save(self, path, **extra) -> None:
@@ -177,6 +199,8 @@ class Records:
             npix=self.npix,
             shape_rms=self.shape_rms,
             M=self.M,
+            white=self.white,
+            h=self.h,
             **extra,
         )
 
@@ -246,7 +270,9 @@ def frame_records(
     # weighted residual sum of squares = sum w dh^2 - eps^T b
     rss = np.maximum(swr2[idx] - np.sum(eps * b[idx], 1), 0)
     shape = np.sqrt(rss / sw[idx])
-    return Records(idx, np.full(len(idx), view["frame"]), A[idx], eps, cnt[idx], shape, M)
+    white = rss / np.maximum(cnt[idx] - 3, 1)
+    h = np.sqrt(cnt[idx] / sw[idx])
+    return Records(idx, np.full(len(idx), view["frame"]), A[idx], eps, cnt[idx], shape, M, white, h)
 
 
 def concat(recs: Sequence[Records]) -> Records:
@@ -260,15 +286,37 @@ def concat(recs: Sequence[Records]) -> Records:
         np.concatenate([r.npix for r in recs]),
         np.concatenate([r.shape_rms for r in recs]),
         M,
+        np.concatenate([r.white for r in recs]),
+        np.concatenate([r.h for r in recs]),
     )
 
 
-def fuse(rec: Records, sigma: Mapping[int, float] | np.ndarray | float = 1.0):
+def record_information(rec: Records, sigma=1.0, tau=None) -> np.ndarray:
+    """Per-record information (R, 3, 3): (sigma^2 Lam0^-1 + (tau h)^2 I)^-1, or Lam0 / sigma^2.
+
+    ``sigma`` and ``tau`` are each a scalar, a frame -> value mapping or an array by frame."""
+    s = _sigma_of(rec.frame, sigma)
+    if tau is None:
+        return rec.Lam0 / (s**2)[:, None, None]
+    t = _sigma_of(rec.frame, tau)
+    if not np.any(t > 0):
+        return rec.Lam0 / (s**2)[:, None, None]
+    C = (s**2)[:, None, None] * np.linalg.inv(rec.Lam0)
+    C = C + ((t * rec.h) ** 2)[:, None, None] * np.eye(3)
+    return np.linalg.inv(C)
+
+
+def record_z2(rec: Records, sigma=1.0, tau=None) -> np.ndarray:
+    """Single-frame z^2 of each record under the noise model (sigma, tau)."""
+    return np.einsum("ri,rij,rj->r", rec.eps, record_information(rec, sigma, tau), rec.eps)
+
+
+def fuse(rec: Records, sigma: Mapping[int, float] | np.ndarray | float = 1.0, tau=None):
     """Depth-only fused entities: (Lam (M, 3, 3), eps (M, 3), n_frames (M,)).
 
-    ``sigma`` is a scalar, a frame -> sigma mapping, or an array indexed by frame."""
-    s = _sigma_of(rec.frame, sigma)
-    Lam = rec.Lam0 / (s**2)[:, None, None]
+    ``sigma`` (and the optional record floor ``tau``) is a scalar, a frame -> value mapping, or an
+    array indexed by frame."""
+    Lam = record_information(rec, sigma, tau)
     M = rec.M
     LamF = np.zeros((M, 3, 3))
     eta = np.zeros((M, 3))

@@ -104,7 +104,8 @@ def rho_hat(ps: Mapping, B: int, idx: np.ndarray | None = None) -> float:
     r, n = rr["r"], rr["n_pairs"]
     s = np.arange(len(r))
     sel = (s > max(B, 0)) & (n > 0)
-    return float(np.mean(r[sel])) if sel.any() else float("nan")
+    # pair-count weighted: separations with few pairs (the strip ends) count for little
+    return float(np.sum(r[sel] * n[sel]) / np.sum(n[sel])) if sel.any() else float("nan")
 
 
 def law_terms(rec, fused_eps: np.ndarray, n_frames: np.ndarray) -> dict:

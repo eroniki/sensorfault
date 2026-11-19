@@ -163,26 +163,81 @@ def depth_residual(depths, views):
     return {"median_rel": float(np.median(rel)), "p90_rel": float(np.percentile(rel, 90))}
 
 
-def calibrate_sigma(rec, ent, land, min_rec=30):
-    """A8: per-frame sigma so that single-frame s_z = 1 on calibration tiles (land)."""
-    q = np.einsum("ri,rij,rj->r", rec.eps, rec.Lam0, rec.eps)
-    use = (ent.role[rec.entity] == tl.CAL) & land[rec.entity]
-    glob = float(np.sqrt(np.median(q[use]) / cal.CHI2_MEDIAN)) if use.any() else 1.0
-    sig = {}
-    n_own = 0
-    for f in np.unique(rec.frame):
-        m = use & (rec.frame == f)
-        if m.sum() >= min_rec:
-            sig[int(f)] = float(np.sqrt(np.median(q[m]) / cal.CHI2_MEDIAN))
-            n_own += 1
+def _z2_of_tau(proj2, lam, h, s2, t):
+    """z^2 of records with Lam0 eigen-pairs (lam, projections^2 of eps) under (sigma^2, tau)."""
+    return np.sum(proj2 / (s2[:, None] / lam + (t * h)[:, None] ** 2), 1)
+
+
+def _solve_tau(proj2, lam, h, s2, target=cal.CHI2_MEDIAN):
+    """Smallest tau >= 0 with median z^2 <= target (bisection on log tau)."""
+    if np.median(_z2_of_tau(proj2, lam, h, s2, 0.0)) <= target:
+        return 0.0
+    lo, hi = 1e-6, 1.0
+    while np.median(_z2_of_tau(proj2, lam, h, s2, hi)) > target and hi < 1e3:
+        hi *= 4
+    for _ in range(60):
+        mid = np.sqrt(lo * hi)
+        if np.median(_z2_of_tau(proj2, lam, h, s2, mid)) > target:
+            lo = mid
         else:
-            sig[int(f)] = glob
-    return sig, glob, n_own
+            hi = mid
+    return float(hi)
 
 
-def single_frame_z2(rec, sigma):
-    s = rc._sigma_of(rec.frame, sigma)
-    return np.einsum("ri,rij,rj->r", rec.eps, rec.Lam0, rec.eps) / s**2
+def calibrate_noise(rec, ent, land, model="floor", min_rec=30):
+    """A8: per-frame noise model calibrated on calibration tiles (land).
+
+    ``white``: one sigma per frame so that the median single-frame z^2 is the chi2_3 median (pixel
+    errors taken as independent). ``floor``: sigma_i from the within-record residual about the
+    plane (``rec.white``), then the record floor tau_i so that the median single-frame z^2 is the
+    chi2_3 median; frames with fewer than ``min_rec`` calibration records take the global values.
+    Returns (sigma, tau or None, info)."""
+    use = (ent.role[rec.entity] == tl.CAL) & land[rec.entity]
+    frames = np.unique(rec.frame)
+    if model == "white":
+        q = np.einsum("ri,rij,rj->r", rec.eps, rec.Lam0, rec.eps)
+        glob = float(np.sqrt(np.median(q[use]) / cal.CHI2_MEDIAN)) if use.any() else 1.0
+        sig, n_own = {}, 0
+        for f in frames:
+            m = use & (rec.frame == f)
+            own = m.sum() >= min_rec
+            sig[int(f)] = float(np.sqrt(np.median(q[m]) / cal.CHI2_MEDIAN)) if own else glob
+            n_own += int(own)
+        return sig, None, {"model": "white", "sigma_global": glob, "frames_with_own": n_own}
+    lam, V = np.linalg.eigh(rec.Lam0)
+    proj2 = np.einsum("rji,rj->ri", V, rec.eps) ** 2
+    wh = np.where(np.isfinite(rec.white) & (rec.white > 0), rec.white, np.nan)
+    s_glob = float(np.sqrt(np.nanmedian(wh[use]))) if use.any() else 1.0
+    sig, n_own = {}, 0
+    for f in frames:
+        m = use & (rec.frame == f) & np.isfinite(wh)
+        own = m.sum() >= min_rec
+        sig[int(f)] = float(np.sqrt(np.median(wh[m]))) if own else s_glob
+        n_own += int(own)
+    s2 = rc._sigma_of(rec.frame, sig) ** 2
+    t_glob = _solve_tau(proj2[use], lam[use], rec.h[use], s2[use]) if use.any() else 0.0
+    tau = {}
+    for f in frames:
+        m = use & (rec.frame == f)
+        own = m.sum() >= min_rec
+        tau[int(f)] = _solve_tau(proj2[m], lam[m], rec.h[m], s2[m]) if own else t_glob
+    tv = np.array(list(tau.values()))
+    return (
+        sig,
+        tau,
+        {
+            "model": "floor",
+            "sigma_global": s_glob,
+            "tau_global": t_glob,
+            "tau_median": float(np.median(tv)),
+            "tau_p10_p90": [float(np.percentile(tv, 10)), float(np.percentile(tv, 90))],
+            "frames_with_own": n_own,
+        },
+    )
+
+
+def single_frame_z2(rec, sigma, tau=None):
+    return rc.record_z2(rec, sigma, tau)
 
 
 def metric_rows(z2v, ld, tiles, groups, n_boot, seed):
@@ -290,6 +345,12 @@ def main(argv=None):
     ap.add_argument("--datum", choices=["parallax", "calibration"], default="calibration")
     ap.add_argument("--water-level", type=float, default=-3.0)
     ap.add_argument("--roof-height", type=float, default=6.0)
+    ap.add_argument(
+        "--noise",
+        choices=["floor", "white"],
+        default="floor",
+        help="record noise model: white pixel noise plus a record-level floor, or white only",
+    )
     ap.add_argument("--white-noise", type=float, default=0.002)
     ap.add_argument("--planted-rho", type=float, default=0.3)
     ap.add_argument("--planted-tau", type=float, default=0.5)
@@ -374,11 +435,13 @@ def main(argv=None):
     # A7: records; additivity
     rec = rc.concat([rc.frame_records(K, v, al.depth[i], ent) for i, v in enumerate(views)])
     land = cls != clm.WATER
-    sigma, s_glob, n_own = calibrate_sigma(rec, ent, land)  # A8
-    LamF, epsF, nF = rc.fuse(rec, sigma)
+    sigma, tau, noise_info = calibrate_noise(rec, ent, land, a.noise)  # A8
+    LamF, epsF, nF = rc.fuse(rec, sigma, tau)
     fr_sorted = np.unique(rec.frame)
     half = np.isin(rec.frame, fr_sorted[::2])
-    m2 = rc.merge_fused(rc.fuse(rec.subset(half), sigma), rc.fuse(rec.subset(~half), sigma))
+    m2 = rc.merge_fused(
+        rc.fuse(rec.subset(half), sigma, tau), rc.fuse(rec.subset(~half), sigma, tau)
+    )
     seen = nF > 0
     add_err = float(
         np.max(
@@ -389,6 +452,7 @@ def main(argv=None):
     rec.save(
         out / "records.npz",
         sigma=np.array([sigma[int(f)] for f in fr_sorted]),
+        tau=np.array([tau[int(f)] if tau else 0.0 for f in fr_sorted]),
         sigma_frames=fr_sorted,
         fused_Lam=LamF,
         fused_eps=epsF,
@@ -410,7 +474,7 @@ def main(argv=None):
     }
 
     # A8 check on held-out tiles
-    z1 = single_frame_z2(rec, sigma)
+    z1 = single_frame_z2(rec, sigma, tau)
     held_r = ent.role[rec.entity] == tl.HELD
     lr = held_r & land[rec.entity]
     sz1 = cal.tile_bootstrap(
@@ -420,8 +484,9 @@ def main(argv=None):
         seed=a.seed,
     )
     log["single_frame"] = {
-        "sigma_global": s_glob,
-        "frames_with_own_sigma": n_own,
+        "noise": noise_info,
+        "sigma_global": noise_info["sigma_global"],
+        "frames_with_own_sigma": noise_info["frames_with_own"],
         "s_z_heldout_land": sz1,
         "pass": bool(0.9 <= sz1["estimate"] <= 1.1),
     }
@@ -510,10 +575,10 @@ def main(argv=None):
     # A12: consensus gate, re-fused without flagged frames
     gate_rows = {}
     for B in (1, 3, 5, 9):
-        st = cg.frame_statistics(rec, finfo, sigma, B=B)
+        st = cg.frame_statistics(rec, finfo, sigma, B=B, tau=tau)
         g = cg.gate(st)
         keep = ~np.isin(rec.frame, g["flagged"])
-        Lg, eg, ng = rc.fuse(rec.subset(keep), sigma)
+        Lg, eg, ng = rc.fuse(rec.subset(keep), sigma, tau)
         sg = held & (ng >= MIN_N_H1) & land
         z2g = cal.z2(np.nan_to_num(eg[sg]), Lg[sg])
         row = {
@@ -588,6 +653,17 @@ def _ci(c, nd=3):
     return f"{_f(c['estimate'], nd)} [{_f(c['lo'], nd)}, {_f(c['hi'], nd)}]" if c else "n/a"
 
 
+def _noise_line(nz) -> str:
+    if nz["model"] == "white":
+        return f"- Noise model: white pixel noise, global sigma {_f(nz['sigma_global'], 4)}."
+    lo, hi = nz["tau_p10_p90"]
+    return (
+        f"- Noise model: white pixel noise sigma (global {_f(nz['sigma_global'], 4)}) plus a "
+        f"record floor tau (global {_f(nz['tau_global'], 4)}, per-frame median "
+        f"{_f(nz['tau_median'], 4)}, p10-p90 {_f(lo, 4)}-{_f(hi, 4)})."
+    )
+
+
 def render_summary(log) -> str:
     a = log["args"]
     L = [
@@ -618,6 +694,7 @@ def render_summary(log) -> str:
         f"- **H2** (realised/predicted fused variance in [0.67, 1.5] per n-bin): **{log['H2']['decision']}**.",
         f"- A8 single-frame calibration on held-out land: s_z = {_ci(log['single_frame']['s_z_heldout_land'])}, "
         f"{'pass' if log['single_frame']['pass'] else 'FAIL (noise model at fault, H1 undefined)'}.",
+        _noise_line(log["single_frame"]["noise"]),
         "",
     ]
     al = log["alignment"]

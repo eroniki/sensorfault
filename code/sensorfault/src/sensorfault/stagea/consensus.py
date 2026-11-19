@@ -15,12 +15,13 @@ from collections.abc import Mapping
 import numpy as np
 from scipy import stats
 
-from sensorfault.stagea.records import _sigma_of
+from sensorfault.stagea.records import record_information
 
 
-def frame_statistics(rec, frame_info: Mapping[int, Mapping], sigma, B: int = 3) -> dict[int, dict]:
-    s = _sigma_of(rec.frame, sigma)
-    Lam = rec.Lam0 / (s**2)[:, None, None]
+def frame_statistics(
+    rec, frame_info: Mapping[int, Mapping], sigma, B: int = 3, tau=None
+) -> dict[int, dict]:
+    Lam = record_information(rec, sigma, tau)
     eta = np.einsum("rij,rj->ri", Lam, rec.eps)
     M = rec.M
     LamF = np.zeros((M, 3, 3))

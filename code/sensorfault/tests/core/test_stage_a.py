@@ -160,3 +160,40 @@ def test_consensus_gate_flags_shifted_frame(block):
     info = {v["frame"]: v for v in views}
     g = cg.gate(cg.frame_statistics(rec, info, 0.005, B=1))
     assert views[3]["frame"] in g["flagged"]
+
+
+def test_record_floor_removes_pixel_count_growth(block):
+    """Errors shared by a record's pixels: with white noise only, z^2 grows with the pixel count;
+    with the record floor it does not, and fusion stays additive."""
+    K, views, ent = block
+    rng = np.random.default_rng(3)
+    recs = []
+    for v in views:
+        d = v["depth"]
+        eid = ent.pixel_entity[v["frame"]]
+        shared = 0.02 * rng.normal(size=ent.M)
+        rel = np.where(eid >= 0, shared[np.maximum(eid, 0)], 0.0)
+        noisy = d * (1 + rel) * (1 + 0.002 * rng.normal(size=d.shape))
+        recs.append(rc.frame_records(K, v, noisy, ent))
+    recs = rc.concat(recs)
+    assert np.all(np.isfinite(recs.white)) and np.all(recs.h > 0)
+    lo, hi = np.percentile(recs.npix, [33, 67])
+    small, large = recs.npix <= lo, recs.npix >= hi
+
+    def growth(z):
+        return np.median(z[large]) / np.median(z[small])
+
+    # white only: z^2 grows like the pixel count (about 9 vs 12 pixels here)
+    assert growth(rc.record_z2(recs, 0.002)) > 1.3
+    assert 0.85 < growth(rc.record_z2(recs, 0.002, 0.02)) < 1.15
+    # tau = 0 is the white model; the floor only lowers information
+    np.testing.assert_allclose(rc.record_information(recs, 0.002, 0.0), recs.Lam0 / 0.002**2)
+    L1 = rc.record_information(recs, 0.002, 0.02)
+    assert np.all(np.linalg.eigvalsh(recs.Lam0 / 0.002**2 - L1) > -1e-6 * np.abs(L1).max())
+    half = recs.frame % 2 == 0
+    joint = rc.fuse(recs, 0.002, 0.02)
+    merged = rc.merge_fused(
+        rc.fuse(recs.subset(half), 0.002, 0.02), rc.fuse(recs.subset(~half), 0.002, 0.02)
+    )
+    seen = joint[2] > 0
+    np.testing.assert_allclose(merged[0][seen], joint[0][seen], rtol=1e-9)
