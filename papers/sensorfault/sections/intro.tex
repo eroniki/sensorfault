@@ -11,7 +11,8 @@ The danger is an error that repeats. On a given surface a depth model tends to m
 every frame, so the depth maps agree with each other and averaging them removes only the part of the error
 that differs between frames. If a share $\varrho$ of the error variance is common to the $n$ frames that
 see a surface, the variance of their fused estimate is $\varrho+(1-\varrho)/n$ times that of one frame,
-whereas the fused information claims $1/n$. Tests that compare each depth map with the others
+whereas the fused information claims $1/n$: the stated variance is too small by $1+(n-1)\varrho$, which
+grows without bound with the number of frames. Tests that compare each depth map with the others
 \cite{stat_teunissen_dia,flt_raim_joerger,fus_colmap_mvs} are blind to the common part by construction.
 
 The pixels are the only independent witness, and they speak about geometry only through a coupling: an
@@ -28,6 +29,8 @@ and neighbouring pixels are not independent; uncertainty fields derived from the
 \cite{unc_fisherrf,unc_pup3dgs,unc_ougs} are used to rank views or prune primitives, where only the order
 matters. We calibrate it on the scene, without labels, from frame replicates and from displacements
 injected through the renderer, and we cap the information of the prior at what its repeated error allows.
+The disagreement is read as a score test at the surface the depth prior placed, with colour projected from
+other frames, so that a wrong surface cannot be hidden by refitting its appearance.
 
 We contribute:
 \begin{itemize}

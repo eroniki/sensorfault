@@ -17,8 +17,9 @@ baseline \cite{dep_reliability}. These are masks without a stated error rate; th
 Robust losses and distractor-aware splatting \cite{rob_barron,gs_robustnerf,gs_spotless} down-weight
 outlying pixels, not a prior that is wrong consistently.
 
-\runin{Fusion of correlated sources and testing.} Information-form fusion of surfels follows point-based
-fusion \cite{fus_keller_surfels}; fusing sources whose correlation is unknown calls for conservative
+\runin{Fusion of correlated sources and testing.} Multi-view stereo keeps a depth only where several views
+agree \cite{fus_merrell,fus_colmap_mvs}; with a monocular prior that repeats its error, the views agree on
+the wrong surface. Information-form fusion of surfels follows point-based fusion \cite{fus_keller_surfels}; fusing sources whose correlation is unknown calls for conservative
 rules such as covariance intersection \cite{fus_julier_ci}, of which our saturated prior is a special
 case with the correlation estimated. Testing an estimate against independent evidence is data snooping and
 solution separation \cite{stat_teunissen_dia,flt_raim_joerger}. Calibration is scored with a proper rule

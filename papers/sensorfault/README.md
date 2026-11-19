@@ -14,7 +14,7 @@ all frames repeat, that the pixel-against-depth test detects repeated faults tha
 that the pixel information can be calibrated on the scene without labels.
 
 **Status: no experiment of this paper has been run.** Every number is a red placeholder (`\ph{...}`, `\TODO{...}`,
-`\todocell`), the four figures are placeholder boxes, and the letter builds to 5 pages in that state. Statements
+`\todocell`), the four figures are placeholder boxes, and the letter builds to 5 pages of text plus references in that state. Statements
 about the closest prior work rest on abstracts (`refs/EVIDENCE.md`).
 
 ## Build
@@ -22,6 +22,7 @@ about the closest prior work rest on abstracts (`refs/EVIDENCE.md`).
 scripts/build.sh             # output: build/main.pdf (TeX Live; uses ./latexmkrc)
 scripts/build_viewgate.sh    # the earlier view-gate letter and its supplement (see below)
 ```
+`draft_v4.pdf` is the last committed build of this letter; `draft_v0.pdf` and `draft_v0_supplement.pdf` are the earlier view-gate letter.
 Class and bibliography style `IEEEtran`, from TeX Live (`texlive-publishers`). RA-L allows 6 pages plus up to 2 paid
 extra pages, references included, and **no supplementary PDF** (video only), so the letter stands alone. The abstract
 limit is 1,200 characters in the submission form; the current text is 1,181 with one-letter placeholders. Set
