@@ -1,6 +1,7 @@
 """view_gate with the real ViewGateTest on the numpy reference backend (CPU, tiny scene)."""
 
 import numpy as np
+import pytest
 
 from sensorfault.gs.fusers import ViewGate
 from sensorfault.gs.reference import NumpyReferenceBackend
@@ -41,16 +42,19 @@ def _excluded(res):
     return {v for v, flag in res.excluded_sensors.items() if flag}
 
 
+@pytest.mark.slow
 def test_view_gate_excludes_only_the_biased_view():
     res = _fuse(_scene(bias_view=3))
     assert _excluded(res) == {"v3"}
     assert "rounds" in res.meta
 
 
+@pytest.mark.slow
 def test_view_gate_excludes_off_grid_fault():
     res = _fuse(_scene(bias_view=3, region=(5, 17, 7, 19)))
     assert "v3" in _excluded(res)
 
 
+@pytest.mark.slow
 def test_view_gate_clean_scene_excludes_nothing():
     assert _excluded(_fuse(_scene())) == set()
