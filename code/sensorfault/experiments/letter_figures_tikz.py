@@ -44,7 +44,7 @@ STAGE_A_RUNS = [
     ("block3_control_repeated", "exact + rep. ($\\varrho{=}0.3$)", False),
 ]
 LAW_RUN = "block3_depth_pro_s20"
-# representative n of each n bin of the law table (geometric centre of the bin; 17+ taken as 17-32)
+# representative n of each n bin of the law table (geometric center of the bin; 17+ taken as 17-32)
 N_BIN_CENTRE = {
     "1": 1.0,
     "2": 2.0,
@@ -65,8 +65,8 @@ def f(x: float, p: int = 4) -> str:
 def teaser() -> str:
     """3D schematic, three panels (figure*): frames over two buildings; every frame's depth places the roof
     of the larger one 2.5 m too low, the smaller one is placed right. (a) the scene and the frames; (b) the
-    depth-only surfel map coloured by its standardised error, with the stated 2-sigma slab; (c) the
-    per-source map coloured by the energy between depth prior and pixels, with the honest slab."""
+    depth-only surfel map colored by its standardized error, with the stated 2-sigma slab; (c) the
+    per-source map colored by the energy between depth prior and pixels, with the honest slab."""
     rng = np.random.default_rng(3)
     n, sig, rho = 12, 1.0, 0.65  # frames, single-frame sd [m], repeated share
     # buildings: x0, x1, y0, y1, true height [m], repeated depth error [m]
@@ -126,7 +126,7 @@ def teaser() -> str:
     def walls(b, zt):
         x0, x1, y0, y1 = b[:4]
         st = "fill=black!7, draw=black!45, line width=0.3pt"
-        # back faces first, then the faces towards the viewer (view from -x, -y)
+        # back faces first, then the faces toward the viewer (view from -x, -y)
         return "\n".join(
             [
                 quad([(x1, y0, 0), (x1, y1, 0), (x1, y1, zt), (x1, y0, zt)], st),
@@ -200,7 +200,7 @@ def teaser() -> str:
     for (cx, cy, cz), (tx, ty) in zip(cams, targets, strict=True):
         lam = (cz - zt) / (
             cz - b[4]
-        )  # ray towards the true roof point, stopped at the depth-placed height
+        )  # ray toward the true roof point, stopped at the depth-placed height
         hx, hy = cx + lam * (tx - cx), cy + lam * (ty - cy)
         rays.append(
             rf"\draw[sfred, line width=0.45pt, densely dashed] (axis cs:{cx},{cy},{cz}) -- (axis cs:{hx:.2f},{hy:.2f},{zt:.2f});"
@@ -230,7 +230,7 @@ def teaser() -> str:
 {scale_bar}
 \end{{axis}}
 \begin{{axis}}[{common}, at={{(a.south east)}}, anchor=south west, xshift=0.1cm, zmax=14, name=b, colormap name=sfrdbu, point meta min=-8, point meta max=8,
-  {cb.format(ticks="xtick={-8,-4,0,4,8}", label="standardised error $z$")}]
+  {cb.format(ticks="xtick={-8,-4,0,4,8}", label="standardized error $z$")}]
 {scene(2, 3, "z", False)}
 \end{{axis}}
 \begin{{axis}}[{common}, at={{(b.south east)}}, anchor=south west, xshift=0.1cm, zmax=14, name=c, colormap name=sfviridis, point meta min=0, point meta max=6,
@@ -399,7 +399,7 @@ def stage_a(d: dict) -> str:
 \addplot[sfred, line width=0.8pt] coordinates {{{pred}}};
 \addlegendentry{{$\hat\varrho+(1-\hat\varrho)/n$}}
 \addplot[black, only marks, mark=square*, mark size=1.4pt] coordinates {{{real}}};
-\addlegendentry{{realised}}
+\addlegendentry{{realized}}
 \end{{groupplot}}
 \end{{tikzpicture}}
 """

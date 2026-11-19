@@ -59,7 +59,7 @@ head with "Anonymous". The repository URL TODO in the Acknowledgment must stay a
 - `refs/references.bib` cited entries only; `refs/EVIDENCE.md` how each was checked
 - `figures/e1/` E1 figures (pgfplots) and summary table, with their CSV data, copied from `code/sensorfault/results/e1/figures/` (regenerate there with `experiments/e1_figures.py`); `figures/e1q/` E1 qualitative checks (PNG panels and LaTeX), copied from `results/e1/qualitative/` (regenerate with `experiments/e1_qualitative.py`); remaining placeholders are drawn by `\todofig` in `sections/macros.tex`
 
-## Licence note
+## License note
 `IEEEtran` is distributed with TeX Live (LPPL). Keep this repository private until the preprint is released.
 Original text in `sections/` and `main.tex` is the author's.
 

@@ -25,16 +25,16 @@ same three coordinates, an offset along the normal and two tilts (Fig.~\ref{fig:
 disagreement is then a statistic with units and a null distribution.
 
 Stiffness computed from rendering residuals is not honest as it stands, because residuals are model misfit
-and neighbouring pixels are not independent; uncertainty fields derived from the rendering Hessian
+and neighboring pixels are not independent; uncertainty fields derived from the rendering Hessian
 \cite{unc_fisherrf,unc_pup3dgs,unc_ougs} are used to rank views or prune primitives, where only the order
 matters. We calibrate it on the scene, without labels, from frame replicates and from displacements
 injected through the renderer, and we cap the information of the prior at what its repeated error allows.
-The disagreement is read as a score test at the surface the depth prior placed, with colour projected from
+The disagreement is read as a score test at the surface the depth prior placed, with color projected from
 other frames, so that a wrong surface cannot be hidden by refitting its appearance.
 
 We contribute:
 \begin{itemize}
-  \item per-source information records on planar surfels, built on the factorisation of the image Jacobian
+  \item per-source information records on planar surfels, built on the factorization of the image Jacobian
         through the depth Jacobian; records add over frames and tiles (Section~\ref{sec:method:records});
   \item the overconfidence law $\varrho+(1-\varrho)/n$ for depth-only fusion and a score test at the
         depth-placed surface that detects repeated depth faults, both compared with a depth-consensus gate
@@ -53,8 +53,8 @@ are run.}
 \input{\lfigdir/fig_teaser.tex}
 \caption{A depth-only map is confidently wrong where the depth model repeats its error (schematic, surfels of
 2~m). (a) Every frame's depth places the larger roof 2.5~m below the true roof (dashed), so the $n=12$ depth
-maps agree with each other. (b) The depth-only map, coloured by its standardised error $z$: its stated
-$2\sigma$ slab (black) is thin and lies wholly below the true roof. (c) The per-source map, coloured by the
+maps agree with each other. (b) The depth-only map, colored by its standardized error $z$: its stated
+$2\sigma$ slab (black) is thin and lies wholly below the true roof. (c) The per-source map, colored by the
 energy $E_m$ between the depth prior and the pixels: the energy is high only on the faulty roof, the depth
 record is left out there, and the honest $2\sigma$ slab (red) contains the true roof on both buildings.}
 \label{fig:teaser}

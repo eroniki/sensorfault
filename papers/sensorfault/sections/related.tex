@@ -10,7 +10,7 @@ and use it as a relative score. We keep one record per source on shared geometri
 its absolute value, and test one source against the other.
 
 \runin{Monocular depth in splatting.} Depth priors are aligned per view and added as a loss
-\cite{gs_dnsplatter,rec_monosdf}; large-scale systems accept them as an optional regulariser
+\cite{gs_dnsplatter,rec_monosdf}; large-scale systems accept them as an optional regularizer
 \cite{gs_hierarchical}. Recent work selects where to trust the prior, by a rendered-depth consistency
 check with a hand-set threshold \cite{dep_indepthwetrust} or by photometric agreement of an image-only
 baseline \cite{dep_reliability}. These are masks without a stated error rate; they are baselines here.
@@ -24,4 +24,4 @@ rules such as covariance intersection \cite{fus_julier_ci}, of which our saturat
 case with the correlation estimated. Testing an estimate against independent evidence is data snooping and
 solution separation \cite{stat_teunissen_dia,flt_raim_joerger}. Calibration is scored with a proper rule
 \cite{stat_gneiting_scoring}; temperature scaling \cite{cal_guo_temperature} is the single-parameter
-analogue of our dispersion.
+analog of our dispersion.

@@ -5,11 +5,11 @@ are placeholders; the tables show the planned layout only.}}
 
 \subsection{A Depth-Only Map Is Overconfident}
 \label{sec:results:law}
-\TODO{Stage A on the exact-depth block with Depth Pro: scale of the standardised placement error of the
-depth-only map (H1); repeated share $\varrho$ per surface class as a function of the block size; realised
+\TODO{Stage A on the exact-depth block with Depth Pro: scale of the standardized placement error of the
+depth-only map (H1); repeated share $\varrho$ per surface class as a function of the block size; realized
 against predicted variance ratio per number of frames (H2); the same after the depth-consensus gate.}
 A preliminary controlled experiment with injected faults on exact geometry points the same way: a
-depth-consensus gate that leaves out a block of three neighbouring frames detected no more repeated faulty
+depth-consensus gate that leaves out a block of three neighboring frames detected no more repeated faulty
 frames than one that leaves out a single frame. \TODO{Report it here with its setting, or cut.}
 
 A first Stage A run on the exact-depth block (Fig.~\ref{fig:law}) points the same way for every depth model:
@@ -21,12 +21,12 @@ frame is not yet calibrated, so H1 is not yet decided. \TODO{Replace with the St
 \centering
 \input{\lfigdir/fig_stage_a.tex}
 \caption{\textcolor{red}{\textbf{[PRELIMINARY]}} Stage A on MatrixCity block 3 (one scene, held-out tiles). (a) Scale of
-the standardised error $s_z$ (1 if honest) of the depth-only map on land seen by $n\ge5$ frames (black) and
+the standardized error $s_z$ (1 if honest) of the depth-only map on land seen by $n\ge5$ frames (black) and
 of a single frame (orange), per depth model and for exact depth with independent and with repeated noise;
 open markers: alignment not converged; bars: 95\% tile-bootstrap intervals; dashed: the H1 bar. The single
 frame is not calibrated for any real model, so H1 is formally undefined. (b) Repeated share of Depth Pro
 against the strip gap between frame pairs, with its permutation null. (c) Variance of the fused error relative
-to one frame against $n$: stated, predicted from $\hat\varrho$, and realised.}
+to one frame against $n$: stated, predicted from $\hat\varrho$, and realized.}
 \label{fig:law}
 \end{figure*}
 
@@ -34,7 +34,7 @@ to one frame against $n$: stated, predicted from $\hat\varrho$, and realised.}
 \label{sec:results:honest}
 \TODO{Stage 0 and Stage B: finite-difference check of \eqref{eq:factor}; recovery of injected
 displacements against their size per image scale (capture range, H3); noncentrality of realistic faults
-(H4); stated against realised information on textured land, roofs and water.}
+(H4); stated against realized information on textured land, roofs and water.}
 
 \subsection{Repeated Faults Are Detected Where Consensus Is Blind}
 \label{sec:results:detection}
@@ -78,7 +78,7 @@ Fisher field, single source & \todocell & \todocell & \todocell \\
 \begin{table}[!t]
 \centering
 \caption{Maps on the held-out tiles: surface log-score [nats per entity, lower is better], scale of the
-standardised error (1 if honest) and coverage at the nominal 95\%.
+standardized error (1 if honest) and coverage at the nominal 95\%.
 \textcolor{red}{\textbf{[PLACEHOLDER]}}}
 \label{tab:maps}
 \begin{tabular}{@{}lccc@{}}
@@ -101,12 +101,12 @@ Information fusion, gated & \todocell & \todocell & \todocell \\
 
 \begin{table}[!t]
 \centering
-\caption{Real scenes with laser depth: scale of the standardised error of the depth-only map, repeated
-share $\varrho$, and realised over predicted variance. \textcolor{red}{\textbf{[PLACEHOLDER]}}}
+\caption{Real scenes with laser depth: scale of the standardized error of the depth-only map, repeated
+share $\varrho$, and realized over predicted variance. \textcolor{red}{\textbf{[PLACEHOLDER]}}}
 \label{tab:real}
 \begin{tabular}{@{}lccc@{}}
 \toprule
-Depth model & Scale & $\varrho$ & Realised / predicted \\
+Depth model & Scale & $\varrho$ & Realized / predicted \\
 \midrule
 Depth Pro & \todocell & \todocell & \todocell \\
 Metric3D v2 & \todocell & \todocell & \todocell \\

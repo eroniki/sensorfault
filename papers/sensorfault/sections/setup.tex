@@ -11,9 +11,9 @@ ETH3D \cite{data_eth3d} supplies real images with laser depth (13 scenes). Depth
 the primary depth model; Metric3D~v2, UniDepthV2 and Depth Anything~V2
 \cite{est_metric3dv2,est_unidepth,est_dav2} set the scope.
 
-\runin{Implementation.} Surfels are rasterised with gsplat \cite{gs_gsplat}; the records
+\runin{Implementation.} Surfels are rasterized with gsplat \cite{gs_gsplat}; the records
 \eqref{eq:depthrecord} and \eqref{eq:imagerecord} are accumulated from its backward pass, and the
-factorisation \eqref{eq:factor} is checked against central finite differences on a reference renderer
+factorization \eqref{eq:factor} is checked against central finite differences on a reference renderer
 written independently of it. Source and judging frames alternate along each strip, so both sets span the
 same baselines. \TODO{Hardware and time per frame.}
 
@@ -25,13 +25,13 @@ Map-level injection, which moves surfels and re-renders, calibrates the pixel in
 (Section~\ref{sec:method:honest}) and measures its capture range.
 
 \runin{Baselines.} Depth only; a depth-consensus gate that tests each depth map against the surface of
-the others with a block of neighbouring frames left out \cite{stat_teunissen_dia,flt_raim_joerger}; a
+the others with a block of neighboring frames left out \cite{stat_teunissen_dia,flt_raim_joerger}; a
 fixed and a decaying depth weight; information fusion without saturation; selection of the prior by a
 rendered-depth consistency mask \cite{dep_indepthwetrust} and by a photometric mask
 \cite{dep_reliability}, both reimplemented from their descriptions; a single Fisher information field in
 the style of \cite{unc_fisherrf}.
 
-\runin{Metrics.} The standardised error $z_m$ of Section~\ref{sec:method:fusion} has $z_m^2\sim\chi^2_3$
+\runin{Metrics.} The standardized error $z_m$ of Section~\ref{sec:method:fusion} has $z_m^2\sim\chi^2_3$
 if the map is honest. We report its robust scale $s_z$ (1 if honest), coverage at the nominal 95\%, and
 the surface log-score. An entity is faulty if it lies in an injected region and its true error exceeds
 twice the single-frame standard deviation; detection is the true-positive rate at 5\% false alarms on
@@ -42,10 +42,10 @@ as the resampling unit.
 one side of its threshold.
 \begin{description}\setlength{\itemsep}{1pt}
   \item[H1] \emph{Overconfidence:} $s_z$ of a depth-only map exceeds 1.25.
-  \item[H2] \emph{The law:} the realised fused variance is within $[0.67,1.5]$ of
+  \item[H2] \emph{The law:} the realized fused variance is within $[0.67,1.5]$ of
         $\varrho+(1-\varrho)/n$ (Proposition~\ref{prop:law}).
   \item[H3] \emph{Measurement:} the image record recovers injected displacements up to the size the prior
-        leaves, with relative error at most 0.25; the factorisation \eqref{eq:factor} matches finite
+        leaves, with relative error at most 0.25; the factorization \eqref{eq:factor} matches finite
         differences.
   \item[H4] \emph{Power:} realistic faults carry a noncentrality of at least 11.
   \item[H5] \emph{Detection:} on repeated faults the tension reaches an area under the curve of at
