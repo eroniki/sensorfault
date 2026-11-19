@@ -1,0 +1,41 @@
+\section{Experimental Design}
+\label{sec:setup}
+Hypotheses, metrics and thresholds are fixed on development data and tagged in the code repository before
+any held-out tile or test scene is scored; only public data and released models are used, and no fault
+label enters any fit.
+
+\runin{Data.} MatrixCity \cite{data_matrixcity} gives exact depth and poses for aerial strips; one block is
+the development set, split into calibration and held-out ground tiles of 64~m with a buffer.
+\TODO{State the test blocks once obtained; with one block the tables are marked ``same scene''.}
+ETH3D \cite{data_eth3d} supplies real images with laser depth (13 scenes). Depth Pro \cite{est_depthpro} is
+the primary depth model; Metric3D~v2, UniDepthV2 and Depth Anything~V2
+\cite{est_metric3dv2,est_unidepth,est_dav2} set the scope.
+
+\runin{Faults.} Natural failures are the depth model's own. Injected faults move a region of every depth
+map by the same displacement (repeated), by independent displacements, or in part of the frames, over
+three sizes and five magnitudes.
+
+\runin{Baselines.} Depth only; a depth-consensus gate that tests each depth map against the surface of
+the others with a block of neighbouring frames left out \cite{stat_teunissen_dia,flt_raim_joerger}; a
+fixed and a decaying depth weight; information fusion without saturation; selection of the prior by a
+rendered-depth consistency mask \cite{dep_indepthwetrust} and by a photometric mask
+\cite{dep_reliability}, both reimplemented from their descriptions; a single Fisher information field in
+the style of \cite{unc_fisherrf}.
+
+\runin{Hypotheses.} A hypothesis is supported or refuted only if the 95\% bootstrap interval of its
+metric, resampled over tiles, lies wholly on one side of its threshold.
+\begin{description}\setlength{\itemsep}{1pt}
+  \item[H1] \emph{Overconfidence:} the robust scale of the standardised placement error of a depth-only
+        map exceeds 1.25.
+  \item[H2] \emph{The law:} the realised fused variance is within $[0.67,1.5]$ of
+        $\varrho+(1-\varrho)/n$.
+  \item[H3] \emph{Measurement:} the image record recovers injected displacements up to the size the prior
+        leaves, with relative error at most 0.25; the factorisation \eqref{eq:factor} matches finite
+        differences.
+  \item[H4] \emph{Power:} realistic faults carry a noncentrality of at least 11.
+  \item[H5] \emph{Detection:} on repeated faults the tension reaches an area under the curve of at
+        least 0.9 where the consensus gate stays at or below 0.6.
+  \item[H6] \emph{Null:} on healthy entities the mean of $T_m/3$ lies in $[0.85,1.15]$.
+  \item[H7] \emph{Calibration:} the fused map has a standardised error scale in $[0.8,1.25]$ and coverage
+        within 0.04 of the nominal 95\%.
+\end{description}

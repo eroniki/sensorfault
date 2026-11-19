@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+runs/
+*.pt
+*.ckpt
+*.safetensors
+!figures/data/
+figures/tikz/build/*.aux
+figures/tikz/build/*.log
+figures/tikz/build/*.out
+figures/tikz/build/*.fls
+figures/tikz/build/*.fdb_latexmk
+figures/tikz/build/*.synctex.gz

@@ -1,0 +1,47 @@
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+extends: ../base.yaml
+id: ablations_gate
+status: preregistered_draft
+design: v3_rendered_uncertainty_gate
+hypothesis:
+  id: H6
+  prediction: see h6
+  falsification_criterion: see h6
+  independent_variables: [variant]
+  controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
+  levels: {}
+ablations:
+- {id: A0, name: 'full gate (outer loop: one view per round, no readmission, round cap 10; rendered 10x10
+    uncertainty with opacity frozen after warm-up, Newton leave-view-out, no spawning, scene temperature,
+    shared distance bias, combined statistic)'}
+- {id: A1, name: joint surface (no leave-view-out)}
+- {id: A2, name: keep surfels supported only by the tested view}
+- {id: A3, name: unwhitened residual (constant sigma)}
+- {id: A4, name: energy statistic only}
+- {id: A5, name: region-scan statistic only}
+- {id: A6, name: information deflated by n_eff/n}
+- {id: A7, name: FisherRF-style diagonal Fisher uncertainty}
+- {id: A8, name: Bayes-Rays-style perturbation-field uncertainty}
+- {id: A9, name: colour gradients allowed to update map geometry and opacity (violates the appearance-block
+    rule; colour may still refine poses)}
+- {id: A10, name: evidence (Bayes-factor) criterion instead of chi-square (equivalence check)}
+- {id: A11, name: jackknife inflation of the rendered variance}
+- {id: A12, name: no scene temperature (dev-calibrated noise level only)}
+- {id: A13, name: no shared distance bias}
+- {id: A14, name: 'fold-wise opacity warm-up (K=5, each without one fold)'}
+- {id: A15, name: 'loop off: single pass of train, freeze, fuse, test'}
+- {id: A16, name: outer loop drops all Holm-rejected views per round}
+- {id: A17, name: outer loop down-weights instead of dropping}
+- {id: A18, name: outer loop with readmission of dropped views}
+- {id: A19, name: round cap 3 instead of 10}
+- {id: A20, name: single-view leave-out (B = 1)}
+- {id: A21, name: 'block-size sweep B in {1,3,5,9}'}
+- {id: A22, name: perturbed starting poses}
+baselines: [gate, gate_joint, gate_keep_unsupported, gate_unwhitened, gate_deflated, gate_fisherrf_diag,
+  gate_bayesrays, gate_jackknife_inflated, gate_no_temperature, gate_no_shared_bias, gate_foldwise_warmup,
+  gate_single_pass, gate_drop_all_rejected, gate_downweight, gate_readmit, gate_block_1, gate_perturbed_poses]
+metrics:
+  primary: [false_alarm_rate, detection_power_at_fa_0.05]
+implemented: false

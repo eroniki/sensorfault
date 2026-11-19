@@ -1,0 +1,19 @@
+% ---- shared macros -------------------------------------------------------
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\newcommand{\todocell}{\textcolor{red}{\textbf{TODO}}}
+
+% placeholder figure: a framed box that is clearly marked as not yet produced
+\newcommand{\todofig}[2]{%
+  \begin{figure}[!t]
+    \centering
+    \fbox{\parbox[c][2.6cm][c]{0.92\columnwidth}{\centering
+      \textcolor{red}{\textbf{TODO FIGURE}}}}
+    \caption{#2\ \textcolor{red}{\textbf{[PLACEHOLDER --- not yet produced]}}}
+    \label{fig:#1}
+  \end{figure}}
+
+\newcommand{\runin}[1]{\par\smallskip\noindent\textit{#1}\ }
+\newcommand{\R}{\mathbb{R}}
+\newtheorem{proposition}{Proposition}
+% placeholder for a number that has not been measured yet
+\newcommand{\ph}[1]{\textcolor{red}{[#1]}}

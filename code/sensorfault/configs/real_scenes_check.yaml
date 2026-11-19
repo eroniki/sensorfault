@@ -1,0 +1,42 @@
+# Design v4: per-source information on Gaussian surfels (depth prior against pixels).
+# Protocol: docs/learned-indicator/experiment-design.md; paper: docs/learned-indicator/paper-plan.md.
+# Thresholds are proposals until the pre-registration tag; they are copied from the protocol, which wins.
+id: real_scenes_check
+status: preregistered_draft
+design: v4_per_source_information
+paper: ral_first_submission
+stage: A and B on real imagery
+title: Do the exact-depth findings reappear on real scenes with laser truth?
+hypotheses:
+- id: H1
+  prediction: Depth-only overconfidence on real scenes.
+  primary_metric: s_z per scene and model
+  supported_if: lower bound > 1.25 on at least half of the test scenes
+  refuted_if: upper bound <= 1.25 on all test scenes
+  stop: S1 on real data
+- id: H2
+  prediction: Repetition explains it on real scenes.
+  primary_metric: ratio of realised to predicted fused variance
+  supported_if: interval inside [0.67, 1.5]
+  refuted_if: ratio outside [0.5, 2]
+  stop: S1 on real data
+data:
+  eth3d:
+    dev:
+    - courtyard
+    - facade
+    - office
+    - relief
+    test: the other nine scenes
+    note: laser depth is in distorted geometry and is warped before use
+  usegeo:
+    status: not on disk; optional for the first paper
+    dev: set 1
+    test: sets 2 and 3
+compute: cached depth; CPU
+baselines:
+- depth_only
+- consensus_gate
+paper_items:
+- Table 3 (real scenes)
+implemented: false

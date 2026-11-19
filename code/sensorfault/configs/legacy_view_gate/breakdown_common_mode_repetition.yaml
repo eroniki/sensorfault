@@ -1,0 +1,20 @@
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+extends: ../base.yaml
+id: breakdown_common_mode_repetition
+status: preregistered_draft
+design: v3_rendered_uncertainty_gate
+hypothesis:
+  id: breakdown
+  prediction: 'Views repeat the same error in a region (textureless surfaces, H2), beyond the block or
+    across whole strips: the other views agree with the fault and the gate cannot detect it.'
+  falsification_criterion: Report; not a falsifier.
+  independent_variables: [appearance_class]
+  controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
+  levels:
+    appearance_class: [textureless_roof_road_wall]
+baselines: [no_gate, gate, aligned_rms]
+metrics:
+  primary: [detection_power_at_fa_0.05, untestable_rate, fscore]
+implemented: false

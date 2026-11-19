@@ -1,0 +1,25 @@
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+extends: ../base.yaml
+id: h5_rendered_uncertainty_calibration
+status: preregistered_draft
+design: v3_rendered_uncertainty_gate
+hypothesis:
+  id: H5
+  prediction: 'With independent per-surfel blocks the rendered variance is overconfident: on fault-free
+    views the raw mean T/dof exceeds 1.2. With the leave-view-out scene temperature and the omega-calibrated
+    energy threshold, the per-view false-alarm rate on test scenes lies in [0.5, 1.5] alpha without per-scene
+    retuning; n_eff/n deflation and jackknife inflation are ablations.'
+  falsification_criterion: Falsified if the calibrated false-alarm rate leaves [0.5, 1.5] alpha on test
+    scenes.
+  independent_variables: [noise_scaling, overconfidence_ablation]
+  controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
+  levels:
+    noise_scaling: [raw, temperature]
+    overconfidence_ablation: [none, n_eff_over_n, jackknife]
+baselines: [gate, gate_deflated, gate_jackknife_inflated, gate_no_temperature]
+metrics:
+  primary: [mean_T_over_dof_raw, mean_T_over_dof_temperature_scaled, false_alarm_vs_alpha, gamma_hat_per_scene]
+  raw_overconfidence_min: 1.2
+implemented: false

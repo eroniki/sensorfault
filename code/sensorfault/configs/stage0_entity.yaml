@@ -1,0 +1,50 @@
+# Design v4: per-source information on Gaussian surfels (depth prior against pixels).
+# Protocol: docs/learned-indicator/experiment-design.md; paper: docs/learned-indicator/paper-plan.md.
+# Thresholds are proposals until the pre-registration tag; they are copied from the protocol, which wins.
+id: stage0_entity
+status: preregistered_draft
+design: v4_per_source_information
+paper: ral_first_submission
+stage: '0'
+title: 'Synthetic entity: is the image record a measurement?'
+hypotheses:
+- id: H3
+  prediction: The image record recovers an injected placement of one planar entity.
+  primary_metric: median relative error of the recovered offset per contrast level
+  supported_if: slope of recovered on injected in [0.8, 1.2] with R2 >= 0.9 for parallax <= 1 pixel
+  refuted_if: no recovery at any contrast for parallax <= 1 pixel, or dispersion above 100 at 40% contrast
+  stop: S2
+- id: H14
+  prediction: Records are additive over frames and tiles.
+  primary_metric: relative Frobenius difference of merged against joint information
+  supported_if: <= 1e-6 in float64 and <= 1e-3 in float32
+  refuted_if: larger difference (an arithmetic error, not a statistical outcome)
+  stop: null
+checks:
+  jacobian_finite_difference:
+    median_relative_error_max: 0.01
+  dispersion:
+    replicates: 200
+    cv_max: 0.3
+    mean_z2_over_3:
+    - 0.8
+    - 1.25
+data:
+  scene: planar entity, 20 x 20 surfels at 1 m, band-limited texture at 5/15/40% contrast
+  frames: 9 nadir frames, 100 m, 256 x 256, 80% overlap, exact poses
+  source_frames:
+  - 1
+  - 3
+  - 5
+  - 7
+  - 9
+  judging_frames:
+  - 2
+  - 4
+  - 6
+  - 8
+compute: cpu
+baselines: []
+paper_items:
+- unit test of the factorisation (C1)
+implemented: false

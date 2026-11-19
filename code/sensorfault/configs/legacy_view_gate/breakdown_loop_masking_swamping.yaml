@@ -1,0 +1,24 @@
+# Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders (3DGS camp).
+# Reference design: docs/design-3dgs-bayes.md (sections 1-4, 9, 10; section 8 belongs to a separate paper).
+# Faults are regional and appearance-driven; the gate must beat cheap baselines. Old configs: configs/legacy_sensor_faults/.
+extends: ../base.yaml
+id: breakdown_loop_masking_swamping
+status: preregistered_draft
+design: v3_rendered_uncertainty_gate
+hypothesis:
+  id: breakdown
+  prediction: Masking (a faulty view hidden while other faulty views shape the surface) and swamping (a
+    clean view flagged because faulty views distort the surface) across rounds of the outer loop; also
+    loops that hit the round cap.
+  falsification_criterion: Report detections and clean exclusions per round vs the number of faulty views
+    in a region; not a falsifier.
+  independent_variables: [n_faulty_views_in_region, outer_loop_policy, round_cap]
+  controlled_variables: [depth_maps, poses, surfel_fit, fault_seeds, scene_set]
+  levels:
+    n_faulty_views_in_region: [1, 2, 3]
+    outer_loop_policy: [one_per_round, all_rejected]
+    round_cap: [1, 3, 10]
+baselines: [gate, gate_single_pass, gate_drop_all_rejected]
+metrics:
+  primary: [detection_power_at_fa_0.05, untestable_rate, fscore]
+implemented: false

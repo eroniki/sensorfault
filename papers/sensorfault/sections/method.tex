@@ -1,0 +1,116 @@
+\section{Method}
+\label{sec:method}
+
+\todofig{overview}{Overview. Frames and their monocular depth maps place planar surfels. Each entity keeps
+two information records on the same three placement coordinates, one from the depth prior and one from the
+pixels through the differentiable renderer. Their disagreement is tested, and the calibrated records are
+fused into a map with an information field.}
+
+\subsection{Setting}
+\label{sec:method:setting}
+The input is a posed aerial video in strips, with frames $i=1,\dots,N$, images $\mathbf c_i$ and one
+monocular depth map $\hat d_i$ per frame from a released model. Depth is related to the true depth $d$ by
+$\hat d_i(u)=a_i\,d+b_i+\varepsilon_i(u)$ with unknown scale $a_i$ and offset $b_i$ per frame. The scene is a
+set of planar Gaussian surfels \cite{gs_2dgs} with centre $\boldsymbol\mu_k$, tangents
+$\mathbf t_{1},\mathbf t_{2}$, normal $\mathbf n$, scales and opacity, rendered with compositing weights
+$w_{uk}$ for pixel $u$ and surfel $k$ \cite{gs_gsplat}; rendered depth and colour are
+$D_i(u)=\sum_k w_{uk}d_{uk}$ and $\hat{\mathbf c}_i(u)=\sum_k w_{uk}\mathbf a_k$.
+
+An \emph{entity} $m$ is a set of surfels that move together: here the surfels of one ground tile of
+\ph{8}~m side with a common normal class. Its \emph{placement} $\boldsymbol\theta_m=(\nu,\tau_1,\tau_2)$ is
+an offset along the normal and two tilts about the entity centre $\bar{\boldsymbol\mu}_m$. For a ray with
+direction $\mathbf w_u$ that meets surfel $k$ at $\mathbf x$, the depth changes with the placement by the row
+\begin{equation}
+\mathbf j_{uk}=\frac{\partial d_{uk}}{\partial\boldsymbol\theta_m}
+=\frac{1}{\mathbf n^{\top}\mathbf w_u}\bigl[\,1,\ -\mathbf t_1^{\top}(\mathbf x-\bar{\boldsymbol\mu}_m),\
+-\mathbf t_2^{\top}(\mathbf x-\bar{\boldsymbol\mu}_m)\bigr].
+\label{eq:depthjac}
+\end{equation}
+
+\subsection{Two Records on One Placement}
+\label{sec:method:records}
+\runin{Depth record.} Frame $i$ contributes to entity $m$ the information and pull
+\begin{align}
+\Lambda^{D}_{mi}&=\sum_{u}\sum_{k\in m}\frac{w_{uk}\,a_i^{2}}{\sigma_i^{2}}\,\mathbf j_{uk}^{\top}\mathbf j_{uk},
+\label{eq:depthrecord}\\
+\boldsymbol\eta^{D}_{mi}&=\sum_{u}\sum_{k\in m}\frac{w_{uk}\,a_i}{\sigma_i^{2}}\,\mathbf j_{uk}^{\top}r_i(u),
+\nonumber
+\end{align}
+with $r_i$ the aligned depth residual and $\sigma_i$ the depth noise scale of the frame. The weights enter
+linearly (lumped information), which majorises the true Hessian, and $(a_i,b_i)$ are marginalised by a
+Schur complement, so a frame says nothing in the directions its own scale and offset can explain.
+
+\runin{Image record.} Moving surfel $k$ changes the image in two steps. A change of its kernel changes its
+own weight and, through the transmittance, the weights of everything behind it, so the image responds with
+the \emph{contrast} $w_{uk}(\mathbf a_k-\mathbf b_{uk})$, where $\mathbf b_{uk}$ is the colour composited
+behind $k$. Moving the plane along the ray \emph{slides} the intersection in the tangent frame by
+$\mathbf m_{uk}$, the tangential component of the ray in units of the surfel scales. With
+$\mathbf s_{uk}$ the intersection in the same units,
+\begin{equation}
+\frac{\partial\hat{\mathbf c}_i(u)}{\partial\boldsymbol\theta_m}=\mathbf g_{uk}\,\mathbf j_{uk},\qquad
+\mathbf g_{uk}=-\,w_{uk}\,(\mathbf a_k-\mathbf b_{uk})\,(\mathbf s_{uk}^{\top}\mathbf m_{uk}).
+\label{eq:factor}
+\end{equation}
+The image Jacobian factors through the depth Jacobian: both sources act on the same row $\mathbf j_{uk}$
+and differ by a scalar weight per pixel and surfel. The identity is first-order, with surfel order and the
+colour behind held fixed, and holds because a surfel is a plane; it is checked by finite differences on a
+reference renderer (Section~\ref{sec:setup}). The image record is
+\begin{equation}
+\Lambda^{I}_{mi}=\sum_{u}\sum_{k\in m}\frac{\lVert\mathbf g_{uk}\rVert^{2}}{\sigma_I^{2}}\,
+\mathbf j_{uk}^{\top}\mathbf j_{uk},
+\label{eq:imagerecord}
+\end{equation}
+with the pull $\boldsymbol\eta^{I}_{mi}$ formed likewise from the colour residual; both come from one
+backward pass of the image loss per frame, with visibility and occlusion supplied by the rasteriser. No
+features are matched: frames are associated only through the compositing weights of shared surfels.
+Records add over frames, $\Lambda^{s}_{m}=\sum_i\Lambda^{s}_{mi}$ for $s\in\{D,I\}$, and over tiles.
+
+\subsection{Honest Information}
+\label{sec:method:honest}
+\runin{The prior saturates.} Write the placement error of frame $i$'s depth on entity $m$ as
+$\boldsymbol\mu_m+\boldsymbol\alpha_{mi}$, a part shared by all frames with covariance $\Sigma_\mu$ and a
+part that differs between frames. Fusing $n$ frames leaves the covariance
+$\Sigma_\mu+(\Lambda^{D}_{m})^{-1}$, so the honest prior information is
+\begin{equation}
+\tilde\Lambda^{D}_{m}=\bigl(\Sigma_\mu+(\Lambda^{D}_{m})^{-1}\bigr)^{-1}\ \preceq\ \Sigma_\mu^{-1},
+\label{eq:saturation}
+\end{equation}
+which stops growing with $n$. With $\varrho$ the share of the single-frame error variance that is common,
+the fused variance is $\varrho+(1-\varrho)/n$ of the single-frame variance, against the $1/n$ that
+\eqref{eq:depthrecord} states. $\Sigma_\mu$ is estimated from the correlation of depth residuals between
+frames more than a block of $B$ frames apart along the strip.
+
+\runin{The pixel information is deflated.} Rendering residuals are model misfit and are spatially
+correlated, so \eqref{eq:imagerecord} overstates the information. A dispersion $\hat\varphi$ is estimated
+from frame replicates: the frames that see an entity are split into halves, and the scatter between the
+placements they imply is compared with the scatter their records state. A second, absolute check injects
+a known displacement by moving the entity's surfels and re-rendering, and compares the displacement the
+record recovers with the one injected; the ratio of stated to realised information is the honesty factor.
+Neither step uses a label.
+
+\subsection{Tension and the Score Test}
+\label{sec:method:test}
+With $\hat{\boldsymbol\theta}^{s}_{m}=(\Lambda^{s}_{m})^{-1}\boldsymbol\eta^{s}_{m}$ the placement each
+source implies, the stretch $\mathbf t_m=\hat{\boldsymbol\theta}^{I}_{m}-\hat{\boldsymbol\theta}^{D}_{m}$ is in
+metres and radians, and
+\begin{equation}
+T_m=\mathbf t_m^{\top}\bigl((\tilde\Lambda^{D}_{m})^{-1}+\hat\varphi\,(\Lambda^{I}_{m})^{-1}\bigr)^{-1}\mathbf t_m
+\label{eq:tension}
+\end{equation}
+is $\chi^{2}$ with three degrees of freedom if both sources see one surface; $E_m=T_m/2$ is an energy in
+nats. A joint fit would hide a fault, because appearance can be repainted to agree with a wrong surface.
+The test is therefore a score test: the surface stays where the depth prior placed it, the appearance is
+taken projectively from a set of source frames, and $\boldsymbol\eta^{I}_{m}$, $\Lambda^{I}_{m}$ are
+accumulated on disjoint judging frames, so $\mathbf t_m=(\Lambda^{I}_{m})^{-1}\boldsymbol\eta^{I}_{m}$ is
+the step the judging pixels ask for. A depth error that every frame repeats does not appear in the
+disagreement among depth maps; it appears in $T_m$.
+
+\subsection{Fusion and Scoring}
+\label{sec:method:fusion}
+The fused record is $\Lambda_m=\tilde\Lambda^{D}_{m}+\hat\varphi^{-1}\Lambda^{I}_{m}$, with the depth
+record left out where $T_m$ exceeds the threshold of a stated false-alarm rate. Where
+$\hat\varphi^{-1}\Lambda^{I}_{m}$ is negligible the entity is reported as unsupported by pixels. A map is
+scored by the \emph{surface log-score}, the negative log density of the true placement of each entity
+under the map, taken on the signed error along the normal and averaged over entities. It is a proper
+scoring rule \cite{stat_gneiting_scoring}: it cannot be improved by inflating or deflating the stated
+information, and it falls when either the geometry or its error bar improves.

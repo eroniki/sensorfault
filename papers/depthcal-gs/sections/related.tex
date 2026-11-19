@@ -1,0 +1,30 @@
+\section{Related Work}
+\label{sec:related}
+\runin{Diffusion monocular depth.}
+Marigold~\cite{ke2024marigold} fine-tunes a latent image diffusion model on synthetic data to predict affine-invariant depth and
+ensembles members after aligning their scale and shift; its ensemble spread is not evaluated against error.
+\runin{Multi-view diffusion for depth.}
+MVGD~\cite{guizilini2025mvgd} generates novel-view images and depth from posed views with a pixel-space diffusion model trained
+from scratch; it outputs no uncertainty, and for stereo and video depth the target image is also a conditioning input.
+\runin{Guidance for consistency.}
+DepthSync~\cite{depthsync2025} guides a video diffusion depth model at inference with scale and geometry losses between neighbouring frames;
+the target frame's own prediction enters the guide, and it reports no uncertainty.
+\runin{Depth rectification in splatting.}
+AffineGS~\cite{tse2026affinegs} corrects a depth network's output toward the splat render of the same view with a per-pixel affine field;
+it has no uncertainty and no leave-view-out step.
+\runin{Other diffusion depth models.}
+Several works make the diffusion depth model faster or sharper: single-step deterministic fine-tuning~\cite{garciamartin2025e2edepth,he2024lotus}, flow matching~\cite{gui2025depthfm}, joint depth and normals~\cite{fu2024geowizard}, and pixel-space transformers~\cite{xu2025pixelperfect}.
+DDVM and DepthGen sample multimodal depth and handle incomplete training depth~\cite{saxena2023ddvm,saxena2023depthgen}; video variants spend the sampling budget on temporal coherence~\cite{hu2024depthcrafter,ke2024rollingdepth,yang2024depthanyvideo}.
+We found no work that evaluates the calibration (PIT, CRPS) of the sample spread of a diffusion depth model; the search was not exhaustive.
+\runin{Guided depth sampling.}
+Marigold-DC and SteeredMarigold steer sampling with sparse measured depth~\cite{viola2025marigolddc,gregorek2024steeredmarigold}; the underlying guidance schemes are posterior sampling and its manifold-constrained and universal variants~\cite{chung2023dps,chung2022mcg,bansal2023universal,he2023mpgd}.
+Multi-view diffusion for images and 3D~\cite{gao2024cat3d,wu2023reconfusion,shi2023mvdream,tang2023mvdiffusion} generates or regularises views; we go the other way and use a reconstruction to constrain a single-view depth prior.
+\runin{Affine-invariant and foundation depth.}
+Scale-and-shift-invariant training~\cite{ranftl2022midas,ranftl2021dpt,yang2024depthanything,yang2024depthanythingv2} and metric models~\cite{yin2023metric3d,hu2024metric3dv2,piccinelli2024unidepth,bochkovskii2025depthpro,bhat2023zoedepth} are deterministic; feed-forward multi-view geometry networks output heuristic confidences~\cite{wang2023dust3r,leroy2024mast3r,wang2025vggt}.
+\runin{Splatting with depth priors.}
+Surface-oriented splatting~\cite{kerbl2023gaussians,huang2024twodgs,guedon2023sugar,yu2024gof,chen2024pgsr} is supervised or regularised by monocular depth in DN-Splatter, DNGaussian, FSGS and related work~\cite{turkulainen2025dnsplatter,li2024dngaussian,zhu2023fsgs,chung2023depthreg,zhang2024corgs}, with scale-shift alignment into the loss as in MonoSDF~\cite{yu2022monosdf}. We use gsplat~\cite{ye2024gsplat}.
+\runin{Uncertainty and calibration for depth.}
+Aleatoric and epistemic uncertainty~\cite{kendall2017uncertainties}, ensembles~\cite{lakshminarayanan2017ensembles}, regression calibration~\cite{kuleshov2018calibrated,levi2019evaluating}, proper scoring rules~\cite{gneiting2007scoring} and sparsification metrics~\cite{ilg2018uncertainty,poggi2020uncertainty} are the established tools; surveys cover foundation depth models~\cite{landgraf2025critical}, and sparsification has been criticised~\cite{xiang2023measuring}. Distribution-free alternatives exist~\cite{vovk2022algorithmic,angelopoulos2021gentle,barber2021jackknifeplus}.
+\runin{Fault detection and exclusion.}
+Data snooping and minimal detectable bias~\cite{baarda1968testing,teunissen1998mdb,teunissen2024network} and solution-separation integrity monitoring~\cite{blanch2012araim} are the ancestors of our whitened-residual test; RANSAC~\cite{fischler1981ransac} and robust radiance-field losses~\cite{sabour2023robustnerf,sabour2024spotless,martinbrualla2020nerfw} reject outliers per pixel or measurement rather than testing a view.
+Claims in this section rest on the papers as read; method descriptions for some entries come from abstracts only, see \path{refs/EVIDENCE.md} and \path{refs/lit/}.

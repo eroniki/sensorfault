@@ -1,0 +1,70 @@
+# Design v4: per-source information on Gaussian surfels (depth prior against pixels).
+# Protocol: docs/learned-indicator/experiment-design.md; paper: docs/learned-indicator/paper-plan.md.
+# Thresholds are proposals until the pre-registration tag; they are copied from the protocol, which wins.
+id: stage_c_two_source_map
+status: preregistered_draft
+design: v4_per_source_information
+paper: ral_first_submission
+stage: C
+title: Detection of repeated faults and calibration of the fused map.
+hypotheses:
+- id: H9
+  prediction: Repeated depth faults are visible to the between-source statistic and not to consensus among depth
+    maps.
+  primary_metric: AUROC of the tension and of the consensus statistic on repeated injected faults
+  supported_if: AUROC >= 0.9 where the information ratio is >= 0.5, and consensus AUROC <= 0.6 at rho >= 0.8
+  refuted_if: consensus AUROC >= 0.85
+  stop: S5
+- id: H10
+  prediction: The energy has its stated null on healthy entities.
+  primary_metric: mean T/3 and exceedance of 7.815
+  supported_if: mean in [0.85, 1.15] and exceedance in [0.035, 0.075]; same for the depth-half placebo
+  refuted_if: outside both
+  stop: S4
+- id: H7
+  prediction: The fused map is calibrated after the label-free corrections.
+  primary_metric: s_z, coverage at 0.683 and 0.95, expected calibration error, surface log-score
+  supported_if: s_z in [0.8, 1.25], coverages within 0.08 and 0.04 of nominal, ECE <= 0.05
+  refuted_if: s_z > 1.5, or log-score no better than depth only
+  stop: S4
+- id: H8
+  prediction: Gating adds to saturated information fusion (secondary for the first paper).
+  primary_metric: share of fault-affected entities with z2 > 11.345, gated over ungated
+  supported_if: ratio <= 0.5 with upper bound < 0.8
+  refuted_if: upper bound >= 1, or a decaying depth weight matches it on half of the fault cells
+  stop: S5
+entities:
+  kind: ground tiles
+  side_m: 8
+  ablation: segmenter entities (deferred)
+faults:
+  modes:
+  - repeated
+  - independent
+  - partial
+  sizes: 3
+  magnitudes: 5
+  types: 3
+maps:
+- pixels_only
+- depth_only
+- fixed_weight
+- decaying_weight
+- information_fusion
+- information_fusion_gated
+data:
+  dev: MatrixCity aerial block 3
+  test: further MatrixCity aerial blocks if obtained; otherwise held-out tiles, tables marked same scene
+compute: gpu
+baselines:
+- consensus_gate
+- photometric_error_mask
+- virtual_stereo_mask
+- fisher_field
+- single_summed_confidence
+- oracle_gate
+paper_items:
+- Fig. 4 (detection)
+- Table 1 (six maps)
+- Table 2 (detection at 5% false alarms)
+implemented: false

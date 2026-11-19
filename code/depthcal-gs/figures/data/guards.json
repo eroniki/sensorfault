@@ -1,0 +1,106 @@
+[
+ {
+  "pipeline": "toy point surface (CPU, synthetic room)",
+  "view": 0,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "toy point surface (CPU, synthetic room)",
+  "view": 1,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "toy point surface (CPU, synthetic room)",
+  "view": 2,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "toy point surface (CPU, synthetic room)",
+  "view": 3,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "toy point surface (CPU, synthetic room)",
+  "view": 4,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "deliberately leaky fit (must fail)",
+  "view": 0,
+  "atol": 0.0,
+  "poisoned": false,
+  "invariant": false,
+  "sensitive": true
+ },
+ {
+  "pipeline": "deliberately leaky fit (must fail)",
+  "view": 2,
+  "atol": 0.0,
+  "poisoned": false,
+  "invariant": false,
+  "sensitive": true
+ },
+ {
+  "pipeline": "deliberately leaky fit (must fail)",
+  "view": 4,
+  "atol": 0.0,
+  "poisoned": false,
+  "invariant": false,
+  "sensitive": true
+ },
+ {
+  "pipeline": "gsplat 2DGS surface (GPU, synthetic room)",
+  "view": 0,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "gsplat 2DGS surface (GPU, synthetic room)",
+  "view": 1,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "gsplat 2DGS surface (GPU, synthetic room)",
+  "view": 2,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "gsplat 2DGS surface (GPU, synthetic room)",
+  "view": 3,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ },
+ {
+  "pipeline": "gsplat 2DGS surface (GPU, synthetic room)",
+  "view": 4,
+  "atol": 0.0,
+  "poisoned": true,
+  "invariant": true,
+  "sensitive": true
+ }
+]

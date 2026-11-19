@@ -1,0 +1,94 @@
+\section{Results}
+\label{sec:results}
+\textcolor{red}{\textbf{None of the experiments of this section has been run. Numbers in red brackets are
+placeholders; the tables and figures show the planned layout only.}}
+
+\subsection{A Depth-Only Map Is Overconfident}
+\label{sec:results:law}
+\TODO{Stage A on the exact-depth block with Depth Pro: scale of the standardised placement error of the
+depth-only map (H1); repeated share $\varrho$ per surface class as a function of the block size; realised
+against predicted variance ratio per number of frames (H2); the same after the depth-consensus gate.}
+A preliminary controlled experiment with injected faults on exact geometry points the same way: a
+depth-consensus gate that leaves out a block of three neighbouring frames detected no more repeated faulty
+frames than one that leaves out a single frame. \TODO{Report it here with its setting, or cut.}
+
+\todofig{law}{Left: variance of the fused depth-only estimate against the number of fused frames $n$,
+with the stated $1/n$ and the predicted $\varrho+(1-\varrho)/n$. Right: stated against realised pixel
+information per surface class, before and after the dispersion and the honesty factor.}
+
+\subsection{The Pixel Information Is a Measurement Once Calibrated}
+\label{sec:results:honest}
+\TODO{Stage 0 and Stage B: finite-difference check of \eqref{eq:factor}; recovery of injected
+displacements against their size per image scale (capture range, H3); noncentrality of realistic faults
+(H4); stated against realised information on textured land, roofs and water.}
+
+\subsection{Repeated Faults Are Detected Where Consensus Is Blind}
+\label{sec:results:detection}
+\TODO{Stage C: detection of repeated, independent and partial injected faults by the tension, the consensus
+gate and the two masks (H5); null of the energy on healthy entities and on the depth-half placebo (H6).}
+
+\todofig{detection}{Detection of repeated depth faults: true-positive rate against false-alarm rate for
+the tension, the depth-consensus gate, the rendered-depth mask and the photometric mask, per fault size.}
+
+\begin{table}[!t]
+\centering
+\caption{Detection at 5\% false alarms on the held-out tiles: true-positive rate [\%].
+\textcolor{red}{\textbf{[PLACEHOLDER]}}}
+\label{tab:detection}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Detector & Repeated & Independent & Partial \\
+\midrule
+Tension (ours) & \todocell & \todocell & \todocell \\
+Depth-consensus gate & \todocell & \todocell & \todocell \\
+Rendered-depth mask & \todocell & \todocell & \todocell \\
+Photometric mask & \todocell & \todocell & \todocell \\
+Fisher field, single source & \todocell & \todocell & \todocell \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{The Fused Map Is Calibrated}
+\label{sec:results:map}
+\TODO{Six maps on the held-out tiles (H7).}
+
+\begin{table}[!t]
+\centering
+\caption{Maps on the held-out tiles: surface log-score [nats per entity, lower is better], scale of the
+standardised error (1 if honest) and coverage at the nominal 95\%.
+\textcolor{red}{\textbf{[PLACEHOLDER]}}}
+\label{tab:maps}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Map & Log-score & Scale & Coverage [\%] \\
+\midrule
+Pixels only & \todocell & \todocell & \todocell \\
+Depth only & \todocell & \todocell & \todocell \\
+Fixed depth weight & \todocell & \todocell & \todocell \\
+Decaying depth weight & \todocell & \todocell & \todocell \\
+Information fusion & \todocell & \todocell & \todocell \\
+Information fusion, gated & \todocell & \todocell & \todocell \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Real Scenes with Laser Truth}
+\label{sec:results:real}
+\TODO{ETH3D, four depth models: overconfidence ratio, repeated share and coverage per scene (H1, H2).}
+
+\begin{table}[!t]
+\centering
+\caption{Real scenes with laser depth: scale of the standardised error of the depth-only map, repeated
+share $\varrho$, and realised over predicted variance. \textcolor{red}{\textbf{[PLACEHOLDER]}}}
+\label{tab:real}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Depth model & Scale & $\varrho$ & Realised / predicted \\
+\midrule
+Depth Pro & \todocell & \todocell & \todocell \\
+Metric3D v2 & \todocell & \todocell & \todocell \\
+UniDepthV2 & \todocell & \todocell & \todocell \\
+Depth Anything V2 & \todocell & \todocell & \todocell \\
+\bottomrule
+\end{tabular}
+\end{table}

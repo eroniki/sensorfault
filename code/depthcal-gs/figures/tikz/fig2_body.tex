@@ -1,0 +1,45 @@
+% Leave-out guards. Left: pass/fail matrix from data/fig2_matrix.csv (synthetic room; leaky fit = mutation check). Right: real pipes noise floor, data/fig2_floor.csv
+\pgfplotstableread[col sep=comma]{\tikzdir/data/fig2_matrix.csv}\figtwomat
+\newcommand{\figtwocell}[4]{% #1 row index, #2 column key, #3 x, #4 y   ; leaky row (2): passes of poisoned/invariant must be 0 (caught)
+  \pgfplotstablegetelem{#1}{n}\of\figtwomat \edef\nn{\pgfplotsretval}
+  \pgfplotstablegetelem{#1}{#2}\of\figtwomat \edef\kk{\pgfplotsretval}
+  \ifnum#1=2
+    \ifx#2\relax\fi
+    \edef\isleaky{1}
+  \else \edef\isleaky{0}\fi
+  \def\cellok{0}
+  \ifnum\isleaky=1
+    \IfSubStr{#2}{sensitive}{\ifnum\kk=\nn\def\cellok{1}\fi}{\ifnum\kk=0\def\cellok{1}\fi}
+  \else
+    \ifnum\kk=\nn\def\cellok{1}\fi
+  \fi
+  \ifnum\cellok=1 \def\cellcol{ambPass}\else\def\cellcol{ambFail}\fi
+  \fill[\cellcol] (#3-0.46,#4-0.4) rectangle (#3+0.46,#4+0.4);
+  \node[font=\figfont\footnotesize] at (#3,#4) {%
+    \ifnum\isleaky=1 \IfSubStr{#2}{sensitive}{\kk/\nn\ pass}{\number\numexpr\nn-\kk\relax/\nn\ caught}\else \kk/\nn\ pass\fi};}
+\begin{tikzpicture}
+\def\cw{2.15}\def\ch{1.05}
+\begin{scope}[x=\cw cm, y=\ch cm]
+  \foreach \c/\t in {0/{View $j$ poisoned:\\never touched}, 1/{$j$ perturbed:\\render unchanged}, 2/{Other view perturbed:\\render changes}}
+    \node[font=\figfont\scriptsize, align=center, anchor=south] at (\c+0.5,3.05) {\t};
+  \foreach \r/\t in {0/{Toy point surface\\(CPU, synthetic room)}, 1/{gsplat 2DGS surface\\(GPU, synthetic room)}, 2/{Deliberately leaky fit\\(mutation: must fail)}}
+    \node[font=\figfont\scriptsize, align=right, anchor=east] at (-0.05,2.5-\r) {\t};
+  \foreach \r in {0,1,2}{
+    \figtwocell{\r}{poisoned_ok}{0.5}{2.5-\r}
+    \figtwocell{\r}{invariant_ok}{1.5}{2.5-\r}
+    \figtwocell{\r}{sensitive_ok}{2.5}{2.5-\r}
+  }
+  \node[font=\figfont\footnotesize, anchor=north] at (1.5,-0.92) {(a) Synthetic checks (green = as required)};
+\end{scope}
+\begin{axis}[amb, at={(8.6cm,0.0cm)}, anchor=south west, width=0.32\figw, height=0.2\figw, ybar, bar width=4pt, ymode=log, log origin y=infty, barleg, ymin=1e-5, ymax=0.2,
+  xtick={0,1,2}, xticklabels={2,6,10}, xmin=-0.6, xmax=2.6, xlabel={Held-out view}, ylabel={$|$Depth difference$|$ [m]},
+  legend to name=figtwoleg, legend columns=2, legend style={/tikz/every even column/.append style={column sep=6pt}}]
+  \addplot[ybar, fill=ambRed, draw=black, line width=0.3pt, bar shift=-7.5pt] table[x expr=\coordindex, y=pert_med, col sep=comma]{\tikzdir/data/fig2_floor.csv};
+  \addplot[ybar, fill=ambRed, draw=black, line width=0.3pt, bar shift=-2.5pt, postaction={pattern=north east lines, pattern color=white}] table[x expr=\coordindex, y=pert_p99, col sep=comma]{\tikzdir/data/fig2_floor.csv};
+  \addplot[ybar, fill=ambGrey!50!black, draw=black, line width=0.3pt, bar shift=2.5pt] table[x expr=\coordindex, y=ctrl_med, col sep=comma]{\tikzdir/data/fig2_floor.csv};
+  \addplot[ybar, fill=ambGrey!50!black, draw=black, line width=0.3pt, bar shift=7.5pt, postaction={pattern=north east lines, pattern color=white}] table[x expr=\coordindex, y=ctrl_p99, col sep=comma]{\tikzdir/data/fig2_floor.csv};
+  \addlegendentry{$j$ perturbed, median}\addlegendentry{$j$ perturbed, 99th pct.}\addlegendentry{control re-run, median}\addlegendentry{control re-run, 99th pct.}
+\end{axis}
+\node[anchor=south] at (11.2cm,3.35cm) {\ref{figtwoleg}};
+\node[font=\figfont\footnotesize, anchor=north] at (11.2cm,-1.45cm) {(b) Real optimised 2DGS (ETH3D pipes): perturbing $j$ equals the noise floor};
+\end{tikzpicture}

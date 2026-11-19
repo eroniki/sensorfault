@@ -1,0 +1,73 @@
+% IEEE Robotics and Automation Letters (RA-L), with the IROS presentation option.
+% Template: IEEEtran journal mode, as in the RA-L author kit. No supplementary PDF: the letter stands alone.
+% The earlier view-gate letter is main_viewgate.tex (with supplement.tex).
+\documentclass[letterpaper,journal,twoside]{IEEEtran}
+\input{preamble}
+\anonymousfalse % true for double-anonymous review
+\ifanonymous\def\runauthor{Anonymous}\else\def\runauthor{Ambarkutuk}\fi
+
+\markboth{IEEE Robotics and Automation Letters. Preprint Version. Submitted Month, Year}%
+{\runauthor: Auditing Monocular Depth with Per-Source Information on Gaussian Surfels}
+
+\begin{document}
+
+\title{Auditing Monocular Depth with Per-Source Information on Gaussian Surfels}
+
+\ifanonymous
+\author{Anonymous Author(s)}
+\else
+\author{Murat Ambarkutuk%
+\thanks{Manuscript received: Month, Day, Year; Revised Month, Day, Year; Accepted Month, Day, Year.}%
+\thanks{This paper was recommended for publication by Editor Editor A. Name upon evaluation of the
+Associate Editor and Reviewers' comments. This research received no external funding.}%
+\thanks{M. Ambarkutuk is an independent researcher, Shelton, CT, USA (e-mail: murat@ambarkutuk.com).}%
+\thanks{Digital Object Identifier (DOI): see top of this page.}}
+\fi
+
+\maketitle
+
+% RA-L limit: 1,200 characters in the submission form, no TeX. Count again after the numbers are filled in.
+\begin{abstract}
+Maps built from posed aerial video and monocular depth state no confidence and can be confidently wrong over
+whole surfaces, identically in every frame. We store on each planar Gaussian surfel patch a Fisher
+information record on its placement, an offset and two tilts, separately for the depth prior and for the
+pixels. Because the surfel is a plane, the image Jacobian factors through the depth Jacobian, so both
+records are quadratic forms on the same coordinates and their disagreement is a statistic with a null
+distribution. Other frames enter by rendering the shared surfels; no features are matched. On a synthetic
+aerial block with exact depth, a depth-only map states an error variance \ph{X} times too small, close to
+the \ph{Y} predicted from the share of depth error that all frames repeat. The pixel-against-depth test
+detects repeated faults at \ph{Z}\% true-positive rate at 5\% false alarms where depth-consensus gating
+reaches \ph{W}\%. Calibrating pixel information by displacement injected through the renderer gives
+\ph{C}\% coverage at the nominal 95\% and a surface log-score of \ph{S} nats per entity against \ph{S0} for
+depth only. Checks on \ph{N} real scenes with laser truth \ph{agree}.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Mapping, Aerial Systems: Perception and Autonomy, Deep Learning for Visual Perception,
+Probability and Statistical Methods, Failure Detection and Recovery
+\end{IEEEkeywords}
+
+\IEEEpeerreviewmaketitle
+
+\input{sections/intro}
+\input{sections/related}
+\input{sections/method}
+\input{sections/setup}
+\input{sections/results}
+\input{sections/conclusion}
+\label{endmaintext}
+
+\section*{Acknowledgment}
+\textbf{Data and code availability.} All datasets are used for non-commercial research under their own
+terms and are not redistributed: UseGeo under CC BY-NC-SA 4.0 (as stated in its GitHub README);
+MatrixCity under CC BY-NC 4.0 (its Hugging Face dataset card); H3D under terms not stated on its pages,
+with the download link given after registration and the data provided as is; UrbanScene3D, of which at
+most one scene is used, under its non-commercial terms, which forbid disseminating the data or altered
+versions; ETH3D under CC BY-NC-SA 4.0 (its home page). Only released, off-the-shelf depth models are used.
+\textcolor{red}{[TODO: release the code, configurations, seeds and fault manifests and add the repository URL; confirm the H3D terms.]}
+\textbf{Use of AI tools.} \textcolor{red}{[TODO: author to state whether and how generative AI tools assisted the writing; IEEE asks for a disclosure in the acknowledgments.]}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs/references}
+
+\end{document}
