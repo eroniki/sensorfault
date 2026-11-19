@@ -1,10 +1,15 @@
 \section{Method}
 \label{sec:method}
 
-\todofig{overview}{Overview. Frames and their monocular depth maps place planar surfels. Each entity keeps
-two information records on the same three placement coordinates, one from the depth prior and one from the
-pixels through the differentiable renderer. Their disagreement is tested, and the calibrated records are
-fused into a map with an information field.}
+\begin{figure}[!t]
+\centering
+\input{\lfigdir/fig_overview.tex}
+\caption{Overview. Each entity keeps two information records on the same three placement coordinates, one
+from the depth prior (black) and one from the pixels through the renderer (red); both are built on the same
+depth rows $\mathbf j_{uk}$. The prior is capped, the pixels are deflated, their disagreement is tested, and
+the calibrated records are fused.}
+\label{fig:overview}
+\end{figure}
 
 \subsection{Setting}
 \label{sec:method:setting}

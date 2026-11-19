@@ -13,8 +13,11 @@ statistic with a null distribution. It claims that a depth-only map is overconfi
 all frames repeat, that the pixel-against-depth test detects repeated faults that depth consensus cannot see, and
 that the pixel information can be calibrated on the scene without labels.
 
-**Status: no experiment of this paper has been run.** Every number is a red placeholder (`\ph{...}`, `\TODO{...}`,
-`\todocell`), the four figures are placeholder boxes, and the letter builds to 5 pages of text plus references in that state. Statements
+**Status: only a preliminary Stage A run exists (Fig. 3).** Every number is a red placeholder (`\ph{...}`, `\TODO{...}`,
+`\todocell`), and the letter builds to 5 pages of text plus references in that state. The four figures are TikZ, written by
+`code/sensorfault/experiments/letter_figures_tikz.py` into `figures/letter/`: the teaser and overview are schematic, the detection
+figure is an analytic prediction, and the Stage A figure is a **preliminary** run (numbers in `figures/letter/stage_a_snapshot.json`;
+regenerate with `python3 experiments/letter_figures_tikz.py ../../papers/sensorfault --stage-a results/stage_a` from `code/sensorfault`). Statements
 about the closest prior work rest on abstracts (`refs/EVIDENCE.md`).
 
 ## Build
@@ -32,7 +35,7 @@ limit is 1,200 characters in the submission form; the current text is 1,181 with
 Abstract, Index Terms; I Introduction; II Related Work; III Method (setting; two records on one placement; honest
 information; tension and the score test; fusion and scoring); IV Experimental Design (data, faults, baselines,
 hypotheses H1-H7); V Results (overconfidence law; pixel information; detection; fused map; real scenes);
-VI Limitations and Conclusion; Acknowledgment; References. Planned: four figures (teaser, overview, law and honesty,
+VI Limitations and Conclusion; Acknowledgment; References. Four figures (teaser, overview, Stage A law,
 detection) and three tables (detection, maps, real scenes).
 
 The letter numbers its hypotheses consecutively. They map to the protocol's IDs as: letter H1, H2, H3, H4 = protocol

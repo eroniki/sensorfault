@@ -1,7 +1,7 @@
 \section{Results}
 \label{sec:results}
-\textcolor{red}{\textbf{None of the experiments of this section has been run. Numbers in red brackets are
-placeholders; the tables and figures show the planned layout only.}}
+\textcolor{red}{\textbf{Only a preliminary Stage A run exists (Fig.~\ref{fig:law}). Numbers in red brackets
+are placeholders; the tables show the planned layout only.}}
 
 \subsection{A Depth-Only Map Is Overconfident}
 \label{sec:results:law}
@@ -12,9 +12,23 @@ A preliminary controlled experiment with injected faults on exact geometry point
 depth-consensus gate that leaves out a block of three neighbouring frames detected no more repeated faulty
 frames than one that leaves out a single frame. \TODO{Report it here with its setting, or cut.}
 
-\todofig{law}{Left: variance of the fused depth-only estimate against the number of fused frames $n$,
-with the stated $1/n$ and the predicted $\varrho+(1-\varrho)/n$. Right: stated against realised pixel
-information per surface class, before and after the dispersion and the honesty factor.}
+A first Stage A run on the exact-depth block (Fig.~\ref{fig:law}) points the same way for every depth model:
+the depth-only map is several times overconfident, the repeated share stays above its permutation null, and
+the fused variance follows $\hat\varrho+(1-\hat\varrho)/n$ rather than $1/n$. It is preliminary: the single
+frame is not yet calibrated, so H1 is not yet decided. \TODO{Replace with the Stage A rerun.}
+
+\begin{figure*}[!t]
+\centering
+\input{\lfigdir/fig_stage_a.tex}
+\caption{\textcolor{red}{\textbf{[PRELIMINARY]}} Stage A on MatrixCity block 3 (one scene, held-out tiles). (a) Scale of
+the standardised error $s_z$ (1 if honest) of the depth-only map on land seen by $n\ge5$ frames (black) and
+of a single frame (orange), per depth model and for exact depth with independent and with repeated noise;
+open markers: alignment not converged; bars: 95\% tile-bootstrap intervals; dashed: the H1 bar. The single
+frame is not calibrated for any real model, so H1 is formally undefined. (b) Repeated share of Depth Pro
+against the strip gap between frame pairs, with its permutation null. (c) Variance of the fused error relative
+to one frame against $n$: stated, predicted from $\hat\varrho$, and realised.}
+\label{fig:law}
+\end{figure*}
 
 \subsection{The Pixel Information Is a Measurement Once Calibrated}
 \label{sec:results:honest}
@@ -27,8 +41,17 @@ displacements against their size per image scale (capture range, H3); noncentral
 \TODO{Stage C: detection of repeated, independent and partial injected faults by the tension, the consensus
 gate and the two masks (H5); null of the energy on healthy entities and on the depth-half placebo (H6).}
 
-\todofig{detection}{Detection of repeated depth faults: true-positive rate against false-alarm rate for
-the tension, the depth-consensus gate, the rendered-depth mask and the photometric mask, per fault size.}
+\begin{figure}[!t]
+\centering
+\input{\lfigdir/fig_detection.tex}
+\caption{Why consensus is blind to repeated faults (analytic, Gaussian model of Proposition~\ref{prop:law}
+with $n=12$, $\varrho=0.65$ and pixel information equal to one frame's depth information). Detection at 5\%
+false alarms of a placement fault, in units $\sigma$ of the single-frame error, (a) against the share of
+frames that carry it and (b) against its size when every frame carries it. A depth-consensus test compares
+a frame with the others and loses the fault as it becomes common; the tension compares the depth-placed
+surface with the pixels. \TODO{Replace by measured rates from Stage C, with both masks.}}
+\label{fig:detection}
+\end{figure}
 
 \begin{table}[!t]
 \centering
