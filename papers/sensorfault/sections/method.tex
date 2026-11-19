@@ -4,10 +4,12 @@
 \begin{figure}[!t]
 \centering
 \input{\lfigdir/fig_overview.tex}
-\caption{Overview. Each entity keeps two information records on the same three placement coordinates, one
-from the depth prior (black) and one from the pixels through the renderer (red); both are built on the same
-depth rows $\mathbf j_{uk}$. The prior is capped, the pixels are deflated, their disagreement is tested, and
-the calibrated records are fused.}
+\caption{Overview. Shared surfels are rendered into every frame; the depth residual (black) and the
+photometric residual (red) each give a Gauss--Newton information record on the same three placement
+coordinates of an entity, built on the same depth rows $\mathbf j_{uk}$. The prior is capped, the pixels
+are deflated, their disagreement is tested, and the map is refit with the calibrated weights. Tags give
+the experimental stage that measures each step (Section~\ref{sec:setup}): 0 the renderer and its Jacobian,
+A the depth term alone, B the photometric term, C both.}
 \label{fig:overview}
 \end{figure}
 
@@ -20,7 +22,15 @@ scene is a set of planar Gaussian surfels \cite{gs_2dgs}, surfel $k$ having cent
 tangents $\mathbf t_{1},\mathbf t_{2}$, normal $\mathbf n$, scales and opacity. The rasterizer
 \cite{gs_gsplat} gives compositing weights $w_{uk}$ for pixel $u$ and surfel $k$, and the rendered depth
 and color are $D_i(u)=\sum_k w_{uk}d_{uk}$ and $\hat{\mathbf c}_i(u)=\sum_k w_{uk}\mathbf a_k$, with
-$d_{uk}$ the depth at which the ray meets surfel $k$ and $\mathbf a_k$ its color.
+$d_{uk}$ the depth at which the ray meets surfel $k$ and $\mathbf a_k$ its color. The surfels
+$\mathcal G$ are shared by all frames and fit by differentiable rendering against both sources,
+\begin{equation}
+L(\mathcal G)=\sum_{i,u}\frac{\bigl(D_i(u)-a_i\hat d_i(u)-b_i\bigr)^2}{2\sigma_i^{2}}
++\frac{\lVert\hat{\mathbf c}_i(u)-\mathbf c_i(u)\rVert^2}{2\sigma_I^{2}},
+\label{eq:loss}
+\end{equation}
+a depth and a photometric term. Frames are fused only through the surfels they render; no feature is
+matched. We keep the terms apart: how much information does each give, and do they agree?
 
 A fault moves a surface, not a surfel, and a surfel moved alone tears the surface. The unit of analysis is
 therefore an \emph{entity} $m$, a set of surfels that move together: here the surfels of one ground tile
@@ -37,6 +47,8 @@ changes with the placement by the row
 
 \subsection{Two Records on One Placement}
 \label{sec:method:records}
+Each record is the Gauss--Newton block of one term of \eqref{eq:loss} on the placement of one entity.
+
 \runin{Depth record.} Frame $i$ contributes to entity $m$ the information and pull
 \begin{align}
 \Lambda^{D}_{mi}&=\sum_{u}\sum_{k\in m}\frac{w_{uk}\,a_i^{2}}{\sigma_i^{2}}\,\mathbf j_{uk}^{\top}\mathbf j_{uk},
@@ -44,17 +56,17 @@ changes with the placement by the row
 \boldsymbol\eta^{D}_{mi}&=\sum_{u}\sum_{k\in m}\frac{w_{uk}\,a_i}{\sigma_i^{2}}\,\mathbf j_{uk}^{\top}r_i(u),
 \nonumber
 \end{align}
-with $r_i$ the aligned depth residual and $\sigma_i$ the depth noise scale of the frame. The weights enter
+with $r_i(u)=D_i(u)-a_i\hat d_i(u)-b_i$ the depth residual of \eqref{eq:loss} and $\sigma_i$ the depth
+noise scale of the frame. The weights enter
 linearly, so that the record adds over surfels; by Jensen's inequality it bounds the Gauss--Newton
 information of the rendered depth $D_i$ from above, and Section~\ref{sec:method:honest} caps it. The
 per-frame $(a_i,b_i)$ are marginalized by a Schur complement, so a frame says nothing in the directions its
 own scale and offset can explain.
 
-\runin{Image record.} Moving surfel $k$ changes the image in two steps. A change of its kernel changes its
-own weight and, through the transmittance, the weights of everything behind it, so the pixel responds with
-the \emph{contrast} $w_{uk}(\mathbf a_k-\mathbf b_{uk})$, where $\mathbf b_{uk}$ is the color composited
-behind $k$. Moving the plane along the ray \emph{slides} the intersection in the tangent frame by
-$\mathbf m_{uk}$, the tangential component of the ray in units of the surfel scales. With
+\runin{Image record.} Moving surfel $k$ along the ray \emph{slides} its intersection in the tangent frame
+by $\mathbf m_{uk}$ (the tangential ray component in units of the surfel scales), which changes its weight
+and, through the transmittance, those behind it; the pixel responds with the \emph{contrast}
+$w_{uk}(\mathbf a_k-\mathbf b_{uk})$, $\mathbf b_{uk}$ the color composited behind $k$. With
 $\mathbf s_{uk}$ the intersection in the same units,
 \begin{equation}
 \frac{\partial\hat{\mathbf c}_i(u)}{\partial\boldsymbol\theta_m}=\sum_{k\in m}\mathbf g_{uk}\,\mathbf j_{uk},\quad
@@ -63,8 +75,7 @@ $\mathbf s_{uk}$ the intersection in the same units,
 \end{equation}
 The image Jacobian factors through the depth Jacobian: each surfel contributes the same row
 $\mathbf j_{uk}$ as in \eqref{eq:depthrecord}, scaled by a color vector $\mathbf g_{uk}$. The identity is
-first-order, with surfel order and the color behind held fixed, and holds because a surfel is a plane; it
-is checked by finite differences on a reference renderer (Section~\ref{sec:setup}). The sum over $k$ is
+first-order, with surfel order and the color behind held fixed, and holds because a surfel is a plane. The sum over $k$ is
 taken before squaring, so that the tears between surfels of one entity cancel and what remains is texture
 contrast times slide. With $J^{I}_{mi}(u)$ the $C\times3$ matrix of \eqref{eq:factor}, the image record is
 \begin{align}
@@ -73,9 +84,9 @@ contrast times slide. With $J^{I}_{mi}(u)$ the $C\times3$ matrix of \eqref{eq:fa
 \boldsymbol\eta^{I}_{mi}&=\frac{1}{\sigma_I^{2}}\sum_{u}J^{I}_{mi}(u)^{\top}\mathbf r^{I}_i(u),
 \nonumber
 \end{align}
-with $\mathbf r^{I}_i$ the color residual. Both come from one backward pass of the image loss per frame,
-with visibility and occlusion supplied by the rasterizer. No features are matched: frames are associated
-only through the compositing weights of shared surfels. Records add over frames,
+with $\mathbf r^{I}_i=\hat{\mathbf c}_i-\mathbf c_i$ the photometric residual of \eqref{eq:loss}. Both
+records come from one backward pass of their term per frame, with visibility and occlusion supplied by the
+rasterizer. Records add over frames,
 $\Lambda^{s}_{m}=\sum_i\Lambda^{s}_{mi}$ for $s\in\{D,I\}$, and over tiles; leaving out a block of frames
 is a subtraction.
 
@@ -110,7 +121,7 @@ misfit about a common placement, which splits exactly into a within-depth term, 
 between-source term: the first contains only $\Sigma_\alpha$, the last contains $\Sigma_\mu$ plus the
 scatter of the second, so the two give $\hat\varrho$ wherever the pixels have stiffness.
 
-\runin{The pixel information is deflated.} Rendering residuals are model misfit and are spatially
+\runin{The pixel information is deflated.} Photometric residuals are model misfit and are spatially
 correlated, so \eqref{eq:imagerecord} overstates the information. A dispersion $\hat\varphi$ is estimated
 from frame replicates, the units that are independent: the within-image scatter of the per-frame placements
 $(\Lambda^{I}_{mi})^{-1}\boldsymbol\eta^{I}_{mi}$ is compared with the scatter their records state, and
@@ -143,8 +154,10 @@ it appears in $T_m$ only.
 
 \subsection{Fusion and Scoring}
 \label{sec:method:fusion}
-The fused record is $\Lambda_m=\tilde\Lambda^{D}_{m}+\hat\varphi^{-1}\Lambda^{I}_{m}$, with the depth
-record left out where $T_m$ exceeds the $\chi^2_r$ quantile of a stated false-alarm rate; in the
+The fused map refits $\mathcal G$ by \eqref{eq:loss} with each term weighted by its calibrated
+information, the depth term left out on entities where $T_m$ exceeds the $\chi^2_r$ quantile of a stated
+false-alarm rate. Its stated information is
+$\Lambda_m=\tilde\Lambda^{D}_{m}+\hat\varphi^{-1}\Lambda^{I}_{m}$; in the
 $3-r$ directions without pixel stiffness the entity is reported as unsupported by pixels. A map is scored
 by the \emph{surface log-score}, the mean over entities of
 $\tfrac12 z_m^2-\tfrac12\log\det\Lambda_m$ (without the constant), where $\boldsymbol\epsilon_m$ is the

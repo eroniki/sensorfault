@@ -12,10 +12,14 @@ the primary depth model; Metric3D~v2, UniDepthV2 and Depth Anything~V2
 \cite{est_metric3dv2,est_unidepth,est_dav2} set the scope.
 
 \runin{Implementation.} Surfels are rasterized with gsplat \cite{gs_gsplat}; the records
-\eqref{eq:depthrecord} and \eqref{eq:imagerecord} are accumulated from its backward pass, and the
-factorization \eqref{eq:factor} is checked against central finite differences on a reference renderer
-written independently of it. Source and judging frames alternate along each strip, so both sets span the
+\eqref{eq:depthrecord} and \eqref{eq:imagerecord} are accumulated from its backward pass. Source and judging frames alternate along each strip, so both sets span the
 same baselines. \TODO{Hardware and time per frame.}
+
+\runin{Stages.} The experiments switch on the terms of \eqref{eq:loss} one at a time
+(Fig.~\ref{fig:overview}). Stage~0 checks the factorization \eqref{eq:factor} against central finite
+differences on an independent reference renderer. Stage~A fits the surfels with the depth term alone and measures the overconfidence of
+the depth record (H1, H2). Stage~B adds the photometric term with projected appearance and calibrates the
+image record by injection (H3, H4). Stage~C uses both: the score test and the refit map (H5--H7).
 
 \runin{Faults.} Natural failures are the depth model's own. Injected faults replace the depth inside a
 region of \ph{16, 64 or 256} surfels by that of the plane displaced by $\boldsymbol\delta$: by the same
