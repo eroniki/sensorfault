@@ -14,7 +14,7 @@ all frames repeat, that the pixel-against-depth test detects repeated faults tha
 that the pixel information can be calibrated on the scene without labels.
 
 **Status: no experiment of this paper has been run.** Every number is a red placeholder (`\ph{...}`, `\TODO{...}`,
-`\todocell`), the four figures are placeholder boxes, and the letter builds to 5 pages in that state. Statements
+`\todocell`), the four figures are placeholder boxes, and the letter builds to 5 pages of text plus references in that state. Statements
 about the closest prior work rest on abstracts (`refs/EVIDENCE.md`).
 
 ## Build
