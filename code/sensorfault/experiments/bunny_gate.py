@@ -1,5 +1,5 @@
-"""Stanford bunny check of the view gate (non-planar scene): runs the cases behind the manuscript's bunny
-figure and writes ``results/bunny/gate.json`` plus small depth maps for the figure.
+"""Stanford bunny check of the view gate (non-planar scene): runs the golden-test cases and writes
+``results/bunny/gate.json`` plus small depth maps of the faulty view.
 
 Same setup as ``tests/gs/test_bunny_golden.py``: six 32x32 views of the bunny on a 60 deg arc, 5 mm
 depth noise, +5 cm bias on pixels (8:24, 8:24) of the faulty view, ``view_gate`` with the numpy

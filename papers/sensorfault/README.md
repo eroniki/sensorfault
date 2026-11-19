@@ -23,7 +23,6 @@ about the closest prior work rest on abstracts (`refs/EVIDENCE.md`).
 ## Build
 ```
 scripts/build.sh             # output: build/main.pdf (TeX Live; uses ./latexmkrc)
-scripts/build_viewgate.sh    # the earlier view-gate letter and its supplement (see below)
 ```
 `sensorfault.pdf` is the committed build of this letter (`scripts/build.sh` refreshes it); versions live in the git history.
 Class and bibliography style `IEEEtran`, from TeX Live (`texlive-publishers`). RA-L allows 6 pages plus up to 2 paid
@@ -42,25 +41,22 @@ The letter numbers its hypotheses consecutively. They map to the protocol's IDs 
 H1, H2, H3, H4; letter H5 = protocol H9; letter H6 = protocol H10; letter H7 = protocol H7.
 
 ## The earlier view-gate letter
-`main_viewgate.tex` with `sections/vg_*.tex`, and `supplement.tex` with `sections/supp_*.tex`, are the previous
-paper, *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface*, kept intact.
-Its depth-only view gate is the depth-consensus baseline of the new letter, and its controlled experiments (E1, the
-pose check) are the source of the figures under `figures/`. Build it with `scripts/build_viewgate.sh`;
-its last committed PDFs are in the git history. The two documents cross-reference each other with `xr` (prefix `S-` in the letter, `M-` in the
-supplement); run `scripts/xref_prefixes.py` after moving text between them.
+The previous paper, *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface*,
+with its supplement and figures, is in the git history (last present in commit 42a2fc0). Its depth-only view gate
+is the depth-consensus baseline of this letter; the code is `code/sensorfault/src/sensorfault/gs/gate.py`.
 
 ## Double-anonymous review
-Set `\anonymoustrue` near the top of `main.tex` and `supplement.tex` to replace the author block and running
+Set `\anonymoustrue` near the top of `main.tex` to replace the author block and running
 head with "Anonymous". The repository URL TODO in the Acknowledgment must stay anonymous too.
 
 ## Layout
-- `main.tex` RA-L letter: title, abstract, index terms, section includes, acknowledgment; `supplement.tex` supplementary material; `preamble.tex` shared packages and macros
-- `sections/` new letter: `intro`, `related`, `method`, `setup`, `results`, `conclusion`; view-gate letter: `vg_*.tex`; its supplement: `supp_*.tex`; `macros.tex`
-- `refs/references.bib` cited entries only; `refs/EVIDENCE.md` how each was checked
-- `figures/e1/` E1 figures (pgfplots) and summary table, with their CSV data, copied from `code/sensorfault/results/e1/figures/` (regenerate there with `experiments/e1_figures.py`); `figures/e1q/` E1 qualitative checks (PNG panels and LaTeX), copied from `results/e1/qualitative/` (regenerate with `experiments/e1_qualitative.py`); remaining placeholders are drawn by `\todofig` in `sections/macros.tex`
+- `main.tex` RA-L letter: title, abstract, index terms, section includes, acknowledgment; `preamble.tex` packages and macros
+- `sections/` `intro`, `related`, `method`, `setup`, `results`, `conclusion`; `macros.tex` (placeholders `\ph`, `\TODO`, `\todocell`, `\todofig`)
+- `refs/references.bib` cited entries, plus `stat_holm` and the UseGeo, H3D and UrbanScene3D entries that the text names but does not cite yet; `refs/EVIDENCE.md` how each was checked
+- `figures/letter/` the four letter figures and `stage_a_snapshot.json`, written by `code/sensorfault/experiments/letter_figures_tikz.py`; `figures/figstyle.tex` shared PGFPlots style
 
 ## License note
-`IEEEtran` is distributed with TeX Live (LPPL). Keep this repository private until the preprint is released.
+`IEEEtran` is distributed with TeX Live (LPPL). Make the repository private during double-anonymous review.
 Original text in `sections/` and `main.tex` is the author's.
 
 ## Open items before the preprint
