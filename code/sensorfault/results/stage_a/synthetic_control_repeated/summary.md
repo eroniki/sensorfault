@@ -6,7 +6,7 @@ Synthetic block.
 ## Decisions
 
 - **H1** (lower bound of s_z on held-out land, n >= 5, above 1.25): **supported**.
-- **H2** (realised/predicted fused variance in [0.67, 1.5] per n-bin): **inconclusive**.
+- **H2** (realised/predicted fused variance in [0.67, 1.5] per n-bin): **supported**.
 - A8 single-frame calibration on held-out land: s_z = 1.01 [0.992, 1.04], pass.
 
 ## Alignment (A5)
@@ -61,11 +61,11 @@ Cross strip r = 0.235; cross heading r = 0.216.
 
 | n bin | entities | R_real | R_pred | 1/n | real/pred |
 |---|---|---|---|---|---|
-| 1 | 105 | 1 | 1 | 1 | n/a [n/a, n/a] |
-| 2 | 172 | 0.604 | 0.608 | 0.5 | n/a [n/a, n/a] |
-| 3-4 | 197 | 0.458 | 0.443 | 0.288 | n/a [n/a, n/a] |
-| 5-8 | 146 | 0.356 | 0.335 | 0.152 | 1.99 [1.24, 2.47] |
-| 9-16 | 236 | 0.322 | 0.286 | 0.0882 | 1.02 [0.675, 1.28] |
+| 1 | 105 | 1 | 1 | 1 | 1 [1, 1] |
+| 2 | 172 | 0.604 | 0.608 | 0.5 | 0.994 [0.822, 1.14] |
+| 3-4 | 197 | 0.458 | 0.443 | 0.288 | 1.04 [0.855, 1.24] |
+| 5-8 | 146 | 0.356 | 0.335 | 0.152 | 1.06 [0.863, 1.23] |
+| 9-16 | 236 | 0.322 | 0.286 | 0.0882 | 1.13 [0.781, 1.35] |
 | 17+ | 15 | 0.293 | 0.261 | 0.0564 | 1.12 |
 
 ## Residual parallax on textured land (A15)

@@ -210,23 +210,29 @@ def decide(lo, hi, tau, supported_if="above"):
     raise ValueError(supported_if)
 
 
-def law_table(terms, ps, ent, sel_base, rho_fn, n_boot, seed):
+def law_table(terms, ent, pool, sel_base, rho_fn, n_boot, seed):
+    """A11 rows per n-bin. rho comes from the entities ``pool`` (those the repetition sums cover);
+    the tile bootstrap resamples the tiles of ``pool``, recomputes rho from the resample and the
+    ratio from the resampled entities of the bin, so rho's uncertainty is carried."""
     rows = []
     tiles = ent.tile_id
+    rho_all = rho_fn(None)
     for (a_, b_), lab in zip(rp.N_BINS, rp.n_bin_labels()):
-        sel = np.flatnonzero(sel_base & (terms["n"] >= a_) & (terms["n"] <= b_))
+        in_bin = sel_base & (terms["n"] >= a_) & (terms["n"] <= b_)
+        sel = np.flatnonzero(in_bin)
         if not len(sel):
             continue
-        rho = rho_fn(None)
-        row = {"n_bin": lab, **rp.law_ratio(terms, rho, sel), "rho": rho}
+        row = {"n_bin": lab, **rp.law_ratio(terms, rho_all, sel), "rho": rho_all}
         if len(sel) >= 50 and len(np.unique(tiles[sel])) >= 2:
 
-            def stat(i, sel=sel):
-                ii = sel[i]
-                return rp.law_ratio(terms, rho_fn(ii), ii)["ratio"]
+            def stat(i, in_bin=in_bin):
+                ii = pool[i]
+                jj = ii[in_bin[ii]]
+                if not len(jj):
+                    return np.nan
+                return rp.law_ratio(terms, rho_fn(ii), jj)["ratio"]
 
-            ci = cal.tile_bootstrap(stat, tiles[sel], n_boot=n_boot, seed=seed)
-            row["ratio_ci"] = ci
+            row["ratio_ci"] = cal.tile_bootstrap(stat, tiles[pool], n_boot=n_boot, seed=seed)
         rows.append(row)
     return rows
 
@@ -466,7 +472,7 @@ def main(argv=None):
     # A11: H2 law (rho beyond the primary block, recomputed inside the bootstrap)
     terms = rp.law_terms(rec, epsF, nF)
     rho_fn = lambda ii: rp.rho_hat(ps, B_PRIMARY, ii)
-    law = law_table(terms, ps, ent, held & seen, rho_fn, min(a.n_boot, 2000), a.seed)
+    law = law_table(terms, ent, ents_held, held & seen, rho_fn, min(a.n_boot, 2000), a.seed)
     rho_ci = rep["rho"][B_PRIMARY]
     ratios = [r["ratio_ci"] for r in law if "ratio_ci" in r and r["n_bin"] not in ("1",)]
     if rho_ci["hi"] < 0.1 or any(r["lo"] > 2 or r["hi"] < 0.5 for r in ratios):
