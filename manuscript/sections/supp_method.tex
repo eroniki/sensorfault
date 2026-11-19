@@ -1,0 +1,188 @@
+\section{Method Details}
+\label{sup:method}
+This section holds the parts of the method that the letter states only briefly.
+
+\subsection{Prior Work the Method Builds On}
+The representation is not new: 2DGS surfels \cite{gs_2dgs} with confidence-weighted fusion are close to
+point-based fusion \cite{fus_keller_surfels}, and per-view alignment of monocular depth is standard
+\cite{rec_monosdf}. The test is classical (Baarda's data snooping, Teunissen's DIA procedure
+\cite{stat_teunissen_dia} and GNSS solution separation \cite{flt_raim_joerger}); removing a view by
+subtraction is the cavity step of expectation propagation \cite{mp_minka_ep}, used here once per round
+and without moment matching; the outer loop of rounds is iterative data snooping and hard EM
+\cite{stat_dempster_em}; and spline trajectories are standard in continuous-time estimation
+\cite{traj_furgale_basis}. What is new, to our knowledge, is the gate: a per-Gaussian uncertainty that
+the splatting rasteriser renders into depth variance, used with exact leave-view-out and leave-block-out
+to test whole views at a stated false-alarm rate (Section~\ref{M-sec:related}).
+
+\subsection{Poses}
+The input is posed images; the poses are refined, not estimated from scratch. A survey flight is a
+smooth trajectory, so we write the camera pose as a uniform cubic B-spline in time
+\cite{traj_furgale_basis}: positions are a weighted sum of four active control points, and rotations use
+the cumulative form on $SO(3)$ \cite{traj_sommer_bspline}. The control points are first fitted to the
+GNSS/IMU or dataset poses, with a smoothness prior, and then refined by a differentiable pose-graph
+optimisation whose factors are the GNSS/IMU prior, the spline's smoothness and render-and-compare depth
+terms: the depth of each view against the surfels rendered at its pose. No feature correspondences are
+used. The pose of a tested view never uses its own depth: its render-and-compare term is subtracted from
+the control-point information before the pose is used in the test, so a pose fitted to that view's
+depth cannot absorb its fault. The remaining uncertainty of that pose,
+$\Sigma_q=\mathbf{b}(t_j)\,\Sigma_{\mathrm{ctrl}}\,\mathbf{b}(t_j)^{\top}$ with $\mathbf{b}(t_j)$ the spline's
+basis row at the view's time stamp, enters the test through $J_q\Sigma_qJ_q^{\top}$
+(Section~\ref{M-sec:method:gate}). Perturbed starting poses are an ablation, and a controlled check (H7) perturbs the poses of chosen
+views by known amounts after the gate has run, to measure whether the gate flags them and whether the
+refinement pulls them back. On ETH3D the registered poses are used as given. Figure~\ref{fig:aerial}
+sketches the aerial setting: strips, a held-out block of neighbouring frames
+(Section~\ref{M-sec:method:fusion}) and the spline with its pose-graph factors.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_aerial.tex}
+\caption{Aerial setting (schematic, not to scale of any dataset). (\textbf{a})~A lawnmower flight of
+four strips; each dot is a frame. To test view $j$ (red cross), the block $\mathcal{B}_j$ of $B=3$
+neighbouring frames of its strip is left out together with it (red footprints); the footprints of the
+adjacent strips at the same along-track position (grey) overlap the block from the side and keep its
+ground testable. (\textbf{b})~One strip's cross-track offset over time: the cubic B-spline (red) is
+defined by its control points (orange) and fitted to the GNSS/IMU positions (black +), then refined in a
+pose graph with smoothness, GNSS/IMU and render-and-compare depth factors (red squares) against the
+surfel map. When view $j$ is tested its own render-and-compare factor is removed (grey), so its pose
+cannot absorb its depth fault.}
+\label{fig:aerial}
+\end{figure}
+
+\subsection{The Surfel Uncertainty}
+Figure~\ref{fig:surfel}(a) draws one surfel in section: the offset moves every pixel's depth alike, the tilt moves it in proportion to the lever arm, so the rendered band is narrowest at the centre and widens towards the rim. Keeping shape and uncertainty apart matters: if one covariance served both, a confident surfel would shrink in the render and lose its weight.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_surfel.tex}
+\caption{One surfel's uncertainty (schematic). (\textbf{a})~The surfel in section: its shape (black) is
+used for rendering only, its uncertainty over normal offset $\nu$ and tilt $\tau$ is a separate block
+(dashed: one draw of each). Bands: $\pm2\sigma$ of the surface, fused (grey) and in the cavity without
+the block $\mathcal{B}_j$ (orange), drawn $\times4$; red: the ray of one pixel. (\textbf{b})~The rendered
+depth standard deviation along the surfel, $\sqrt{J_{uk}P_kJ_{uk}^{\top}}$: an offset moves every pixel
+alike, a tilt in proportion to the lever arm, so it grows away from the pixels the remaining views
+support. (\textbf{c})~The same surfel in its $(\nu,\tau)$ plane, $1\sigma$: a view that sees one end
+constrains a mix of offset and tilt (black dashed), the block the rest (red dashed); fused, they give the
+small $P_k$ (black), without the block the cavity $P_k^{(-j)}$ (orange).}
+\label{fig:surfel}
+\end{figure}
+
+\subsection{A Message-Passing Reading}
+Within each round, train, freeze, fuse, test (Algorithm~\ref{M-alg:gate}) can be read as message passing
+among views. In the fuse step the views share information: each view sends the surfels it renders an information-form
+message, its alpha-weighted $\Lambda_k^{(i)}=\sum_u J^{\top}R^{-1}J$ and the matching vector
+$\boldsymbol\eta_k^{(i)}$ of \eqref{M-eq:info}, and a surfel's belief is the product of its prior and the
+messages it receives. Leaving view $j$ out by subtraction, \eqref{M-eq:loo}, or a block of views,
+\eqref{M-eq:block}, is the cavity step of
+expectation propagation \cite{mp_minka_ep}: what remains is the cavity, the belief of all other views,
+and the gate tests view $j$ against that cavity rendered into view $j$. This is a framing of a known
+identity, not a contribution, and it is not full expectation propagation: we take one exact Gaussian
+subtraction at the MAP and run no moment-matching iterations. The loop parallels the optimisation loop
+of vanilla 3DGS, which fits every view's rendering by gradient steps; the difference is the explicit
+exchange of information between views, which gives both the fused uncertainty and the leave-view-out
+reference. Gaussian belief propagation for spatial AI \cite{mp_davison_gbp}, which passes Gaussian
+messages on factor graphs, is the closest relative in vision. Figure~\ref{M-fig:cavity} follows one
+strip through fuse, cavity and test.
+
+\subsection{Correlation Within a Surfel}
+Pixels rendered by the same surfel share that surfel's estimation error, so the off-diagonal terms of $UP^{(-j)}U^{\top}$ in \eqref{M-eq:res} matter even under independent blocks: a region statistic that ignored them would add a shared error coherently and raise false alarms, which a dry run of E1 showed on weakly supported views. Figure~\ref{fig:upu} gives an analytic example.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_upu.tex}
+\caption{Why the surface term must keep $UP^{(-j)}U^{\top}$: an analytic example, not a measurement. Thirty
+pixels on one image row are rendered by three surfels (12, 10 and 8 pixels); each pixel adds unit
+independent sensor noise, and each surfel an offset and a tilt error with covariance $P_k$, large for the
+weakly supported first surfel (variances 1.0 and 0.3 $\sigma^{2}$) and small for the others (0.04 and 0.01).
+(\textbf{a})~Three draws of the residual: under the weak surfel (shaded) the pixels move together.
+(\textbf{b})~The full covariance $\Sigma_r$ has a dense block per surfel; a diagonal-only model keeps the
+per-pixel variances on the diagonal but drops these blocks. (\textbf{c})~The variance of the residual summed
+over the first $w$ pixels of the weak surfel, with the full $\Sigma_r$ (red) and the diagonal only (black):
+a region statistic under the diagonal model understates it by a factor that grows with the region, 6.1 over
+the whole surfel here.
+On E1, this ratio per region-scan tile had median 1.54 and maximum 9.3 on a weakly supported view
+(Figure~\ref{fig:e1qualunc}).}
+\label{fig:upu}
+\end{figure}
+
+\subsection{Leave-Block-Out}
+Only view $j$ is tested against this
+cavity; the other views of the block are tested against their own blocks. The block therefore changes
+the reference, not the number of tests: the Holm family stays $M=NR_{\max}$, independent of $B$ (testing
+whole blocks instead would give $\lceil N/B\rceil R_{\max}$ tests, an alternative we do not use). In the
+outer loop, a rejected view is dropped alone, not with its block, and its neighbours are re-tested in the
+next round against a cavity that no longer contains it.
+Figure~\ref{fig:scene3d} shows the block in a survey.
+
+\begin{figure}[!t]
+\centering
+\input{\mfigdir/fig_scene3d.tex}
+\caption{Leave-block-out in a survey (schematic). Three strips of frames; the block $\mathcal{B}_j$ of
+$B=3$ frames around view $j$ is left out (hollow red), and the cavity is rendered into view $j$'s footprint
+(red). Each surfel is coloured by the number of views outside the block that still support it: lowest
+along the middle strip, where only the adjacent strips and the strip's farther frames remain. The centre of
+the roof, which only the block saw, keeps no support and its pixels are untestable (grey).}
+\label{fig:scene3d}
+\end{figure}
+
+The price is a weaker cavity. Removing $B$ views removes more information, so the rendered variance
+grows and the minimum detectable bias rises; pixels seen only within the block become untestable, so
+availability falls; and on a strip with little side overlap a large block can leave whole regions
+untestable. $B$ is therefore chosen on development data from a sweep, $B\in\{1,3,5,9\}$, against the
+measured cross-view correlation of H2; $B=1$, single-view leave-out, is the ablation.
+
+\subsection{Outer Loop: Defaults, Risks and Cost}
+\paragraph{False-alarm control across rounds}
+A fixed $\alpha$ per round would let the false-alarm rate grow with the number of rounds. Instead the
+Holm step-down schedule runs over a family that counts every test the loop may perform: each of the
+$N$ views once in each of up to $R_{\max}$ rounds, $M=N R_{\max}$ tests, re-tests of the same view in later
+rounds included. The $(k{+}1)$-th rejection overall uses the threshold $\alpha/(M-k)$; within a round the
+p-values are sorted and compared step-down, continuing the global count $k$, and the first failure
+ends the round's rejections. Because $M$ is fixed before the loop starts, the union bound holds over
+all rounds; the step-down relaxation is Holm's, which is exact for a fixed set of p-values, whereas
+here the p-values change as the surface is retrained, so the level of the whole loop is calibrated by
+clean-run permutation, as the single-pass threshold is.
+\paragraph{Defaults and risks}
+By default a round drops only the most significant rejected view, there is no readmission, and
+$R_{\max}=10$. Dropping one view at a time guards against \emph{swamping}, in which a clean view looks
+faulty only because a faulty view still shapes the surface; it is resolved when the next round
+retrains without the faulty view. Retraining also resolves \emph{masking}, in which a faulty view
+passes while other faulty views in the same region support it, as long as the faulty views are a
+minority there. Without readmission the loop is monotone and terminates; a swamped clean view that was
+dropped is not recovered, which the one-view-per-round default makes rare. Readmission, dropping all
+rejected views per round, down-weighting instead of dropping, and a single pass (loop off) are
+ablations (H6). If the cap is reached while views are still being flagged, an alarm is raised. The
+loop also removes a risk of the single pass: a surfel that a faulty view caused to be pruned during
+the warm-up can return once that view is caught, because the next round re-densifies without it.
+
+\paragraph{Known ideas}
+The loop is Baarda-style iterative data snooping \cite{stat_teunissen_dia}, which tests, removes the
+most significant observation and re-adjusts, and it is hard expectation--maximisation
+\cite{stat_dempster_em}: the gate is the E-step that sets each view's fault indicator, and training is
+the M-step that refits the geometry given those indicators. Within each round the message-passing
+reading of Section~\ref{M-sec:method:fusion} applies unchanged. None of this is claimed as a contribution.
+\paragraph{Cost}
+Each round costs one training run, warm-started from the previous round, plus the tests. The test of a
+view costs $B$ backward passes for its block (or one, if the views' messages are cached), one render
+and one solve on the nine geometric coordinates of each surfel it touches, so it is linear in the number of views and pixels and needs no correspondence search; the
+depth maps are computed once and cached. With one view dropped per round, the number of rounds is the
+number of excluded views plus one, capped at $R_{\max}$.
+
+\paragraph{Approximation}
+Each surfel has its own block. Cross-surfel correlations (pixels shared by overlapping surfels), the
+correlation of depth error within a view and the shared pose error of a view are ignored, so the
+rendered variance is overconfident. This stays a stated limitation; H5 measures it, and deflating each
+view's information by $n_{\mathrm{eff}}/n$ or inflating the variance by a jackknife are ablations.
+Within a round, opacity frozen after the warm-up has a residual risk: a surfel that a not-yet-caught view
+caused to be pruned cannot be restored by any leave-out. The outer loop removes this risk for views it
+catches; a fold-wise warm-up is the ablation that measures what remains.
+
+\subsection{Further Details of the Gate}
+Each view ends a round kept, flagged, or reported untestable; flagged views are handled by the outer loop.
+A fitted scene temperature $\hat\gamma$ beyond its development range raises a scene-level alarm. Further
+shared bias terms (grazing angle, texture) are added to \eqref{M-eq:meas} only if the development residuals
+show them. The degrees of freedom $m_j$ of the energy statistic are based on $n_{\mathrm{eff}}$, not on the
+pixel count, and the region scan leads when the heterogeneity $\omega$ is large. Both the information
+$\Lambda^{(j)}$ and the gradient $\nabla\mathcal{L}_j$ of a view come from one backward pass, so nothing per
+view and surfel has to be stored. Gradients run only inside the train step; the fuse and test steps are not
+differentiated, so fusion need not be differentiable. H3D \cite{data_h3d} is used only if its raw images and
+orientations can be obtained.
