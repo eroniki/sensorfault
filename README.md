@@ -39,6 +39,7 @@ sensorfault/
     sim/ faults/ elim/ eval/   simulator, fault injection, elimination, metrics
   tests/                  CPU-only pytest suite
   docs/DEVELOPMENT.md     conventions: seeds, determinism, dev/test split
+  manuscript/             the RA-L letter (LaTeX; `manuscript/scripts/build.sh`), figures written by experiments/*_figures_tikz.py
   data/ outputs/ third_party/   git-ignored
 ```
 
@@ -66,7 +67,7 @@ Optional extras: `pip install -e ".[tsdf]"` (Open3D), `".[gs]"` (torch, gsplat),
 | real | Do the exact-depth findings reappear on scenes with laser truth? | H1, H2 | `configs/real_scenes_check.yaml` |
 
 All are `preregistered_draft` and flagged `implemented: false`; thresholds are proposals until the
-pre-registration tag (`prereg/`). The manuscript is in the private repo `sensorfault-manuscript`.
+pre-registration tag (`prereg/`). The manuscript is in `manuscript/`.
 
 ## Licence caveats
 

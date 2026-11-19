@@ -6,7 +6,7 @@ Writes results/h7/summary.json (criteria (a) and (b) per level) and, into <manus
   fig_h7_scatter.tex  supplement: pose error after vs before refinement, per view and component
   tab_h7.tex          main text: per level counts, detection, recovery, induced error, swamping
   *.csv               plotted data
-Run: python3 experiments/h7_figures_tikz.py ../sensorfault-manuscript
+Run: python3 experiments/h7_figures_tikz.py manuscript
 """
 
 from __future__ import annotations
@@ -471,4 +471,4 @@ def main(manuscript: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT.parent / "sensorfault-manuscript"))
+    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "manuscript"))

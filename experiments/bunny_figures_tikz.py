@@ -7,7 +7,7 @@ experiments/bunny_gate.py):
   (c) per-view -log10 p, fault on v3 vs clean (seed 0, the golden-test cases), first Holm threshold
   (d) the same for the two known failures: clean seed 1 and a fault on the end-of-arc view v5
 Compiles a standalone check PDF + PNG preview into results/bunny/ when pdflatex is available.
-Run: python3 experiments/bunny_figures_tikz.py ../sensorfault-manuscript
+Run: python3 experiments/bunny_figures_tikz.py manuscript
 """
 
 from __future__ import annotations
@@ -220,4 +220,4 @@ def main(manuscript: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT.parent / "sensorfault-manuscript"))
+    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "manuscript"))

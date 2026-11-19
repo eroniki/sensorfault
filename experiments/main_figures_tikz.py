@@ -9,7 +9,7 @@ Writes into <manuscript>/figures/main/:
 Uses only existing results (results/e1/qualitative/meta.json, results/rgb/metrics.json and the renders
 already on disk); the U P U^T figure is a small analytic example, labelled as such. Compiles standalone
 PDFs for checking at print size (text width of the elsarticle preprint layout: 390 pt = 13.7 cm).
-Run: python3 experiments/main_figures_tikz.py ../sensorfault-manuscript
+Run: python3 experiments/main_figures_tikz.py manuscript
 """
 
 from __future__ import annotations
@@ -820,4 +820,4 @@ def main(manuscript: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT.parent / "sensorfault-manuscript"))
+    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "manuscript"))
