@@ -7,7 +7,7 @@ merged here with its full commit history. The imported commits keep their origin
 | Workspace | Content | Start here |
 |---|---|---|
 | `code/sensorfault/` | Auditing monocular depth with per-source information on Gaussian surfels: surfel fit, information records, baselines, experiments | `code/sensorfault/PLAN.md`, `code/sensorfault/README.md` |
-| `papers/sensorfault/` | The RA-L letter for it (LaTeX), and the earlier view-gate letter with its supplement | `papers/sensorfault/README.md` |
+| `papers/sensorfault/` | The RA-L letter for it (LaTeX) | `papers/sensorfault/README.md` |
 | `code/depthcal-gs/` | depthcal-gs code, configs, figures and training notes | `code/depthcal-gs/PLAN.md` |
 | `papers/depthcal-gs/` | The depthcal-gs manuscript (LaTeX) | `papers/depthcal-gs/README.md` |
 
@@ -20,13 +20,13 @@ cd code/sensorfault && pip install -e ".[dev]" && pytest -q tests/core && ruff c
 cd code/depthcal-gs && pip install -e . && pytest -q
 ```
 
-Each paper builds from inside its directory with `scripts/build.sh` (TeX Live with `latexmk`). The sensorfault figure
-generators (`code/sensorfault/experiments/*_figures_tikz.py`) write into `papers/sensorfault/figures/` by default.
+Each paper builds from inside its directory with `scripts/build.sh` (TeX Live with `latexmk`). The sensorfault letter
+figures are written by `code/sensorfault/experiments/letter_figures_tikz.py` into `papers/sensorfault/figures/letter/`.
 `papers/depthcal-gs/.githooks/pre-commit` rebuilds its committed PDF; enable it with
 `git config core.hooksPath papers/depthcal-gs/.githooks` if wanted.
 
 ## Licences and data
 
 Code under `code/sensorfault/` is MIT (`code/sensorfault/LICENSE`, `NOTICE`); see each workspace for the terms of the
-datasets and models it uses. No dataset, checkpoint or third-party code is committed. The repository is private; the
-letters are under double-anonymous review rules, so check each venue before making it public.
+datasets and models it uses. No dataset, checkpoint or third-party code is committed. The letters follow
+double-anonymous review rules: make the repository private while a paper is under review.

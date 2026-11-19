@@ -1,4 +1,0 @@
-i,stage,minutes,gate_passes,s_per_pass,threads
-0,clean,49.1,340,8.7,4
-1,grid,55.4,482,6.9,2
-2,repeated,47.0,455,6.2,2
