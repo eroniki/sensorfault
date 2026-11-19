@@ -70,10 +70,63 @@ and collapse only at $95\%$, where the fault is nearly a constant offset; the st
 
 \subsection{Supervised first stage (sanity check, not a result)}
 \label{sec:stage1}
-\runin{Setup.} SDXL base frozen in fp16 with a fp32 VAE, LoRA rank 32 on the attention projections, a widened $8$-channel input convolution, $v$-prediction with zero-terminal-SNR, empty-prompt conditioning, $512$\,px, batch $32$.
-Training data: BlendedMVS (107 training scenes, 6 held out) and a Hypersim subset; the BlendedMVS images are blended composites, not photographs.
-The run was stopped at step $2{,}000$ of a planned $10{,}000$ (about $14$\,s per step on a TITAN RTX; peak $8.9$\,GB in the smoke run).
-\runin{Validation.} Validation loss at steps $500/1000/1500/2000$: $0.439/0.393/0.351/0.337$; the proxy affine AbsRel (a different normalisation from the literature, a trend indicator only): $0.719/0.648/0.641/0.618$.
-\runin{Held-out ETH3D \texttt{pipes}} (three views of one scene; five DDIM samples per view, scale and shift fitted to the sparse laser depth, AbsRel in depth units). Mean AbsRel over the three views: $0.102$ (step $1000$, $10$ steps), $0.105/0.107/0.110/0.111$ (step $2000$, $1/4/10/30$ steps). On view 6 the untrained base scores $0.38$.
-Step $2000$ is not clearly better than step $1000$, and fewer sampler steps score slightly better; with three views of one scene these differences are within noise.
-This is not a benchmark: it says only that the pipeline trains without numerical failure and moves the output toward the ground truth.
+The first stage (Section~\ref{sec:stage1-setup}) was run to step $2{,}000$ of the planned $10{,}000$ and stopped there by design, keeping the $10{,}000$-step learning-rate schedule so that the same run can be resumed.
+\TODO{Training is to resume from the step-$2{,}000$ checkpoint to step $10{,}000$. Every number in this subsection marked in red will change when it does; the others describe the first segment and stay.}
+
+\runin{Training.} The segment took $29{,}055$\,s ($8.1$\,h, validation included).
+The step time was $13.1$\,s at step $10$ and $14.2$--$14.6$\,s from step $500$ on ($2.4$ samples per second), so the full $10{,}000$ steps would take about $40$\,h on this card.
+Training allocated $8.9$\,GB of GPU memory ($9.7$\,GB on the device), and up to $16.4$\,GB during validation sampling.
+No step was skipped by the loss scaler and no loss was non-finite in $2{,}000$ steps; the loss scale stayed at $4096$ and rose to $8192$ at step $2{,}000$.
+At step $2{,}000$ the learning rate was still $9.1\times10^{-5}$, close to its peak, so the model is far from converged.
+
+\begin{table}[!t]
+  \centering
+  \caption{First-stage training and validation by step. Validation loss on $32$ held-out samples; proxy AbsRel in the normalised target space ($8$ images, median of DDIM samples with $10$ steps), a trend indicator only and not comparable with published AbsRel. Train loss is the mean over the $10$ logged steps up to that step. \emph{Rows after step $2{,}000$ are not yet run.}}
+  \label{tab:stage1-val}
+  \begin{tabular}{rccc}
+    \toprule
+    step & train loss & validation loss & proxy AbsRel \\
+    \midrule
+    $500$   & $0.427$ & $0.439$ & $0.719$ \\
+    $1{,}000$ & $0.337$ & $0.393$ & $0.648$ \\
+    $1{,}500$ & $0.330$ & $0.351$ & $0.641$ \\
+    $2{,}000$ & $0.295$ & $0.337$ & $0.618$ \\
+    $4{,}000$--$10{,}000$ & \todocell & \todocell & \todocell \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\runin{Validation.} The validation loss and the proxy AbsRel fell at every check up to step $2{,}000$ (Table~\ref{tab:stage1-val}) and the validation samples were finite at every check.
+\TODO{Validation loss and proxy AbsRel at the end of the resumed run, and whether they keep falling.}
+
+\begin{table}[!t]
+  \centering
+  \caption{Held-out ETH3D \texttt{pipes}, three views of one scene: AbsRel of the per-pixel median of five DDIM samples after a least-squares scale and shift fitted to the sparse laser depth, in depth units. \emph{A sanity check on one scene, not a benchmark result.} The untrained base model was scored on view $6$ only.}
+  \label{tab:stage1-eth3d}
+  \begin{tabular}{lrcccc}
+    \toprule
+    checkpoint & DDIM steps & view 2 & view 6 & view 10 & mean \\
+    \midrule
+    untrained base & -- & -- & $0.38$ & -- & -- \\
+    step $1{,}000$ & $10$ & $0.065$ & $0.108$ & $0.133$ & $0.102$ \\
+    step $2{,}000$ & $1$  & $0.052$ & $0.119$ & $0.144$ & $0.105$ \\
+    step $2{,}000$ & $4$  & $0.049$ & $0.125$ & $0.147$ & $0.107$ \\
+    step $2{,}000$ & $10$ & $0.049$ & $0.132$ & $0.148$ & $0.110$ \\
+    step $2{,}000$ & $30$ & $0.050$ & $0.136$ & $0.148$ & $0.111$ \\
+    step $10{,}000$ & \todocell & \todocell & \todocell & \todocell & \todocell \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\runin{Held-out ETH3D \texttt{pipes}.} Fine-tuning moved the output toward the ground truth: on view $6$ the untrained base scores AbsRel $0.38$ ($\delta_1=0.35$) and the trained model $0.11$--$0.14$, and the mean over the three views is about $0.10$--$0.11$ for every checkpoint and sampler setting tried (Table~\ref{tab:stage1-eth3d}).
+Step $2{,}000$ is not clearly better than step $1{,}000$ (view $2$ improves, views $6$ and $10$ get slightly worse), although the validation loss kept falling; with three views of one scene these differences are within noise.
+\TODO{AbsRel and $\delta_1$ of the resumed model on these views, and on all ETH3D scenes with public ground truth.}
+
+\runin{Sampler steps and sample spread.} Fewer sampler steps score slightly better: the one-step prediction, which is close to a posterior mean, beats $10$ and $30$ steps on views $6$ and $10$, and the median of five samples beats a single sample (single-sample AbsRel $0.055$--$0.158$, against $0.052$--$0.148$ for the median).
+The spread of the samples grows with the number of steps.
+For this paper that is a tension, not a detail: the test of Section~\ref{sec:statistic} needs genuinely diverse samples whose spread is a covariance, while the most accurate output is the least diverse one.
+Visually, the spread is largest at depth edges, on the ceiling and on a metal cabinet, which is also where the error is largest; this correlation has not been measured.
+\TODO{Whether the trade-off between accuracy and spread persists after the resumed run; the measured correlation between spread and error.}
+
+This is not a benchmark.
+It shows that the pipeline trains without numerical failure and moves the output toward the ground truth on data it never saw; it says nothing yet about whether the sample spread is calibrated.

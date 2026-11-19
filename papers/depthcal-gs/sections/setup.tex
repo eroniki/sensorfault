@@ -8,3 +8,20 @@ sparsification error, and the normalised whitened-residual statistic on clean vi
 adversarial-plausible shifts; metrics are the minimum detectable fault at a fixed false-alarm rate, power curves, the clean false-alarm rate, an
 absorption ratio (the fraction of an injected displacement reproduced by the unguided mean), and power against fault area fraction.
 \runin{Label fraction.} \TODO{Grid of labelled-scene fractions; inductive and transductive protocols reported separately.}
+
+\subsection{Stage-1 training run}
+\label{sec:stage1-setup}
+\runin{Data.} BlendedMVS~\cite{yao2020blendedmvs} (low-resolution release, 113 scenes, 17{,}819 image and depth pairs; the last six scenes by identifier, 703 pairs, are held out for validation, leaving 107 scenes and 17{,}116 pairs for training) is sampled with weight $0.6$.
+Its images blend a render of the reconstructed mesh with the photographs, so they are not photographs; its rendered depth was checked to be planar depth ($z$), not distance along the ray.
+A Hypersim~\cite{roberts2021hypersim} subset (twelve scenes of the official training split, 1{,}991 pairs; three scenes of the validation split, 257 pairs) is sampled with weight $0.4$; its distance-along-the-ray depth is converted to planar depth with the nominal focal length ($886.81$\,px), ignoring the per-scene tilt-shift of the camera.
+ETH3D is never read during training.
+\runin{Augmentation.} A random square crop of $60$--$100\%$ of the image area, a horizontal flip and a resize to $512\times512$ (bilinear for the image, nearest for the depth).
+\runin{Optimisation.} AdamW with learning rate $10^{-4}$ for the adapters and $3\times10^{-5}$ for the input convolution, $500$ warm-up steps followed by a cosine decay to $5\%$ of the peak over the planned $10{,}000$ steps, weight decay $0.01$, gradient clipping at norm $1$, half-precision autocast with a dynamic loss scale (initially $4096$), and gradient checkpointing.
+Each optimiser step uses $32$ images (micro-batches of $4$ with $8$ accumulation steps), so the planned run sees $320{,}000$ samples, against $576{,}000$ for Marigold~\cite{ke2024marigold}.
+46.5M parameters are trained (the adapters and the input convolution) out of 2.61B.
+\runin{Hardware.} One NVIDIA TITAN RTX (24\,GB).
+\runin{Smoke test.} Before the run, $200$ steps at batch $16$ on an eight-scene BlendedMVS subset and five Hypersim scenes checked that the loss falls, that no loss is non-finite, that at most $10\%$ of the steps are skipped by the loss scaler, that validation samples are finite, and that a run stopped by a signal resumes with step continuity.
+It passed at $7.3$--$7.5$\,s per step and $8.9$\,GB peak allocation.
+\runin{Monitoring.} Every $500$ steps, the validation loss on $32$ held-out samples, and an affine-fitted AbsRel of the median of DDIM samples ($10$ steps) on $8$ validation images.
+This AbsRel is computed in the normalised target space, not in depth units, and serves only as a trend indicator; it is not comparable with published numbers.
+\runin{Sanity check on held-out ETH3D.} Three views ($2$, $6$ and $10$) of the ETH3D \texttt{pipes} scene, undistorted and down-sampled by $8$; five DDIM samples per view are aligned to each other, their per-pixel median is fitted to the sparse laser depth (about $10\%$ of the pixels) by a least-squares scale and shift, and AbsRel and $\delta_1$ are computed in depth units on the valid pixels.

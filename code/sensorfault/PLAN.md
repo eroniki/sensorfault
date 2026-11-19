@@ -78,7 +78,7 @@ Estimates are for one 24 GB GPU and are not measurements.
 |---|---|---|---|---|---|
 | **0** | Stage 0: colour render and image Jacobian in the reference renderer; finite-difference test; recovery and dispersion on a synthetic entity; additivity test | `gs/reference.py`, new `gs/image_info.py`, `tests/core/test_image_info.py`, `experiments/stage0_entity.py` | CPU, 3 days | none | H3, H14; early S2 |
 | **1** | Data: strip table, RGB loader, 64 m tile map, class labels from exact depth; Depth Pro cache on block 3, then the other three models | `experiments/matrixcity_io.py`, `depthcache/run.py`, new `eval/calibration.py` | 1 GPU h, 1 day | GPU | none |
-| **2** | Stage A: depth-only map from real monocular depth, per-frame alignment without ground truth, per-entity records, single-frame calibration; s_z, ϱ(B), realised against predicted variance | `gs/fit.py`, `eval/calibration.py`, new `experiments/stage_a_honesty.py` | 20 CPU h, 2 days | WP1 | **H1, H2; S1** |
+| **2** | Stage A: depth-only map from real monocular depth, per-frame alignment without ground truth, per-entity records, single-frame calibration; s_z, ϱ(B), realised against predicted variance | `gs/fit.py`, `eval/calibration.py`, new `experiments/stage_a_honesty.py` | 20 CPU h, 2 days | WP1 | **H1, H2; S1**. Task list: `docs/stage-a-tasks.md` (A1–A16) |
 | **3** | Stage B: projective appearance, injection ladder, capture range, dispersion and honesty factor | `experiments/rgb_train_2dgs.py`, new `gs/inject.py` | 14 GPU h, 2 days | WP0, WP1 | H3–H6; S2, S3 |
 | **4** | Stage C: two-source records on tiles, saturated fusion, score test, fault grid, six maps, tile bootstrap | `gs/fit.py`, `gs/fusers.py`, `gs/gate.py`, `faults/injectors.py`, `eval/stats.py` | 40 GPU h, 5 days | WP2, WP3 | H7–H10; S4, S5 |
 | **5** | Baselines: consensus gate on real depth, decaying and fixed weight, photometric and virtual-stereo masks, Fisher field | `gs/gate.py`, `gs/fusers.py`, new `baselines/selective_depth.py`, `baselines/fisher_field.py` | 15 GPU h, 3 days, parallel with WP4 | WP1 | H8, H9 |
@@ -121,7 +121,7 @@ Estimates are for one 24 GB GPU and are not measurements.
 
 ## 9. Open items
 
-- [ ] WP0 and WP1 (start now; WP1 needs the GPU workstation).
+- [ ] WP0 and WP1 (start now; WP1 needs the GPU workstation). Stage A tasks A1–A16 are in `docs/stage-a-tasks.md`.
 - [ ] Approval to download further MatrixCity aerial blocks (test set); otherwise results are "same scene".
 - [ ] Decide whether UseGeo is in this paper (optional).
 - [ ] Fix thresholds on dev data and tag the pre-registration (WP7) before any test tile is scored.
