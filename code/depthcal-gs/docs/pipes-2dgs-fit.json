@@ -1,0 +1,85 @@
+{
+ "2": {
+  "before": {
+   "coverage_of_valid_gt": 0.989,
+   "rel_err_median": 0.001,
+   "rel_err_p90": 0.0044,
+   "psnr_db": 16.18
+  },
+  "after": {
+   "coverage_of_valid_gt": 0.998,
+   "rel_err_median": 0.0008,
+   "rel_err_p90": 0.003,
+   "psnr_db": 23.04
+  },
+  "surfels": 597708,
+  "seconds": 102.2,
+  "poisoned_view_untouched": true,
+  "run_to_run_noise_abs_diff": {
+   "median": 0.0001800060272216797,
+   "p99": 0.003988258838653558,
+   "max": 2.7037246227264404
+  },
+  "perturbed_j_abs_diff": {
+   "median": 0.00018143653869628906,
+   "p99": 0.004193168878555281,
+   "max": 2.7037246227264404
+  }
+ },
+ "6": {
+  "before": {
+   "coverage_of_valid_gt": 0.877,
+   "rel_err_median": 0.0043,
+   "rel_err_p90": 0.0082,
+   "psnr_db": 11.63
+  },
+  "after": {
+   "coverage_of_valid_gt": 0.947,
+   "rel_err_median": 0.0019,
+   "rel_err_p90": 0.0063,
+   "psnr_db": 15.19
+  },
+  "surfels": 584003,
+  "seconds": 131.4,
+  "poisoned_view_untouched": true,
+  "run_to_run_noise_abs_diff": {
+   "median": 2.1219253540039062e-05,
+   "p99": 0.0017442703247070312,
+   "max": 3.2468981742858887
+  },
+  "perturbed_j_abs_diff": {
+   "median": 2.1696090698242188e-05,
+   "p99": 0.0018146002292633023,
+   "max": 2.7441842555999756
+  }
+ },
+ "10": {
+  "before": {
+   "coverage_of_valid_gt": 0.977,
+   "rel_err_median": 0.0014,
+   "rel_err_p90": 0.0047,
+   "psnr_db": 14.34
+  },
+  "after": {
+   "coverage_of_valid_gt": 0.996,
+   "rel_err_median": 0.0009,
+   "rel_err_p90": 0.0043,
+   "psnr_db": 20.13
+  },
+  "surfels": 602175,
+  "seconds": 105.5,
+  "poisoned_view_untouched": true,
+  "run_to_run_noise_abs_diff": {
+   "median": 0.0002155303955078125,
+   "p99": 0.007996668815612673,
+   "max": 2.434636354446411
+  },
+  "perturbed_j_abs_diff": {
+   "median": 0.00021791458129882812,
+   "p99": 0.007727607488631966,
+   "max": 2.9183435440063477
+  }
+ },
+ "peak_gpu_GB": 0.76,
+ "_note": "fits: 2000 iterations; guards: 300 iterations (guard-only rerun), diffs are |depth render| differences in the units of the scene (metres)"
+}

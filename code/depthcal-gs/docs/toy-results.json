@@ -1,0 +1,207 @@
+{
+ "null": {
+  "known": {
+   "mean_T": 257.1557900675382,
+   "mean_T_over_dof": 1.0124243703446385,
+   "far_at_chi2": 0.075,
+   "emp_thr": 303.43577874329264
+  },
+  "oracle": {
+   "mean_T": 243.62675879090136,
+   "mean_T_over_dof": 0.9591604676807141,
+   "far_at_chi2": 0.06,
+   "emp_thr": 293.3082120778497
+  },
+  "kernel": {
+   "mean_T": 332.03484189431225,
+   "mean_T_over_dof": 1.3072237869854813,
+   "far_at_chi2": 0.265,
+   "emp_thr": 746.2222826598207
+  },
+  "kernel_nr": {
+   "mean_T": 332.08083560348723,
+   "mean_T_over_dof": 1.3074048645806584,
+   "far_at_chi2": 0.265,
+   "emp_thr": 748.7799776443605
+  },
+  "shrunk": {
+   "mean_T": 238.2478337805489,
+   "mean_T_over_dof": 0.9379835975612161,
+   "far_at_chi2": 0.135,
+   "emp_thr": 319.8869635532213
+  }
+ },
+ "power": {
+  "square": {
+   "0.5": {
+    "known": 0.2125,
+    "oracle": 0.2125,
+    "kernel": 0.0625,
+    "kernel_nr": 0.0625,
+    "shrunk": 0.15
+   },
+   "1.0": {
+    "known": 0.975,
+    "oracle": 0.9875,
+    "kernel": 0.125,
+    "kernel_nr": 0.125,
+    "shrunk": 0.325
+   },
+   "1.5": {
+    "known": 1.0,
+    "oracle": 1.0,
+    "kernel": 0.3125,
+    "kernel_nr": 0.3375,
+    "shrunk": 0.8375
+   },
+   "2.5": {
+    "known": 1.0,
+    "oracle": 1.0,
+    "kernel": 0.975,
+    "kernel_nr": 0.9875,
+    "shrunk": 1.0
+   },
+   "4.0": {
+    "known": 1.0,
+    "oracle": 1.0,
+    "kernel": 1.0,
+    "kernel_nr": 1.0,
+    "shrunk": 1.0
+   }
+  },
+  "warp": {
+   "0.5": {
+    "known": 0.1,
+    "oracle": 0.075,
+    "kernel": 0.0875,
+    "kernel_nr": 0.0875,
+    "shrunk": 0.1875
+   },
+   "1.0": {
+    "known": 0.1875,
+    "oracle": 0.2,
+    "kernel": 0.1,
+    "kernel_nr": 0.1,
+    "shrunk": 0.6875
+   },
+   "1.5": {
+    "known": 0.425,
+    "oracle": 0.5375,
+    "kernel": 0.125,
+    "kernel_nr": 0.125,
+    "shrunk": 0.95
+   },
+   "2.5": {
+    "known": 1.0,
+    "oracle": 1.0,
+    "kernel": 0.15,
+    "kernel_nr": 0.15,
+    "shrunk": 1.0
+   },
+   "4.0": {
+    "known": 1.0,
+    "oracle": 1.0,
+    "kernel": 0.325,
+    "kernel_nr": 0.35,
+    "shrunk": 1.0
+   }
+  },
+  "edge": {
+   "0.5": {
+    "known": 0.2375,
+    "oracle": 0.3875,
+    "kernel": 0.0875,
+    "kernel_nr": 0.0875,
+    "shrunk": 0.125
+   },
+   "1.0": {
+    "known": 0.9625,
+    "oracle": 1.0,
+    "kernel": 0.0875,
+    "kernel_nr": 0.0875,
+    "shrunk": 0.4
+   },
+   "1.5": {
+    "known": 1.0,
+    "oracle": 1.0,
+    "kernel": 0.225,
+    "kernel_nr": 0.2125,
+    "shrunk": 0.75
+   },
+   "2.5": {
+    "known": 1.0,
+    "oracle": 1.0,
+    "kernel": 0.875,
+    "kernel_nr": 0.85,
+    "shrunk": 1.0
+   },
+   "4.0": {
+    "known": 1.0,
+    "oracle": 1.0,
+    "kernel": 1.0,
+    "kernel_nr": 1.0,
+    "shrunk": 1.0
+   }
+  }
+ },
+ "shift_kappa8": {
+  "known": 1.0,
+  "oracle": 0.05,
+  "kernel": 0.0375,
+  "kernel_nr": 0.0375,
+  "shrunk": 0.025
+ },
+ "affine_kappa8": {
+  "known": 1.0,
+  "oracle": 1.0,
+  "kernel": 0.9125,
+  "kernel_nr": 0.9125,
+  "shrunk": 1.0
+ },
+ "area_sweep_kappa2.5": {
+  "0.05": {
+   "known": 1.0,
+   "oracle": 1.0,
+   "kernel": 0.125,
+   "kernel_nr": 0.1375,
+   "shrunk": 1.0
+  },
+  "0.15": {
+   "known": 1.0,
+   "oracle": 1.0,
+   "kernel": 0.6625,
+   "kernel_nr": 0.8375,
+   "shrunk": 1.0
+  },
+  "0.3": {
+   "known": 1.0,
+   "oracle": 1.0,
+   "kernel": 0.7,
+   "kernel_nr": 0.875,
+   "shrunk": 1.0
+  },
+  "0.45": {
+   "known": 1.0,
+   "oracle": 1.0,
+   "kernel": 0.5875,
+   "kernel_nr": 0.65,
+   "shrunk": 0.9875
+  },
+  "0.6": {
+   "known": 1.0,
+   "oracle": 1.0,
+   "kernel": 0.45,
+   "kernel_nr": 0.55,
+   "shrunk": 1.0
+  }
+ },
+ "meta": {
+  "g": 16,
+  "n": 256,
+  "M": 10,
+  "n0": 200,
+  "n1": 80,
+  "seconds": 84.924076795578,
+  "chi2_thr95": 292.17485804729586
+ }
+}

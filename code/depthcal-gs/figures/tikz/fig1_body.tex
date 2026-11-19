@@ -1,0 +1,26 @@
+% Leave-one-view-out 2DGS on ETH3D pipes, held-out views 2, 6, 10. Data: data/fig1_pipes.csv (REAL data; before = initialised surfels, not optimised)
+\newcommand{\figoneplot}[4]{% #1 col before, #2 col after, #3 precision, #4 ylabel
+  \addplot[ybar, fill=ambGrey, draw=black, line width=0.4pt, bar shift=-4.8pt, nodes near coords,
+    every node near coord/.append style={font=\figfont\tiny, /pgf/number format/.cd, fixed, precision=#3}]
+    table[x expr=\coordindex, y=#1, col sep=comma]{\tikzdir/data/fig1_pipes.csv};
+  \addplot[ybar, fill=ambRed, draw=black, line width=0.4pt, bar shift=4.8pt, nodes near coords,
+    every node near coord/.append style={font=\figfont\tiny, /pgf/number format/.cd, fixed, precision=#3}]
+    table[x expr=\coordindex, y=#2, col sep=comma]{\tikzdir/data/fig1_pipes.csv};}
+\pgfplotsset{figone/.style={ybar, bar width=9pt, barleg}}
+\begin{tikzpicture}
+\begin{groupplot}[amb, group style={group size=3 by 1, horizontal sep=0.105\figw}, width=0.235\figw, height=0.2\figw,
+  xtick={0,1,2}, xticklabels={2,6,10}, xmin=-0.6, xmax=2.6, xlabel={Held-out view}, enlarge y limits={upper, value=0.12}]
+\nextgroupplot[figone, ylabel={Coverage of valid GT [\%]}, ymin=70, ymax=104, legend to name=figoneleg, legend columns=2]
+\figoneplot{cov_b}{cov_a}{1}{}
+\addlegendentry{initialised surfels (not optimised)}
+\addlegendentry{optimised, 2000 iterations (RGB + depth L1)}
+\nextgroupplot[figone, ylabel={Median depth error [\%]}, ymin=0, ymax=0.5]
+\figoneplot{med_b}{med_a}{2}{}
+\nextgroupplot[figone, ylabel={90th pct. depth error [\%]}, ymin=0, ymax=1.0]
+\figoneplot{p90_b}{p90_a}{2}{}
+\end{groupplot}
+\node[anchor=south] at ($(group c2r1.north)+(0,0.25cm)$) {\ref{figoneleg}};
+\subcap{$(group c1r1.south)+(0,-0.95cm)$}{(a) Held-out GT pixels covered}
+\subcap{$(group c2r1.south)+(0,-0.95cm)$}{(b) Median relative depth error}
+\subcap{$(group c3r1.south)+(0,-0.95cm)$}{(c) 90th-percentile relative depth error}
+\end{tikzpicture}

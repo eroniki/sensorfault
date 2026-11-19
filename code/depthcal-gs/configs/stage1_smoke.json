@@ -1,0 +1,48 @@
+{
+  "_comment": "Smoke run: same model and data as the full run, 200 optimiser steps of batch 16, eval and checkpoint every 100 steps. Passes if scripts/stage1_smoke_check.py says so.",
+  "pretrained": "${SDXL_DIR}",
+  "embeds_cache": "${STAGE1_WORK}/empty_prompt_embeds.pt",
+  "vae": "fp32",
+  "prediction_type": "v_prediction",
+  "zero_snr": true,
+  "rank": 32,
+  "grad_ckpt": true,
+  "res": 512,
+  "micro_batch": 4,
+  "accum": 4,
+  "total_steps": 200,
+  "lr": 0.0001,
+  "lr_conv": 3e-05,
+  "warmup": 20,
+  "cosine": true,
+  "min_lr_frac": 0.05,
+  "weight_decay": 0.01,
+  "max_grad_norm": 1.0,
+  "init_scale": 4096,
+  "max_consecutive_bad": 10,
+  "workers": 8,
+  "seed": 0,
+  "log_every": 5,
+  "ckpt_every_min": 90,
+  "ckpt_every_steps": 100,
+  "keep_last": 3,
+  "milestone_every": 0,
+  "eval_every": 100,
+  "val_samples": 16,
+  "val_sample_images": 4,
+  "val_ddim_steps": 10,
+  "datasets": [
+    {
+      "type": "blendedmvs",
+      "root": "${BLENDEDMVS_ROOT}",
+      "weight": 0.6,
+      "val_scenes": 6
+    },
+    {
+      "type": "hypersim",
+      "root": "${HYPERSIM_ROOT}",
+      "weight": 0.4,
+      "split_csv": "${HYPERSIM_SPLIT_CSV}"
+    }
+  ]
+}

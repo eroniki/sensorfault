@@ -1,0 +1,31 @@
+% Toy statistic: power versus fault area, and the two global faults.
+% Data: data/fig5_area_a.csv, data/fig5_area_b_k2.5.csv, data/fig5_area_b_k4.csv, data/fig5_global.csv (synthetic Gaussian toy, 1 seed)
+\newcommand{\figfiveline}[4]{\addplot[#2] table[x=area, y=#1, col sep=comma]{\tikzdir/data/#3.csv};}
+\begin{tikzpicture}
+\begin{groupplot}[amb, group style={group size=3 by 1, horizontal sep=0.075\figw}, width=0.235\figw, height=0.2\figw]
+\nextgroupplot[xmin=0, xmax=0.65, ymin=0, ymax=1.08, ytick={0,0.2,0.4,0.6,0.8,1}, xlabel={Fault area [fraction of view]}, ylabel={Power [-]},
+  legend to name=figfiveleg, legend columns=3, legend style={/tikz/every even column/.append style={column sep=6pt}}]
+\figfiveline{known}{known}{fig5_area_a}{}\addlegendentry{known: true $(a,b)$ and covariance}
+\figfiveline{oracle}{oracle}{fig5_area_a}{}\addlegendentry{fitted $(s,t)$, true covariance}
+\figfiveline{kernel}{kernel}{fig5_area_a}{}\addlegendentry{estimated kernel (robust)}
+\figfiveline{kernel_nr}{kernelnr}{fig5_area_a}{}\addlegendentry{estimated kernel (plain)}
+\figfiveline{shrunk}{shrunk}{fig5_area_a}{}\addlegendentry{shrunk sample covariance}
+\nextgroupplot[xmin=0, xmax=1.0, ymin=0, ymax=1.08, ytick={0,0.2,0.4,0.6,0.8,1}, xlabel={Fault area [fraction of view]}, yticklabels={}]
+\figfiveline{oracle}{oracle}{fig5_area_b_k2.5}{}\figfiveline{kernel}{kernel}{fig5_area_b_k2.5}{}\figfiveline{kernel_nr}{kernelnr}{fig5_area_b_k2.5}{}
+\figfiveline{oracle}{oracle, dotted, mark options={solid}}{fig5_area_b_k4}{}\figfiveline{kernel}{kernel, dotted, mark options={solid}}{fig5_area_b_k4}{}
+\figfiveline{kernel_nr}{kernelnr, dotted, mark options={solid}}{fig5_area_b_k4}{}
+\node[font=\figfont\tiny, align=center, anchor=south east] at (axis cs:0.93,0.05) {fault $\approx$ constant\\offset: absorbed\\by fitted shift};
+\node[font=\figfont\tiny, anchor=west, align=left] at (axis cs:0.42,0.3) {solid: 2.5 sd\\dotted: 4 sd};
+\nextgroupplot[ybar, barleg, bar width=7pt, xmin=-0.6, xmax=4.6, ymin=0, ymax=1.3, ytick={0,0.2,0.4,0.6,0.8,1}, xtick={0,1,2,3,4},
+  xticklabels={known, oracle, kernel, kernel (plain), shrunk}, x tick label style={rotate=30, anchor=east}, yticklabels={},
+  legend to name=figfiveleg2, legend columns=2]
+\addplot[ybar, fill=ambGrey, draw=black, line width=0.3pt, bar shift=-3.8pt] table[x=vi, y=shift, col sep=comma]{\tikzdir/data/fig5_global.csv};
+\addplot[ybar, fill=ambBlue, draw=black, line width=0.3pt, bar shift=3.8pt] table[x=vi, y=affine, col sep=comma]{\tikzdir/data/fig5_global.csv};
+\addlegendentry{constant shift}\addlegendentry{scale error}
+\end{groupplot}
+\node[anchor=south] at ($(group c2r1.north)+(0,0.3cm)$) {\ref{figfiveleg}};
+\node[anchor=north, inner sep=2pt] at ($(group c3r1.north)+(0,-0.05cm)$) {\ref{figfiveleg2}};
+\subcap{$(group c1r1.south)+(0,-1.05cm)$}{(a) Band fault, 2.5 sd}
+\subcap{$(group c2r1.south)+(0,-1.05cm)$}{(b) Larger areas}
+\subcap{$(group c3r1.south)+(0,-1.35cm)$}{(c) Global faults, 8 sd}
+\end{tikzpicture}
