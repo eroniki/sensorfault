@@ -3,8 +3,11 @@ on:
   push:
   pull_request:
 jobs:
-  test:
+  sensorfault:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code/sensorfault
     strategy:
       matrix:
         python-version: ["3.10", "3.12"]
@@ -21,3 +24,17 @@ jobs:
         run: ruff format --check .
       - name: Tests
         run: python -m pytest -q -m "not gpu and not data and not slow"
+  depthcal-gs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code/depthcal-gs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install (CPU only)
+        run: python -m pip install -e . pytest
+      - name: Tests (the stage-1 test needs torch and is not run here)
+        run: python -m pytest -q --ignore=tests/test_stage1.py

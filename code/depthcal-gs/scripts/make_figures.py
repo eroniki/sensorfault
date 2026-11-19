@@ -398,7 +398,7 @@ def summary(pipes, guards, toy, mdf_res, miscal, area):
           "| `fig3`, `fig4`, `fig5`, `fig6` | fig3-fig6, toy statistic | synthetic toy, 1 seed |",
           "| `toy_square`, `toy_warp`, `toy_edge` | toy residual-map panels (matrix plots with shared colourbars; T and threshold printed from the data) | synthetic toy, seed 7 |",
           "| `pipes_view2`, `pipes_view6`, `pipes_view10`, `pipes_guard_poisoned`, `pipes_guard_leaky` | ETH3D render panels (images inside TikZ frames, shared depth and error colourbars) | real ETH3D |", "",
-          "In the manuscript (`eroniki/depthcal-gs-manuscript`) the PGFPlots sources of fig3, fig4, fig6 and the two toy residual-map figures (`toy_square`, `toy_warp`) are included directly "
+          "In the manuscript (`papers/depthcal-gs`) the PGFPlots sources of fig3, fig4, fig6 and the two toy residual-map figures (`toy_square`, `toy_warp`) are included directly "
           "(`figures/tikz/sync_paper.sh` copies them); the ETH3D render panels are not in the paper because they use ground-truth depth as a stand-in for model predictions.", "",
           "### Style sources", "",
           "Figure style (fonts, colours, line weights, axis and legend layout) was taken from your papers:", "",

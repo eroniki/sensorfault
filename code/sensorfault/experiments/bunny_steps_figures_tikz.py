@@ -13,7 +13,7 @@ Reads results/bunny/steps.npz/json (experiments/bunny_steps.py) and writes
    (f) observed minus rendered depth, with the +5 cm window dashed
    (g) residual after the shared bias and affine nuisance, standardised
    (h) step 6, region-scan z per tile of the 4x4 grid and the resulting p-value
-Run: python3 experiments/bunny_steps_figures_tikz.py manuscript
+Run: python3 experiments/bunny_steps_figures_tikz.py ../../papers/sensorfault
 """
 
 from __future__ import annotations
@@ -343,4 +343,4 @@ def main(manuscript: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "manuscript"))
+    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT.parent.parent / "papers" / "sensorfault"))

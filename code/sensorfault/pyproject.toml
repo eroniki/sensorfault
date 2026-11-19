@@ -37,7 +37,7 @@ markers = [
 line-length = 100
 target-version = "py310"
 src = ["src", "tests", "scripts"]
-extend-exclude = ["third_party", "data", "outputs", "manuscript"]
+extend-exclude = ["third_party", "data", "outputs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "C4", "SIM", "RUF", "NPY", "PT"]

@@ -7,7 +7,7 @@ Reads results/surface (experiments/surface_dsm.py) and writes into <manuscript>/
   fig_surface_normals.tex  supplement: depth-derived normals of one view, GT vs RGB 2DGS, angle error
   tab_surface.tex          residual statistics
 and copies the PNG maps. Standalone check PDFs go to results/surface/check/.
-Run: python3 experiments/surface_figures_tikz.py manuscript
+Run: python3 experiments/surface_figures_tikz.py ../../papers/sensorfault
 """
 
 from __future__ import annotations
@@ -402,4 +402,4 @@ def main(manuscript: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "manuscript"))
+    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT.parent.parent / "papers" / "sensorfault"))

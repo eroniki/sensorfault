@@ -2,9 +2,9 @@
 
 Draft of *Auditing Monocular Depth with Per-Source Information on Gaussian Surfels*, in the IEEE Robotics and
 Automation Letters (RA-L) template (`IEEEtran`, journal mode), for the RA-L submission path with the IROS
-presentation option. Code and plan are in the same repository, one level up (`PLAN.md`, design v4.0; method
+presentation option. Code and plan are in the same repository under `code/sensorfault/` (`PLAN.md`, design v4.0; method
 `docs/learned-indicator.md`; protocol `docs/learned-indicator/experiment-design.md`; paper design
-`docs/learned-indicator/paper-plan.md`). Run the commands below from `manuscript/`.
+`docs/learned-indicator/paper-plan.md`). Run the commands below from `papers/sensorfault/`.
 
 The paper stores, on each planar Gaussian surfel patch, a Fisher information record on its placement (an offset and
 two tilts) separately for the monocular depth prior and for the pixels. To first order the image Jacobian factors
@@ -53,7 +53,7 @@ head with "Anonymous". The repository URL TODO in the Acknowledgment must stay a
 - `main.tex` RA-L letter: title, abstract, index terms, section includes, acknowledgment; `supplement.tex` supplementary material; `preamble.tex` shared packages and macros
 - `sections/` new letter: `intro`, `related`, `method`, `setup`, `results`, `conclusion`; view-gate letter: `vg_*.tex`; its supplement: `supp_*.tex`; `macros.tex`
 - `refs/references.bib` cited entries only; `refs/EVIDENCE.md` how each was checked
-- `figures/e1/` E1 figures (pgfplots) and summary table, with their CSV data, copied from `results/e1/figures/` at the repository root (regenerate there with `experiments/e1_figures.py`); `figures/e1q/` E1 qualitative checks (PNG panels and LaTeX), copied from `results/e1/qualitative/` (regenerate with `experiments/e1_qualitative.py`); remaining placeholders are drawn by `\todofig` in `sections/macros.tex`
+- `figures/e1/` E1 figures (pgfplots) and summary table, with their CSV data, copied from `code/sensorfault/results/e1/figures/` (regenerate there with `experiments/e1_figures.py`); `figures/e1q/` E1 qualitative checks (PNG panels and LaTeX), copied from `results/e1/qualitative/` (regenerate with `experiments/e1_qualitative.py`); remaining placeholders are drawn by `\todofig` in `sections/macros.tex`
 
 ## Licence note
 `IEEEtran` is distributed with TeX Live (LPPL). Keep this repository private until the preprint is released.
