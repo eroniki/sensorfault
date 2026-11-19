@@ -184,7 +184,52 @@ def _solve_tau(proj2, lam, h, s2, target=cal.CHI2_MEDIAN):
     return float(hi)
 
 
-def calibrate_noise(rec, ent, land, model="floor", min_rec=30):
+FLOOR_COVARIATES = ("roof", "steep", "log_pixels", "log_incidence", "log_depth")
+
+
+def floor_covariates(rec, ent, cls):
+    """Record covariates of the shared-error floor: surface class, steepness, pixel count,
+    incidence |n.r| and depth (logs)."""
+    e = rec.entity
+    d = rec.h / np.maximum(rec.nr, 1e-6)
+    return np.stack(
+        [
+            (cls[e] == clm.ROOF).astype(float),
+            ent.normal_class[e].astype(float),
+            np.log(np.maximum(rec.npix, 1)),
+            np.log(np.maximum(rec.nr, 1e-3)),
+            np.log(np.maximum(d, 1e-3)),
+        ],
+        1,
+    )
+
+
+def fit_floor_shape(rec, X, use, sig, nu=4.0):
+    """Shape of the floor, log g = X beta (centred on calibration land), by a Student-t (nu)
+    likelihood of the calibration-land records with per-frame white sigma; the level is set later
+    by the per-frame median rule. Returns (beta, centre)."""
+    from scipy.optimize import minimize
+
+    lam, V = np.linalg.eigh(rec.Lam0[use])
+    proj2 = np.einsum("rji,rj->ri", V, rec.eps[use]) ** 2
+    s2 = (rc._sigma_of(rec.frame[use], sig) ** 2)[:, None]
+    h2 = (rec.h[use] ** 2)[:, None]
+    mu = X[use].mean(0)
+    Z = X[use] - mu
+
+    def nll(p):
+        lt = p[0] + Z @ p[1:]
+        v = s2 / lam + np.exp(2 * lt)[:, None] * h2
+        q = np.sum(proj2 / v, 1)
+        return float(np.sum(0.5 * (nu + 3) * np.log1p(q / nu) + 0.5 * np.sum(np.log(v), 1)))
+
+    p0 = np.zeros(1 + X.shape[1])
+    p0[0] = np.log(0.02)
+    res = minimize(nll, p0, method="L-BFGS-B")
+    return res.x[1:], mu
+
+
+def calibrate_noise(rec, ent, land, model="floor", min_rec=30, cls=None):
     """A8: per-frame noise model calibrated on calibration tiles (land).
 
     ``white``: one sigma per frame so that the median single-frame z^2 is the chi2_3 median (pixel
@@ -215,18 +260,34 @@ def calibrate_noise(rec, ent, land, model="floor", min_rec=30):
         sig[int(f)] = float(np.sqrt(np.median(wh[m]))) if own else s_glob
         n_own += int(own)
     s2 = rc._sigma_of(rec.frame, sig) ** 2
-    t_glob = _solve_tau(proj2[use], lam[use], rec.h[use], s2[use]) if use.any() else 0.0
+    shape = {}
+    if model == "class":
+        X = floor_covariates(rec, ent, cls)
+        beta, mu = fit_floor_shape(rec, X, use, sig)
+        rec.floor_scale = np.exp((X - mu) @ beta)
+        shape = {
+            "floor_shape_beta": dict(zip(FLOOR_COVARIATES, beta.tolist())),
+            "floor_scale_p10_p90": [
+                float(np.percentile(rec.floor_scale, 10)),
+                float(np.percentile(rec.floor_scale, 90)),
+            ],
+        }
+    else:
+        rec.floor_scale = np.ones(len(rec.entity))
+    he = rec.h * rec.floor_scale
+    t_glob = _solve_tau(proj2[use], lam[use], he[use], s2[use]) if use.any() else 0.0
     tau = {}
     for f in frames:
         m = use & (rec.frame == f)
         own = m.sum() >= min_rec
-        tau[int(f)] = _solve_tau(proj2[m], lam[m], rec.h[m], s2[m]) if own else t_glob
+        tau[int(f)] = _solve_tau(proj2[m], lam[m], he[m], s2[m]) if own else t_glob
     tv = np.array(list(tau.values()))
     return (
         sig,
         tau,
         {
-            "model": "floor",
+            **shape,
+            "model": model,
             "sigma_global": s_glob,
             "tau_global": t_glob,
             "tau_median": float(np.median(tv)),
@@ -363,9 +424,10 @@ def main(argv=None):
     ap.add_argument("--roof-height", type=float, default=6.0)
     ap.add_argument(
         "--noise",
-        choices=["floor", "white"],
-        default="floor",
-        help="record noise model: white pixel noise plus a record-level floor, or white only",
+        choices=["class", "floor", "white"],
+        default="class",
+        help="record noise model: white pixel noise plus a record floor whose size depends on "
+        "record covariates (class), a per-frame floor only (floor), or white only",
     )
     ap.add_argument("--white-noise", type=float, default=0.002)
     ap.add_argument("--planted-rho", type=float, default=0.3)
@@ -451,7 +513,7 @@ def main(argv=None):
     # A7: records; additivity
     rec = rc.concat([rc.frame_records(K, v, al.depth[i], ent) for i, v in enumerate(views)])
     land = cls != clm.WATER
-    sigma, tau, noise_info = calibrate_noise(rec, ent, land, a.noise)  # A8
+    sigma, tau, noise_info = calibrate_noise(rec, ent, land, a.noise, cls=cls)  # A8
     LamF, epsF, nF = rc.fuse(rec, sigma, tau)
     fr_sorted = np.unique(rec.frame)
     half = np.isin(rec.frame, fr_sorted[::2])
@@ -507,6 +569,11 @@ def main(argv=None):
         "pass": bool(0.9 <= sz1["estimate"] <= 1.1),
         # a noise model that ignores shared pixel errors shows s_z growing with pixels per record
         "s_z_by_pixel_tertile": _by_tertile(z1[lr], rec.npix[lr]),
+        "s_z_by_class": {
+            name: cal.robust_scale(z1[lr & (cls[rec.entity] == c)])
+            for c, name in clm.NAMES.items()
+            if c != clm.WATER and (lr & (cls[rec.entity] == c)).any()
+        },
     }
 
     # A9: H1
@@ -675,11 +742,16 @@ def _noise_line(nz) -> str:
     if nz["model"] == "white":
         return f"- Noise model: white pixel noise, global sigma {_f(nz['sigma_global'], 4)}."
     lo, hi = nz["tau_p10_p90"]
-    return (
-        f"- Noise model: white pixel noise sigma (global {_f(nz['sigma_global'], 4)}) plus a "
-        f"record floor tau (global {_f(nz['tau_global'], 4)}, per-frame median "
-        f"{_f(nz['tau_median'], 4)}, p10-p90 {_f(lo, 4)}-{_f(hi, 4)})."
+    line = (
+        f"- Noise model ({nz['model']}): white pixel noise sigma (global "
+        f"{_f(nz['sigma_global'], 4)}) plus a record floor tau (global {_f(nz['tau_global'], 4)}, "
+        f"per-frame median {_f(nz['tau_median'], 4)}, p10-p90 {_f(lo, 4)}-{_f(hi, 4)})"
     )
+    if "floor_shape_beta" in nz:
+        b = ", ".join(f"{k} {v:+.3f}" for k, v in nz["floor_shape_beta"].items())
+        g0, g1 = nz["floor_scale_p10_p90"]
+        line += f"; floor shape log g: {b} (g p10-p90 {_f(g0)}-{_f(g1)})"
+    return line + "."
 
 
 def render_summary(log) -> str:
@@ -717,6 +789,8 @@ def render_summary(log) -> str:
         + ", ".join(
             f"{t['pixels']} px {_f(t['s_z'])}" for t in log["single_frame"]["s_z_by_pixel_tertile"]
         )
+        + "; by class: "
+        + ", ".join(f"{k} {_f(v)}" for k, v in log["single_frame"]["s_z_by_class"].items())
         + ".",
         "",
     ]

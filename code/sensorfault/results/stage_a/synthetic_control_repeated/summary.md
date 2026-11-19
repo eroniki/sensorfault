@@ -7,9 +7,9 @@ Synthetic block.
 
 - **H1** (lower bound of s_z on held-out land, n >= 5, above 1.25): **supported**.
 - **H2** (realised/predicted fused variance in [0.67, 1.5] per n-bin): **supported**.
-- A8 single-frame calibration on held-out land: s_z = 1.02 [0.988, 1.07], pass.
-- Noise model: white pixel noise sigma (global 0.001899) plus a record floor tau (global 0.002589, per-frame median 0.002589, p10-p90 0.002421-0.002785).
-- A8 s_z by pixels per record (held-out land): 4-9 px 1.05, 10-12 px 0.979, 13-16 px 1.04.
+- A8 single-frame calibration on held-out land: s_z = 1.01 [0.979, 1.05], pass.
+- Noise model (class): white pixel noise sigma (global 0.001899) plus a record floor tau (global 0.00261, per-frame median 0.00261, p10-p90 0.002433-0.0028); floor shape log g: roof +0.182, steep +0.177, log_pixels +0.011, log_incidence -0.537, log_depth +1.494 (g p10-p90 0.964-1.01).
+- A8 s_z by pixels per record (held-out land): 4-9 px 1.02, 10-12 px 0.988, 13-16 px 1.05; by class: roof 1.11, ground 0.998.
 
 ## Alignment (A5)
 
@@ -19,17 +19,17 @@ Median relative depth residual: label-free with parallax datum 0.00248, after da
 
 ## Records (A7)
 
-23660 records, 3402 entities seen, median n = 4, median pixels per record 9, median shape remainder 0.312 m; additivity max relative difference 3.79e-16.
+23660 records, 3402 entities seen, median n = 4, median pixels per record 9, median shape remainder 0.312 m; additivity max relative difference 3.5e-16.
 
 ## H1: depth-only map on held-out tiles, n >= 5 (A9)
 
 | group | entities | s_z | s_z tail | cov 0.683 | cov 0.95 | ECE | log-score | calib. loss |
 |---|---|---|---|---|---|---|---|---|
-| all | 397 | 1.8 [1.74, 1.91] | 1.94 | 0.242 | 0.504 | 0.32 | 0.323 | 2.14 |
-| land | 274 | 1.83 [1.72, 1.99] | 2.04 | 0.23 | 0.5 | 0.326 | 0.77 | 2.58 |
-| water | 123 | 1.77 [1.62, 1.9] | 1.69 | 0.268 | 0.512 | 0.307 | -0.672 | 1.22 |
-| roof | 36 | 1.92 | 2.03 | 0.194 | 0.444 | 0.352 | 0.81 | 2.55 |
-| ground | 238 | 1.79 [1.72, 2.08] | 2.04 | 0.235 | 0.508 | 0.322 | 0.764 | 2.59 |
+| all | 397 | 1.79 [1.72, 1.87] | 1.79 | 0.247 | 0.516 | 0.316 | -0.402 | 1.54 |
+| land | 274 | 1.79 [1.74, 1.87] | 1.84 | 0.237 | 0.518 | 0.322 | -0.241 | 1.74 |
+| water | 123 | 1.77 [1.57, 1.87] | 1.66 | 0.268 | 0.512 | 0.302 | -0.76 | 1.13 |
+| roof | 36 | 1.87 | 2.04 | 0.194 | 0.444 | 0.357 | 0.878 | 2.62 |
+| ground | 238 | 1.78 [1.74, 1.87] | 1.8 | 0.244 | 0.529 | 0.316 | -0.411 | 1.61 |
 | contrast_q1 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | contrast_q2 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | contrast_q3 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
@@ -40,10 +40,10 @@ Consensus gate (A12), land, after removing flagged frames:
 
 | B | frames removed | temperature | s_z | cov 0.95 |
 |---|---|---|---|---|
-| 1 | 3 | 0.785 | 1.83 [1.72, 1.98] | 0.5 |
-| 3 | 5 | 0.785 | 1.77 [1.72, 1.91] | 0.513 |
-| 5 | 4 | 0.786 | 1.83 [1.72, 1.98] | 0.5 |
-| 9 | 4 | 0.786 | 1.83 [1.72, 1.98] | 0.5 |
+| 1 | 3 | 0.74 | 1.76 [1.71, 1.85] | 0.531 |
+| 3 | 3 | 0.746 | 1.76 [1.71, 1.85] | 0.531 |
+| 5 | 3 | 0.746 | 1.76 [1.71, 1.85] | 0.531 |
+| 9 | 3 | 0.746 | 1.76 [1.71, 1.85] | 0.531 |
 
 ## Repetition (A10)
 
@@ -66,8 +66,8 @@ Fused error for the law: equal-weight mean of the frames' errors. The last colum
 | n bin | entities | R_real | R_pred | 1/n | real/pred | info-weighted |
 |---|---|---|---|---|---|---|
 | 1 | 105 | 1 | 1 | 1 | 1 [1, 1] | 1 |
-| 2 | 172 | 0.605 | 0.607 | 0.5 | 0.996 [0.896, 1.07] | 0.943 |
-| 3-4 | 197 | 0.441 | 0.441 | 0.288 | 0.999 [0.868, 1.14] | 0.977 |
+| 2 | 172 | 0.605 | 0.607 | 0.5 | 0.996 [0.896, 1.07] | 0.948 |
+| 3-4 | 197 | 0.441 | 0.441 | 0.288 | 0.999 [0.868, 1.14] | 0.971 |
 | 5-8 | 146 | 0.36 | 0.334 | 0.152 | 1.08 [0.937, 1.22] | 1.05 |
 | 9-16 | 236 | 0.302 | 0.284 | 0.0882 | 1.06 [0.922, 1.15] | 1.05 |
 | 17+ | 15 | 0.289 | 0.259 | 0.0564 | 1.12 | 1.11 |
@@ -76,4 +76,4 @@ Fused error for the law: equal-weight mean of the frames' errors. The last colum
 
 p90_px_scale1: 2.17, p90_px_scale2: 1.09, p90_px_scale4: 0.543, p90_px_scale8: 0.272, n_pixels: 1.95e+05
 
-Runtime 0.6 min.
+Runtime 0.5 min.

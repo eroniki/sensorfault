@@ -27,7 +27,8 @@ over the record's pixels)^-1/2 the metres per unit relative depth error,
     Sigma_mi = sigma_i^2 Lambda0_mi^-1 + (tau_i h_mi)^2 I_3,
 
 where sigma_i is the within-record (white) relative noise and tau_i the relative error shared by
-the record's pixels. ``record_information`` returns Sigma_mi^-1; tau = 0 gives Lam0 / sigma^2.
+the record's pixels. A record-specific multiplier g_mi of tau_i (``floor_scale``) lets the shared
+error depend on record covariates such as surface class, incidence, depth and pixel count. ``record_information`` returns Sigma_mi^-1; tau = 0 gives Lam0 / sigma^2.
 Records also keep the white noise estimate ``white`` (weighted residual sum of squares about the
 plane per degree of freedom, at sigma = 1) and ``h``.
 """
@@ -169,12 +170,14 @@ class Records:
     M: int = 0
     white: np.ndarray | None = None  # (R,) weighted rss / (npix - 3): within-record sigma^2
     h: np.ndarray | None = None  # (R,) metres per unit relative depth error
+    nr: np.ndarray | None = None  # (R,) mean |n . r| of the record's pixels (incidence)
+    floor_scale: np.ndarray | None = None  # (R,) record-specific multiplier of tau (default 1)
 
     def __post_init__(self):
-        if self.white is None:
-            self.white = np.full(len(self.entity), np.nan)
-        if self.h is None:
-            self.h = np.full(len(self.entity), np.nan)
+        R = len(self.entity)
+        for name, val in (("white", np.nan), ("h", np.nan), ("nr", np.nan), ("floor_scale", 1.0)):
+            if getattr(self, name) is None:
+                setattr(self, name, np.full(R, val))
 
     def subset(self, mask: np.ndarray) -> Records:
         return Records(
@@ -187,6 +190,8 @@ class Records:
             self.M,
             self.white[mask],
             self.h[mask],
+            self.nr[mask],
+            self.floor_scale[mask],
         )
 
     def save(self, path, **extra) -> None:
@@ -201,6 +206,8 @@ class Records:
             M=self.M,
             white=self.white,
             h=self.h,
+            nr=self.nr,
+            floor_scale=self.floor_scale,
             **extra,
         )
 
@@ -272,7 +279,10 @@ def frame_records(
     shape = np.sqrt(rss / sw[idx])
     white = rss / np.maximum(cnt[idx] - 3, 1)
     h = np.sqrt(cnt[idx] / sw[idx])
-    return Records(idx, np.full(len(idx), view["frame"]), A[idx], eps, cnt[idx], shape, M, white, h)
+    nr_mean = np.bincount(e, np.abs(nr), M)[idx] / cnt[idx]
+    return Records(
+        idx, np.full(len(idx), view["frame"]), A[idx], eps, cnt[idx], shape, M, white, h, nr_mean
+    )
 
 
 def concat(recs: Sequence[Records]) -> Records:
@@ -288,17 +298,20 @@ def concat(recs: Sequence[Records]) -> Records:
         M,
         np.concatenate([r.white for r in recs]),
         np.concatenate([r.h for r in recs]),
+        np.concatenate([r.nr for r in recs]),
+        np.concatenate([r.floor_scale for r in recs]),
     )
 
 
 def record_information(rec: Records, sigma=1.0, tau=None) -> np.ndarray:
-    """Per-record information (R, 3, 3): (sigma^2 Lam0^-1 + (tau h)^2 I)^-1, or Lam0 / sigma^2.
+    """Per-record information (R, 3, 3): (sigma^2 Lam0^-1 + (tau g h)^2 I)^-1, or Lam0 / sigma^2.
 
-    ``sigma`` and ``tau`` are each a scalar, a frame -> value mapping or an array by frame."""
+    ``sigma`` and ``tau`` are each a scalar, a frame -> value mapping or an array by frame; g is
+    the record's ``floor_scale`` (1 unless a covariate model of the floor set it)."""
     s = _sigma_of(rec.frame, sigma)
     if tau is None:
         return rec.Lam0 / (s**2)[:, None, None]
-    t = _sigma_of(rec.frame, tau)
+    t = _sigma_of(rec.frame, tau) * rec.floor_scale
     if not np.any(t > 0):
         return rec.Lam0 / (s**2)[:, None, None]
     C = (s**2)[:, None, None] * np.linalg.inv(rec.Lam0)
