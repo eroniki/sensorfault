@@ -287,10 +287,15 @@ def align_block(
     if radius is None:
         radius = 3.5 * spacing
     nb = neighbours(views, radius)
-    # gauge pairs need a baseline (parallax); co-located frames carry none
+    # gauge pairs need a baseline (parallax; co-located frames carry none) and a shared view:
+    # oblique frames of different headings hardly overlap, so neighbours of the same heading
+    # come first
+    yaw = np.array([float(v.get("yaw", 0.0)) % 360.0 for v in views])
     pairs = []
     for i in range(F):
         cand = [j for j in nb[i] if np.linalg.norm(C[j] - C[i]) > 0.25 * spacing]
+        same = [j for j in cand if abs(yaw[j] - yaw[i]) < 1.0]
+        cand = same if same else cand
         cand.sort(key=lambda j: np.linalg.norm(C[j] - C[i]))
         pairs += [(i, j) for j in cand[:4]]
     if not pairs:
