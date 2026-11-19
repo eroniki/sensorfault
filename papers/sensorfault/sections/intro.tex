@@ -48,13 +48,14 @@ surface is unsupported.
 \TODO{Replace the list by result-bearing contributions once the experiments of Section~\ref{sec:results}
 are run.}
 
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
 \input{\lfigdir/fig_teaser.tex}
-\caption{A depth-only map is confidently wrong where the depth model repeats its error (schematic). Top: a
-transect through a roof that all $n=12$ frames place 2.5~m too low; their mean, the depth-only map, misses
-the true surface by four times its stated $2\sigma$, whereas the per-source estimate with the prior capped at
-the repeated share keeps the truth inside its band. Bottom: the energy $E_m$ between the depth prior and the
-pixels per 8~m entity; the dotted line is the 5\% threshold.}
+\caption{A depth-only map is confidently wrong where the depth model repeats its error (schematic, surfels of
+2~m). (a) Every frame's depth places the larger roof 2.5~m below the true roof (dashed), so the $n=12$ depth
+maps agree with each other. (b) The depth-only map, coloured by its standardised error $z$: its stated
+$2\sigma$ slab (black) is thin and lies wholly below the true roof. (c) The per-source map, coloured by the
+energy $E_m$ between the depth prior and the pixels: the energy is high only on the faulty roof, the depth
+record is left out there, and the honest $2\sigma$ slab (red) contains the true roof on both buildings.}
 \label{fig:teaser}
-\end{figure}
+\end{figure*}

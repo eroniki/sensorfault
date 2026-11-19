@@ -1,8 +1,8 @@
 """TikZ/PGFPlots figures of the RA-L letter (papers/sensorfault/main.tex), in the style of figstyle.tex.
 
 Writes into <paper>/figures/letter/:
-  fig_teaser.tex     schematic: a depth error repeated in every frame makes the depth-only map confidently
-                     wrong; the per-source record flags it and widens the band (analytic, labelled schematic)
+  fig_teaser.tex     3D schematic (figure*): a depth error repeated in every frame makes the depth-only surfel
+                     map confidently wrong; the per-source record flags it and keeps an honest band
   fig_overview.tex   method overview: two records on one placement, honest information, score test, fusion
   fig_stage_a.tex    PRELIMINARY Stage A on MatrixCity block 3: s_z per depth model against the H1 bar,
                      repeated share rho_hat against its permutation null, and the overconfidence law
@@ -20,7 +20,6 @@ Run from code/sensorfault:
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 import math
 import shutil
@@ -64,79 +63,184 @@ def f(x: float, p: int = 4) -> str:
 
 
 def teaser() -> str:
-    """1D transect through a roof that the depth model places 2.5 m too low in every frame."""
+    """3D schematic, three panels (figure*): frames over two buildings; every frame's depth places the roof
+    of the larger one 2.5 m too low, the smaller one is placed right. (a) the scene and the frames; (b) the
+    depth-only surfel map coloured by its standardised error, with the stated 2-sigma slab; (c) the
+    per-source map coloured by the energy between depth prior and pixels, with the honest slab."""
     rng = np.random.default_rng(3)
-    x = np.linspace(0, 96, 193)
-    truth = np.where((x > 36) & (x < 60), 6.0, 0.0)
-    n, sig, rho = (
-        12,
-        1.0,
-        0.65,
-    )  # single-frame placement sd [m] and repeated share (Depth Pro, preliminary)
-    common = np.where((x > 36) & (x < 60), -2.5, 0.0)  # the repeated fault: same in every frame
-    # per-frame terms: smooth noise, total single-frame variance sig^2 split into (1-rho) independent part
-    frames = []
-    for _ in range(n):
-        w = rng.normal(size=x.size)
-        k = np.exp(-0.5 * (np.arange(-12, 13) / 4.0) ** 2)
-        w = np.convolve(w, k / np.sqrt((k**2).sum()), mode="same")
-        frames.append(truth + common + sig * np.sqrt(1 - rho) * w)
-    frames = np.array(frames)
-    fused = frames.mean(0)
-    stated = 2 * sig / np.sqrt(n)  # the summed depth record claims 1/n
-    # honest prior: capped at the repeated share; pixels: information comparable to one frame, weaker on
-    # the roof (stiffness from its texture and edges)
-    vd = sig**2 * (rho + (1 - rho) / n)
-    vi = np.where((x > 36) & (x < 60), 0.7**2, 0.8**2)
-    pix = truth  # pixel placement, expected value
-    tens = (fused - pix) ** 2 / (vd + vi)
-    gated = tens > 3.84  # chi2_1 at 5%: leave the depth record out
-    lam = np.where(gated, 1 / vi, 1 / vd + 1 / vi)
-    ours = np.where(gated, pix, (fused / vd + pix / vi) / (1 / vd + 1 / vi))
-    band = 2 / np.sqrt(lam)
-    # tension energy per 8 m entity
-    edges = np.arange(0, 97, 8)
-    ent = []
-    for a, b in itertools.pairwise(edges):
-        m = (x >= a) & (x < b)
-        t = (fused[m] - pix[m]).mean()
-        ent.append((0.5 * (a + b), 0.5 + 0.5 * t**2 / (vd + vi[m].mean())))
+    n, sig, rho = 12, 1.0, 0.65  # frames, single-frame sd [m], repeated share
+    # buildings: x0, x1, y0, y1, true height [m], repeated depth error [m]
+    blds = [(14.0, 30.0, 12.0, 26.0, 12.0, -2.5), (36.0, 44.0, 4.0, 12.0, 7.0, 0.0)]
+    s, gap = 2.0, 0.3  # surfel spacing and gap [m]
+    vd = sig**2 * (rho + (1 - rho) / n)  # honest prior variance
+    stated = sig / np.sqrt(n)  # sd the summed depth record states
+    vi_roof, vi_ground = 0.7**2, 0.8**2
 
-    def co(xs, ys):
-        return " ".join(f"({a:.1f},{b:.2f})" for a, b in zip(xs, ys, strict=True))
+    def cell(x, y, z0, bias, vi):
+        ind = sig * np.sqrt(1 - rho) / np.sqrt(n) * rng.normal()
+        depth = z0 + bias + 0.1 * rng.normal() + ind  # depth-only fused placement
+        pix = z0 + np.sqrt(vi) * 0.3 * rng.normal()  # pixel placement
+        t2 = (depth - pix) ** 2 / (vd + vi)
+        ours = pix if t2 > 3.84 else (depth / vd + pix / vi) / (1 / vd + 1 / vi)
+        return (x, y, depth, (depth - z0) / stated, ours, 0.5 + 0.5 * t2)
 
-    fr = "\n".join(
-        rf"\addplot[sfgrey!70, line width=0.3pt, forget plot] coordinates {{{co(x[::2], y[::2])}}};"
-        for y in frames
+    ground, roofs = [], [[] for _ in blds]
+    for x in np.arange(s / 2, 48, s):
+        for y in np.arange(s / 2, 34, s):
+            inside = [k for k, b in enumerate(blds) if b[0] < x < b[1] and b[2] < y < b[3]]
+            if inside:
+                b = blds[inside[0]]
+                roofs[inside[0]].append(cell(x, y, b[4], b[5], vi_roof))
+            else:
+                ground.append(cell(x, y, 0.0, 0.0, vi_ground))
+
+    def table(cs, zkey, ckey, clip):
+        h = s / 2 - gap / 2
+        rows = []
+        for c in cs:
+            x, y, z, m = c[0], c[1], c[zkey], float(np.clip(c[ckey], -clip, clip))
+            rows += [
+                f"{x + dx:.2f} {y + dy:.2f} {z:.2f} {m:.2f}"
+                for dx, dy in ((-h, -h), (h, -h), (h, h), (-h, h))
+            ]
+        return "x y z c\n" + "\n".join(rows) + "\n"
+
+    ps = "patch, patch type=rectangle, shader=flat, z buffer=sort, point meta=explicit, draw=black!35, line width=0.08pt"
+
+    def plot(cs, zkey, ckey, cmap):
+        if cmap == "grey":
+            opt, clip = ps + ", colormap={gr}{gray(0cm)=(0.66); gray(1cm)=(0.66)}", 0
+        elif cmap == "z":
+            opt, clip = ps + ", colormap name=sfrdbu, point meta min=-8, point meta max=8", 8
+        else:
+            opt, clip = ps + ", colormap name=sfviridis, point meta min=0, point meta max=6", 6
+        return f"\\addplot3[{opt}] table[meta=c] {{{table(cs, zkey, ckey, clip)}}};"
+
+    def quad(pts, style):
+        return (
+            rf"\draw[{style}] "
+            + " -- ".join(f"(axis cs:{a:.2f},{b:.2f},{c:.2f})" for a, b, c in pts)
+            + " -- cycle;"
+        )
+
+    def walls(b, zt):
+        x0, x1, y0, y1 = b[:4]
+        st = "fill=black!7, draw=black!45, line width=0.3pt"
+        # back faces first, then the faces towards the viewer (view from -x, -y)
+        return "\n".join(
+            [
+                quad([(x1, y0, 0), (x1, y1, 0), (x1, y1, zt), (x1, y0, zt)], st),
+                quad([(x0, y1, 0), (x1, y1, 0), (x1, y1, zt), (x0, y1, zt)], st),
+                quad(
+                    [(x0, y0, 0), (x1, y0, 0), (x1, y0, zt), (x0, y0, zt)], st + ", fill=black!12"
+                ),
+                quad([(x0, y0, 0), (x0, y1, 0), (x0, y1, zt), (x0, y0, zt)], st + ", fill=black!4"),
+            ]
+        )
+
+    def slab(b, zc, half, col, op):
+        x0, x1, y0, y1 = b[:4]
+        z0, z1 = zc - half, zc + half
+        st = f"fill={col}, fill opacity={op}, draw={col}, draw opacity=0.9, line width=0.4pt"
+        return "\n".join(
+            [
+                quad([(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)], st),
+                quad([(x0, y0, z0), (x0, y1, z0), (x0, y1, z1), (x0, y0, z1)], st),
+                quad(
+                    [(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)],
+                    f"draw={col}, line width=0.4pt",
+                ),
+            ]
+        )
+
+    def true_roof(b):
+        x0, x1, y0, y1, h = b[:5]
+        return quad(
+            [(x0, y0, h), (x1, y0, h), (x1, y1, h), (x0, y1, h)],
+            "sforange, line width=1.0pt, densely dashed",
+        )
+
+    def scene(zkey, ckey, cmap, honest):
+        out = [plot(ground, zkey, ckey, cmap)]
+        for k in (0, 1):  # far building first
+            b = blds[k]
+            roof_z = float(np.median([c[zkey] for c in roofs[k]]))
+            out.append(walls(b, roof_z))
+            out.append(plot(roofs[k], zkey, ckey, cmap))
+            if honest is not None:
+                half = 2 * (np.sqrt(vi_roof) if honest else stated)
+                out.append(
+                    slab(b, roof_z, half, "sfred" if honest else "black", 0.16 if honest else 0.3)
+                )
+            out.append(true_roof(b))
+        return "\n".join(out)
+
+    # frames: one strip at 30 m height, looking down and forward (oblique, as in the survey)
+    cams = [(4.0 + 10.0 * k, 4.0, 34.0) for k in range(5)]
+
+    def frustum(cx, cy, cz):
+        c = [
+            (cx - 2.0, cy + 1.2, cz - 2.0),
+            (cx + 2.0, cy + 1.2, cz - 2.0),
+            (cx + 2.0, cy + 3.0, cz - 0.8),
+            (cx - 2.0, cy + 3.0, cz - 0.8),
+        ]
+        st = "black!75, line width=0.4pt"
+        out = [
+            rf"\draw[{st}] (axis cs:{cx},{cy},{cz}) -- (axis cs:{a:.1f},{b:.1f},{d:.1f});"
+            for a, b, d in c
+        ]
+        out.append(quad(c, st + ", fill=white, fill opacity=0.9"))
+        return "\n".join(out)
+
+    b = blds[0]
+    targets = [(17.0, 16.0), (20.0, 20.0), (24.0, 22.0), (27.0, 17.0), (26.0, 23.0)]
+    zt = b[4] + b[5]
+    rays, hits = [], []
+    for (cx, cy, cz), (tx, ty) in zip(cams, targets, strict=True):
+        lam = (cz - zt) / (
+            cz - b[4]
+        )  # ray towards the true roof point, stopped at the depth-placed height
+        hx, hy = cx + lam * (tx - cx), cy + lam * (ty - cy)
+        rays.append(
+            rf"\draw[sfred, line width=0.45pt, densely dashed] (axis cs:{cx},{cy},{cz}) -- (axis cs:{hx:.2f},{hy:.2f},{zt:.2f});"
+        )
+        hits.append(f"({hx:.2f},{hy:.2f},{zt:.2f})")
+
+    common = (
+        r"view={-35}{34}, hide axis, scale only axis, width=6.0cm, height=6.0cm, xmin=0, xmax=48, ymin=0, ymax=34, zmin=0,"
+        r" clip=false, unit vector ratio*=1 1 1"
     )
-    bars = " ".join(f"({c:.0f},{e:.2f})" for c, e in ent)
-    return rf"""% Teaser, schematic (generated by experiments/letter_figures_tikz.py; analytic, no data)
+    cb = (
+        r"colorbar horizontal, colorbar style={{width=3.4cm, height=0.12cm, at={{(0.5,-0.03)}}, anchor=north, {ticks},"
+        r" xticklabel style={{font=\sffamily\sansmath\tiny}}, xlabel={{{label}}}, xlabel style={{font=\sffamily\tiny, yshift=3pt}}}}"
+    )
+    lab = r"\node[font=\sffamily\tiny, align=center, inner sep=1pt]"
+    scale_bar = r"\draw[black, line width=0.6pt] (axis cs:30,-1.5,0) -- (axis cs:40,-1.5,0) node[midway, below, font=\sffamily\tiny, inner sep=2pt] {10 m};"
+    return rf"""% Teaser, 3D schematic (generated by experiments/letter_figures_tikz.py; analytic, no data)
+% n={n} frames, single-frame sd {sig} m, repeated share {rho}; large roof: repeated error {blds[0][5]} m
 \begin{{tikzpicture}}
-\begin{{groupplot}}[group style={{group size=1 by 2, vertical sep=4pt, xticklabels at=edge bottom}},
-  sfaxis, width=7.4cm, xmin=0, xmax=96, scale only axis, xtick={{0,16,...,96}}]
-\nextgroupplot[height=2.6cm, ymin=-2.5, ymax=9, ylabel={{height [m]}}, ytick={{0,3,6}},
-  legend style={{at={{(0.5,1.03)}}, anchor=south, legend columns=3, font=\sffamily\tiny, /tikz/every even column/.append style={{column sep=2pt}}}}]
-{fr}
-\addplot[name path=dl, draw=none, forget plot] coordinates {{{co(x[::2], (fused - stated)[::2])}}};
-\addplot[name path=du, draw=none, forget plot] coordinates {{{co(x[::2], (fused + stated)[::2])}}};
-\addplot[black!45, fill opacity=0.55] fill between[of=dl and du];
-\addlegendentry{{depth only, stated $2\sigma$}}
-\addplot[name path=ol, draw=none, forget plot] coordinates {{{co(x[::2], (ours - band)[::2])}}};
-\addplot[name path=ou, draw=none, forget plot] coordinates {{{co(x[::2], (ours + band)[::2])}}};
-\addplot[sfred, fill opacity=0.18] fill between[of=ol and ou];
-\addlegendentry{{per source, honest $2\sigma$}}
-\addplot[black, line width=0.9pt] coordinates {{{co(x[::2], fused[::2])}}};
-\addlegendentry{{depth-only map}}
-\addplot[sforange, line width=1.1pt, densely dashed] coordinates {{{co(x[::2], truth[::2])}}};
-\addlegendentry{{true surface}}
-\addlegendimage{{sfgrey!70, line width=0.3pt}}
-\addlegendentry{{{n} frames}}
-\node[font=\sffamily\tiny, align=center, anchor=south] at (axis cs:48,6.9) {{repeated error}};
-\nextgroupplot[height=1.05cm, ymin=0, ymax=9, ylabel={{$E_m$ [nat]}}, ytick={{0,4,8}}, xlabel={{along-track position [m]}},
-  ybar, bar width=7pt, every axis plot/.append style={{line width=0.4pt}}]
-\addplot[fill=sfred, draw=sfred!60!black] coordinates {{{bars}}};
-\addplot[sharp plot, black, densely dotted, line width=0.6pt] coordinates {{(0,1.92) (96,1.92)}};
-\end{{groupplot}}
+\begin{{axis}}[{common}, zmax=14, name=a]
+{scene(2, 3, "grey", None)}
+{"".join(frustum(*c) for c in cams)}
+{"".join(rays)}
+\addplot3[only marks, mark=*, mark size=1.0pt, sfred] coordinates {{{" ".join(hits)}}};
+{lab}[anchor=south] at (axis cs:24,4,35.5) {{{n} frames, one depth map each}};
+{lab}[anchor=south east, text=sforange!80!black] at (axis cs:14,26,12.3) {{true roof}};
+{scale_bar}
+\end{{axis}}
+\begin{{axis}}[{common}, at={{(a.south east)}}, anchor=south west, xshift=0.1cm, zmax=14, name=b, colormap name=sfrdbu, point meta min=-8, point meta max=8,
+  {cb.format(ticks="xtick={-8,-4,0,4,8}", label="standardised error $z$")}]
+{scene(2, 3, "z", False)}
+\end{{axis}}
+\begin{{axis}}[{common}, at={{(b.south east)}}, anchor=south west, xshift=0.1cm, zmax=14, name=c, colormap name=sfviridis, point meta min=0, point meta max=6,
+  {cb.format(ticks="xtick={0,2,4,6}, xticklabels={0,2,4,6+}", label="energy $E_m$ [nat]")}]
+{scene(4, 5, "E", True)}
+\end{{axis}}
+\coordinate (bot) at ([yshift=-1pt]current bounding box.south);
+\foreach \p/\t in {{a/{{\sfsub{{a}} the frames agree on a wrong roof}}, b/{{\sfsub{{b}} depth only, stated $2\sigma$}},
+  c/{{\sfsub{{c}} per source, honest $2\sigma$}}}}
+  \node[font=\sffamily\scriptsize, anchor=north] at (\p.south |- bot) {{\t}};
 \end{{tikzpicture}}
 """
 
