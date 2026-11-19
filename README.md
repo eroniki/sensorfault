@@ -1,7 +1,8 @@
 # Papers and code: sensorfault and depthcal-gs
 
 One repository for two papers and their code. Each of the four workspaces was a repository of its own and was
-merged here with its full commit history (`git log -- <directory>` follows it).
+merged here with its full commit history. The imported commits keep their original paths, so they appear in
+`git log` and on the second parent of each import merge, not under `git log -- <directory>`.
 
 | Workspace | Content | Start here |
 |---|---|---|
