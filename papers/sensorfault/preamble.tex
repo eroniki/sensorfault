@@ -1,4 +1,4 @@
-% shared preamble for main.tex (RA-L letter) and supplement.tex
+% preamble of main.tex (RA-L letter)
 \usepackage{amsmath,amssymb,amsfonts,amsthm}
 \usepackage{xcolor}
 \usepackage{algorithmic}
@@ -15,17 +15,11 @@
 \usetikzlibrary{calc,arrows.meta,positioning,patterns,decorations.pathreplacing,3d,backgrounds,fit,shapes.geometric}
 \usepackage{sansmath}
 \pgfplotsset{compat=1.16}
-\newcommand{\efigdir}{figures/e1}
-\newcommand{\qfigdir}{figures/e1q}
-\newcommand{\rfigdir}{figures/rgb}
-\newcommand{\mfigdir}{figures/main}
-\newcommand{\sfigdir}{figures/surface}
-\newcommand{\hfigdir}{figures/h7}
 \newcommand{\lfigdir}{figures/letter}
 \input{figures/figstyle.tex}
 \DeclareUrlCommand\path{\urlstyle{rm}}
 \providecommand{\href}[2]{#2}
 
-% Double-anonymous review: set \anonymoustrue in main.tex and supplement.tex to hide the author.
+% Double-anonymous review: set \anonymoustrue in main.tex to hide the author.
 \newif\ifanonymous
 \input{sections/macros}

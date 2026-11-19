@@ -11,8 +11,8 @@ entity therefore carries two information records on the same three placement coo
 tilts): one from the depth prior, one from the pixels, the second computed through the differentiable renderer. Their
 disagreement is a statistic with a null distribution; the pixel information is calibrated on the scene by frame
 replicates and by displacements injected through the renderer; the prior information saturates. No features are
-matched and no fault labels are used. The earlier depth-only view gate (design v3.4,
-`docs/plan-v3-view-gate.md`) is kept as the depth-consensus baseline.
+matched and no fault labels are used. The earlier depth-only view gate (design v3.4;
+`src/sensorfault/gs/gate.py`, configs in `configs/legacy_view_gate/`) is kept as the depth-consensus baseline.
 
 **Status:** nothing of design v4 is measured yet. Existing and tested: the depth-only surfel fit
 (`src/sensorfault/gs/`), the reference renderer with compositing weights and depth Jacobians, the information blocks
