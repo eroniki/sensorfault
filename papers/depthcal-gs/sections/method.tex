@@ -1,0 +1,36 @@
+\section{Method}
+\label{sec:method}
+\subsection{Setting}
+Posed views $\{(I_i, K_i, T_i)\}_{i=1}^N$ of a static scene. For a tested view $j$ the model produces samples of its depth.
+\TODO{Notation and assumptions: poses and intrinsics given; static scene; minority of faulty views.}
+
+\subsection{Affine-invariant depth diffusion}
+\label{sec:model}
+A pretrained latent image diffusion model is fine-tuned to sample the depth of a view conditioned on its RGB latent. The target is the
+per-view percentile-normalised depth; global scale and shift are not predicted and no camera embedding is used.
+\TODO{Backbone, adaptation (parameter-efficient or full), objective, sampler and number of steps.}
+
+\subsection{Unguided and guided sampling}
+\label{sec:guidance}
+\emph{Unguided} samples use only $I_j$ and give the measurement with its own covariance. \emph{Guided} samples add, at the last denoising
+steps, a likelihood gradient toward the depth rendered from a Gaussian-splat surface fitted to the other views, after a closed-form per-step
+scale and shift alignment. The render for view $j$ uses nothing derived from view $j$.
+\TODO{Surface construction, variance of the render, support mask, guidance schedule, rounds of refitting.}
+
+\subsection{Leave-view-out statistic with a fitted scale and shift}
+\label{sec:statistic}
+Let $\bar m$ be the mean of $M$ unguided samples aligned to each other, $\Sigma_U$ their local-shape covariance, and $D^{-j}$, $\Sigma_r^{-j}$ the
+render from the other views and its variance. Fit only a per-view scale and shift,
+\begin{equation}
+(s,t)=\argmin_{s,t}\ \lVert s\,\bar m + t\mathbf 1 - D^{-j}\rVert^{2}_{(s^{2}(1+1/M)\Sigma_U+\Sigma_r^{-j})^{-1}},
+\end{equation}
+and test the residual local shape
+$T=r^\top \bigl(s^{2}(1+1/M)\Sigma_U+\Sigma_r^{-j}\bigr)^{-1} r$, $r=s\bar m+t\mathbf 1-D^{-j}$.
+\TODO{Robust fit, effective degrees of freedom, empirical threshold calibration through the identical pipeline, the blind spot
+(a constant offset is absorbed exactly by $t$), and the minority-fault condition.}
+
+\subsection{Semi-self-supervised training}
+\label{sec:training}
+Labelled views use the standard diffusion loss on normalised ground-truth depth. Unlabelled views use a scale-and-shift-invariant
+render-and-compare loss against the leave-view-out render, weighted by the render variance, plus photometric consistency to the other views.
+\TODO{Label-fraction schedule, teacher, inductive versus transductive protocols.}

@@ -1,0 +1,10 @@
+\section{Experimental Design}
+\label{sec:setup}
+\runin{Data.} ETH3D (laser ground truth; 13 training scenes with public ground truth) is the primary evaluation set, with leave-one-scene-out evaluation. Labelled and unlabelled training pools come from BlendedMVG, Hypersim and TartanAir; TartanAir, whose ground truth is complete everywhere, is used for a controlled study in which labels are withheld at a chosen fraction. \TODO{Usage terms and attribution for each dataset; fixed scene-wise splits; ETH3D scenes never enter training.}
+\runin{Baselines.} Marigold-style single-view depth diffusion with the same number of samples per view; AffineGS~\cite{tse2026affinegs}; cheap per-view tests.
+\runin{Calibration.} Negative log-likelihood, probability-integral-transform histograms, interval coverage, regression calibration error, CRPS,
+sparsification error, and the normalised whitened-residual statistic on clean views. \TODO{Per-scene temperature ablation.}
+\runin{Fault injection.} Depth-space injection (control for the statistic), image-space injection (tests the prior), pose or focal-length error, and
+adversarial-plausible shifts; metrics are the minimum detectable fault at a fixed false-alarm rate, power curves, the clean false-alarm rate, an
+absorption ratio (the fraction of an injected displacement reproduced by the unguided mean), and power against fault area fraction.
+\runin{Label fraction.} \TODO{Grid of labelled-scene fractions; inductive and transductive protocols reported separately.}

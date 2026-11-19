@@ -1,0 +1,33 @@
+\section{Introduction}
+\label{sec:intro}
+Monocular depth networks have become a standard input to multi-view reconstruction~\cite{yang2024depthanythingv2,bochkovskii2025depthpro,yu2022monosdf,turkulainen2025dnsplatter}.
+Two properties limit how far their output can be trusted.
+A single image leaves the global scale (and, for relative-depth networks, the shift) unobserved, so the prediction is defined only up to an affine map~\cite{ranftl2022midas,ke2024marigold}.
+The network also fails regionally, on thin structures, reflective surfaces or objects far from its training distribution, and a point estimate carries no covariance against which such a region can be judged.
+Recent splatting work therefore corrects the network's output toward the reconstruction, for instance with a spatially varying affine field~\cite{tse2026affinegs}, or regularises the reconstruction with depth and normal priors~\cite{turkulainen2025dnsplatter,li2024dngaussian}; neither yields a distribution over depth whose spread can be tested.
+
+We take a different route and do not correct any depth network.
+We fine-tune a pretrained latent image diffusion model, SDXL with low-rank adaptation~\cite{podell2023sdxl,hu2021lora}, to sample the depth of a view given only its RGB image, in the affine-invariant form used by Marigold~\cite{ke2024marigold}.
+Marigold uses several samples to sharpen one estimate; we keep the samples and ask whether their spread is a usable covariance.
+The reference is a Gaussian-splat surface~\cite{huang2024twodgs} built from the \emph{other} posed views, never view $j$.
+After fitting a per-view scale and shift between the samples and this leave-view-out render, the remaining local shape disagreement is tested with the sample covariance and the render covariance.
+This is the leave-one-out logic of solution-separation fault detection~\cite{blanch2012araim,baarda1968testing} applied to a learned prior, with the threshold set empirically because a $\chi^2$ reference is invalid for estimated covariances.
+The test uses \emph{unguided} samples; if the reference leaked into the samples, agreement would be built in and a fault could not show.
+Guided sampling, where the likelihood gradient toward the same leave-view-out render acts in the last denoising steps~\cite{chung2023dps}, is the product we aim at: multi-view-consistent depth samples.
+It differs from guiding a depth model by sparse measured depth~\cite{viola2025marigolddc} or by predictions of neighbouring frames~\cite{depthsync2025}, because the guide is an independent render with its own covariance, and from learned multi-view generators~\cite{guizilini2025mvgd}, because the prior itself stays a single-image model.
+Training is planned to be semi-self-supervised, with ground-truth depth where it exists and render-and-compare elsewhere, and the labelled fraction varied.
+
+Reporting accuracy alone would not answer the question this raises, so calibration is part of the evaluation: negative log-likelihood, probability-integral-transform coverage, calibration error~\cite{kuleshov2018calibrated,gneiting2007scoring} and sparsification error~\cite{ilg2018uncertainty}.
+A learned prior can also explain a real fault as plausible depth, and we plan a fault-injection protocol that measures this.
+
+\runin{What is established so far.}
+This version contains two pieces of evidence and no more.
+(i) On a synthetic Gaussian world (one seed), fitting the scale and shift costs almost no detection power when the covariance is known, an estimated covariance accounts for most of the power loss, a constant offset is absorbed by the shift (a blind spot), and a scale error is not (Section~\ref{sec:toy}).
+(ii) A supervised first stage of the model, trained for 2{,}000 steps, whose validation loss fell and which scores an affine-fitted AbsRel of about $0.10$--$0.11$ on three held-out views of one ETH3D scene; this is a sanity check, not a benchmark result.
+The semi-self-supervised stage, guided sampling, and the calibration and fault-injection experiments on real model samples are not yet run.
+
+\runin{Contributions.}
+(i) A formulation of calibrated, multi-view-consistent depth sampling that neither adjusts another network's output nor uses the target view in the reference, with a leave-view-out test on unguided samples that accounts for the fitted scale and shift.
+(ii) A first-stage SDXL-LoRA affine-invariant depth sampler, with its training recipe, memory and speed, and a first sanity check (Section~\ref{sec:stage1}).
+(iii) A synthetic characterisation of the statistic's power and its failure modes.
+(iv) A protocol, to be executed, for calibration of the sample spread and for fault injection against a learned prior.

@@ -1,0 +1,25 @@
+% Toy statistic under a miscalibrated sample spread. Data: data/fig6_{oracle,kernel,kernel_nr}.csv (synthetic Gaussian toy, 1 seed)
+\newcommand{\figsixline}[3]{% #1 file, #2 style, #3 y column
+  \addplot[#2] table[x=miscal, y=#3, col sep=comma]{\tikzdir/data/fig6_#1.csv};}
+\newcommand{\figsixcens}[3]{% censored points: hollow marker and ">4"
+  \addplot[only marks, mark=o, mark size=3pt, #2, nodes near coords={$>4$}, every node near coord/.append style={font=\figfont\tiny, anchor=south},
+    restrict expr to domain={\thisrow{#3}}{1:1}] table[x=miscal, y=mdf_warp, col sep=comma]{\tikzdir/data/fig6_#1.csv};}
+\begin{tikzpicture}
+\begin{groupplot}[amb, group style={group size=3 by 1, horizontal sep=0.115\figw}, width=0.235\figw, height=0.2\figw,
+  xmode=log, xmin=0.5, xmax=1.9, xtick={0.6,1,1.6}, xticklabels={0.6,1.0,1.6}, minor tick num=0, xlabel={Spread / true spread [-]}]
+\nextgroupplot[ylabel={Mean $T/(n-2)$ [-]}, ymin=0.2, ymax=2.9, legend to name=figsixleg, legend columns=3,
+  legend style={/tikz/every even column/.append style={column sep=6pt}}]
+\addplot[dotted, black, line width=0.5pt, forget plot] coordinates {(0.5,1) (1.9,1)};
+\figsixline{oracle}{oracle}{t_over_dof}\figsixline{kernel}{kernel}{t_over_dof}\figsixline{kernel_nr}{kernelnr}{t_over_dof}
+\addlegendentry{true covariance}\addlegendentry{est. kernel (robust)}\addlegendentry{est. kernel (plain)}
+\nextgroupplot[ylabel={MDF [sd]}, ymin=0.6, ymax=2.6]
+\figsixline{oracle}{oracle}{mdf_sq}\figsixline{kernel}{kernel}{mdf_sq}\figsixline{kernel_nr}{kernelnr}{mdf_sq}
+\nextgroupplot[ylabel={MDF [sd]}, ymin=1.8, ymax=4.5]
+\figsixline{oracle}{oracle}{mdf_warp}\figsixline{kernel}{kernel}{mdf_warp}\figsixline{kernel_nr}{kernelnr}{mdf_warp}
+\figsixcens{kernel}{ambBlue}{cens_warp}\figsixcens{kernel_nr}{ambBrown}{cens_warp}
+\end{groupplot}
+\node[anchor=south] at ($(group c2r1.north)+(0,0.25cm)$) {\ref{figsixleg}};
+\subcap{$(group c1r1.south)+(0,-1.15cm)$}{(a) Null statistic}
+\subcap{$(group c2r1.south)+(0,-1.15cm)$}{(b) Square region}
+\subcap{$(group c3r1.south)+(0,-1.15cm)$}{(c) Smooth warp}
+\end{tikzpicture}

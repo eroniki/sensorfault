@@ -1,0 +1,59 @@
+% Shared PGFPlots/TikZ style for the figures of this project.
+% Modelled on the figures in M. Ambarkutuk and P. E. Plassmann, "Modeling and analysis of dispersive propagation of structural waves for
+% vibro-localization", Sensors 24(23):7744, 2024 (read in full): boxed axes with outward ticks, DejaVu Sans text, thin lines, two-colour
+% proposed-vs-baseline convention (red = proposed, black = baseline; the 2023 Sensors paper uses blue/brown for its PDF/CDF pair),
+% axis labels written "Quantity [unit]", frame-boxed legends inside the axes, viridis maps, red x / black + markers, (a)(b)(c) panel labels below.
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepgfplotslibrary{groupplots}
+\usetikzlibrary{calc,patterns,positioning}
+\usepackage{xstring}
+\pgfplotsset{compat=1.16}
+\usepackage[scaled=0.95]{DejaVuSans}
+\usepackage{sansmath}
+\newcommand{\figfont}{\fontencoding{T1}\fontfamily{DejaVuSans-TLF}\selectfont\sansmath}
+\providecommand{\tikzdir}{.}
+
+\definecolor{ambRed}{RGB}{255,0,0}
+\definecolor{ambBlack}{RGB}{0,0,0}
+\definecolor{ambBlue}{RGB}{31,119,180}
+\definecolor{ambBrown}{RGB}{140,86,75}
+\definecolor{ambGreen}{RGB}{44,160,44}
+\definecolor{ambGrey}{RGB}{217,217,217}
+\definecolor{ambPass}{RGB}{207,232,213}
+\definecolor{ambFail}{RGB}{243,198,198}
+
+% diverging maps (ColorBrewer RdBu reversed, PiYG) and viridis/magma are built in or defined here
+\pgfplotsset{
+  colormap={rdbu}{rgb255=(5,48,97) rgb255=(33,102,172) rgb255=(67,147,195) rgb255=(146,197,222) rgb255=(209,229,240) rgb255=(247,247,247)
+                  rgb255=(253,219,199) rgb255=(244,165,130) rgb255=(214,96,77) rgb255=(178,24,43) rgb255=(103,0,31)},
+  colormap={piyg}{rgb255=(142,1,82) rgb255=(197,27,125) rgb255=(222,119,174) rgb255=(241,182,218) rgb255=(253,224,239) rgb255=(247,247,247)
+                  rgb255=(230,245,208) rgb255=(184,225,134) rgb255=(127,188,65) rgb255=(77,146,33) rgb255=(39,100,25)},
+}
+
+\pgfplotsset{
+  colormap={viridisa}{rgb255=(68,1,84) rgb255=(72,40,120) rgb255=(62,74,137) rgb255=(49,104,142) rgb255=(38,130,142) rgb255=(31,158,137)
+                      rgb255=(53,183,121) rgb255=(109,205,89) rgb255=(180,222,44) rgb255=(253,231,37)},
+  colormap={magmaa}{rgb255=(0,0,4) rgb255=(28,16,68) rgb255=(79,18,123) rgb255=(129,37,129) rgb255=(181,54,122) rgb255=(229,80,100)
+                    rgb255=(251,135,97) rgb255=(254,194,135) rgb255=(252,253,191)},
+}
+\pgfplotsset{
+  amb/.style={
+    scale only axis, axis line style={line width=0.5pt}, tick align=outside, tick pos=left,
+    major tick length=2.5pt, tick style={line width=0.5pt},
+    label style={font=\figfont\footnotesize}, tick label style={font=\figfont\scriptsize}, title style={font=\figfont\footnotesize},
+    legend style={font=\figfont\tiny, draw=black!25, fill=white, fill opacity=0.85, text opacity=1, rounded corners=1pt,
+                  inner sep=2pt, nodes={inner sep=1pt}, legend cell align=left},
+    every axis plot/.append style={line width=0.8pt, mark size=1.3pt},
+    ymajorgrids=false, xmajorgrids=false,
+  },
+  % method styles shared by the toy figures
+  known/.style={ambBlack, dashed, mark=square*, mark options={solid}},
+  oracle/.style={ambRed, mark=*},
+  kernel/.style={ambBlue, mark=triangle*, mark options={solid}},
+  kernelnr/.style={ambBrown, mark=triangle*, mark options={rotate=180,solid}},
+  shrunk/.style={ambGreen, mark=diamond*, mark options={solid}},
+}
+\pgfplotsset{barleg/.style={legend image code/.code={\draw[#1] (0cm,-0.08cm) rectangle (0.28cm,0.08cm);}}}
+\newcommand{\subcap}[2]{\node[font=\figfont\footnotesize, anchor=north] at (#1) {#2};}

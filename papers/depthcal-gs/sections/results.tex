@@ -1,0 +1,79 @@
+\section{Results}
+\label{sec:results}
+\textcolor{red}{\textbf{Evidence in this version: the synthetic check of the statistic (Section~\ref{sec:toy}) and a supervised first-stage run to step 2{,}000 (Section~\ref{sec:stage1}, three held-out views of one scene only). No guided sampling, semi-self-supervised training, calibration or fault-injection experiment has been run; any other table or figure is a placeholder.}}
+
+\subsection{Synthetic check of the test statistic (toy, not real data)}
+\label{sec:toy}
+The statistic of Section~\ref{sec:statistic} was exercised on a synthetic Gaussian world (a $16\times16$ grid, $M=10$ samples per view, one seed,
+$200$ clean trials for the null and $80$ trials per fault cell, power standard error about $0.05$); the render, the unguided samples and the truth are
+drawn from known Gaussian processes, the truth being one more draw of the posterior. No image and no learned model is involved; the purpose is to check the
+statistic and its calibration, not to estimate the performance of the method. Five variants are compared: the true scale and shift with the true covariance
+(unattainable), the fitted scale and shift with the true covariance (oracle), and the fitted scale and shift with a stationary-kernel covariance estimated from the
+samples (robust and plain fit), and with a shrunk sample covariance. The threshold is the empirical 95\% quantile of the clean-view null of the identical pipeline.
+
+\begin{figure}[!t]
+  \centering
+  \setlength{\figw}{\linewidth}\adjustbox{max width=\linewidth}{\input{figures/tikz/fig3_body}}
+  \caption{Power against fault magnitude (units of the per-pixel total residual standard deviation) for three fault families. \emph{Synthetic Gaussian toy, one seed,
+  80 trials per cell; error bars are binomial standard errors.} Dotted lines mark 80\% power and the 5\% level.}
+  \label{fig:toy-power}
+\end{figure}
+
+With the true covariance, fitting the scale and shift costs almost nothing for local faults: the minimum detectable fault at 80\% power is $0.88$ standard
+deviations for a square region with the fitted scale and shift against $0.89$ with the true ones, and $0.84$ against $0.89$ for an edge-aligned region; a smooth
+warp needs about $2.1$ (Figure~\ref{fig:toy-power}, \ref{fig:toy-mdf}). The covariance estimate dominates the loss: with the estimated kernel the same faults need
+$2.2$--$2.4$ and the warp is not detected up to $4$ standard deviations. A constant offset is invisible by construction (power $0.05$), whereas a scale error is
+flagged (power $1.0$ with the true covariance), because the fitted scale also rescales the sample covariance. With the $\chi^2_{n-2}$ reference the clean-view
+false-alarm rate is $0.06$ with the true covariance but $0.27$ with the estimated kernel, which is why the threshold is taken from the empirical null.
+
+\begin{figure}[!t]
+  \centering
+  \setlength{\figw}{\linewidth}\adjustbox{max width=\linewidth}{\input{figures/tikz/fig4_body}}
+  \caption{Minimum detectable fault at 80\% power per covariance variant (hatched: not reached by $4$) and clean-view false-alarm rate at the
+  $\chi^2_{n-2}$ 95\% threshold. \emph{Synthetic Gaussian toy, one seed, 200 clean trials and 80 trials per cell.}}
+  \label{fig:toy-mdf}
+\end{figure}
+
+\begin{figure}[!t]
+  \centering
+  \setlength{\figw}{\linewidth}\adjustbox{max width=\linewidth}{\input{figures/tikz/fig6_body}}
+  \caption{Effect of a miscalibrated sample spread (spread equal to $0.6$, $1.0$ and $1.6$ times the truth's posterior spread; the covariance used by the
+  oracle is the one the model would report; MDF = minimum detectable fault at 80\% power, all variants with the fitted scale and shift). \emph{Synthetic Gaussian toy, one seed, 150 clean trials and 60 trials per cell.}}
+  \label{fig:toy-miscal}
+\end{figure}
+
+A wrong scale of the spread is absorbed by the empirical threshold: with the oracle shape the minimum detectable fault stays at $0.87$--$0.91$ (square) and
+$2.07$--$2.11$ (warp) across Figure~\ref{fig:toy-miscal}. A wrong covariance shape is what costs power. Faults covering up to $85\%$ of the view remain detectable
+and collapse only at $95\%$, where the fault is nearly a constant offset; the statistic detects an inconsistency but cannot say which side is wrong.
+\textcolor{red}{\textbf{Not yet tested: a calibration set that is not exchangeable with the test views, real model samples, several seeds.}}
+
+\begin{figure}[!t]
+  \centering
+  \setlength{\figw}{\linewidth}\adjustbox{max width=\linewidth}{\input{figures/tikz/toy_square_body}}
+  \caption{One synthetic view without and with a square fault of $3$ standard deviations (the same random draw; black outline = fault support), with the true
+  covariance (top) and the estimated kernel covariance (bottom). Left pair: raw residual after the fitted scale and shift. Right pair: whitened residual
+  (Cholesky innovations in raster order, unit variance under the null; their streaks follow the whitening order and do not localise the fault); the test statistic
+  $T$ and the empirical threshold are printed on each. \emph{Synthetic Gaussian toy, seed 7, threshold from 150 clean views.}}
+  \label{fig:toy-square}
+\end{figure}
+
+\begin{figure}[!t]
+  \centering
+  \setlength{\figw}{\linewidth}\adjustbox{max width=\linewidth}{\input{figures/tikz/toy_warp_body}}
+  \caption{As Figure~\ref{fig:toy-square} for a smooth warp of $3$ standard deviations. The statistic with the true covariance flags the faulted view; with the
+  estimated kernel covariance it does not ($T=412$ against a threshold of $746$), consistent with Figure~\ref{fig:toy-mdf}. \emph{Synthetic Gaussian toy, seed 7.}}
+  \label{fig:toy-warp}
+\end{figure}
+
+\todofig{calibration}{Calibration of the unguided sample spread against ground truth on held-out scenes (coverage and PIT), versus the Marigold-style ensemble.}
+\todofig{power}{Fault-injection power curves by fault family on real model samples, and absorption ratio of the learned prior.}
+
+\subsection{Supervised first stage (sanity check, not a result)}
+\label{sec:stage1}
+\runin{Setup.} SDXL base frozen in fp16 with a fp32 VAE, LoRA rank 32 on the attention projections, a widened $8$-channel input convolution, $v$-prediction with zero-terminal-SNR, empty-prompt conditioning, $512$\,px, batch $32$.
+Training data: BlendedMVS (107 training scenes, 6 held out) and a Hypersim subset; the BlendedMVS images are blended composites, not photographs.
+The run was stopped at step $2{,}000$ of a planned $10{,}000$ (about $14$\,s per step on a TITAN RTX; peak $8.9$\,GB in the smoke run).
+\runin{Validation.} Validation loss at steps $500/1000/1500/2000$: $0.439/0.393/0.351/0.337$; the proxy affine AbsRel (a different normalisation from the literature, a trend indicator only): $0.719/0.648/0.641/0.618$.
+\runin{Held-out ETH3D \texttt{pipes}} (three views of one scene; five DDIM samples per view, scale and shift fitted to the sparse laser depth, AbsRel in depth units). Mean AbsRel over the three views: $0.102$ (step $1000$, $10$ steps), $0.105/0.107/0.110/0.111$ (step $2000$, $1/4/10/30$ steps). On view 6 the untrained base scores $0.38$.
+Step $2000$ is not clearly better than step $1000$, and fewer sampler steps score slightly better; with three views of one scene these differences are within noise.
+This is not a benchmark: it says only that the pipeline trains without numerical failure and moves the output toward the ground truth.

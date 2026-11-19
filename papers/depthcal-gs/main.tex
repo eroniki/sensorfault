@@ -1,0 +1,65 @@
+\documentclass[preprint,12pt]{elsarticle}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{bm}
+\usepackage{url}
+\DeclareUrlCommand\path{\urlstyle{rm}}
+\providecommand{\href}[2]{#2}
+
+\newcommand{\tikzdir}{figures/tikz}
+\input{figures/tikz/preamble}   % PGFPlots/TikZ style of the figures (DejaVu Sans text, boxed axes, red/black/blue/brown series)
+\usepackage{adjustbox}
+\newlength{\figw}
+\input{sections/macros}
+
+\journal{Preprint}
+
+\begin{document}
+\begin{frontmatter}
+
+\title{Calibrated Multi-View-Consistent Depth Sampling with a Diffusion Model}
+
+\author{Murat Ambarkutuk}
+\ead{murat@ambarkutuk.com}
+\affiliation{organization={Independent Researcher},
+            city={Shelton},
+            state={CT},
+            country={USA}}
+
+\begin{abstract}
+Single-image depth networks leave global scale free, fail regionally, and return a point estimate against which no covariance can be tested.
+We study a generative alternative: a latent diffusion model (SDXL with low-rank adaptation) fine-tuned to sample an affine-invariant per-view depth from the RGB image alone.
+Its unguided samples are the object of a leave-view-out fault test: a Gaussian-splat (2DGS) surface is built from the other posed views only, never view $j$,
+a per-view scale and shift is fitted between the samples and the render, and the residual is tested against the sample covariance plus the render covariance with an empirically calibrated threshold.
+Guided sampling, in which the likelihood gradient toward the leave-view-out render acts in the last denoising steps, is intended as the multi-view-consistent product; training is planned to be semi-self-supervised, with ground-truth depth where it exists and render-and-compare elsewhere.
+So far we have (i) a synthetic check of the statistic, in which fitting the scale and shift costs almost no power when the covariance is known (minimum detectable fault $0.88\sigma$ against $0.89\sigma$) and an estimated covariance accounts for most of the power loss,
+and (ii) a supervised first stage of the model, trained for 2{,}000 of a planned 10{,}000 steps on BlendedMVS and Hypersim, whose validation loss fell monotonically; on three held-out views of one ETH3D scene the affine-fitted AbsRel (fitted to sparse laser depth) was between $0.10$ and $0.11$ depending on checkpoint and number of sampler steps, whereas on one of those views, the only one where we scored it, the untrained base gave $0.38$ (trained: $0.11$--$0.14$).
+That check is a sanity test, not a result.
+The semi-self-supervised stage, guided sampling, and the calibration and fault-injection experiments on real model samples have not been run, and no claim is made about them.
+\end{abstract}
+
+\begin{keyword}
+diffusion models \sep monocular depth estimation \sep uncertainty calibration \sep Gaussian splatting \sep multi-view consistency \sep fault detection
+\end{keyword}
+
+\end{frontmatter}
+
+\input{sections/intro}
+\input{sections/related}
+\input{sections/method}
+\input{sections/setup}
+\input{sections/results}
+\input{sections/conclusion}
+\label{endmaintext}
+
+\section*{Declarations}
+\textbf{Funding.} This research received no external funding.
+\textbf{Data and code availability.} \TODO{State what is released. Restricted datasets are not redistributed.}
+\textbf{Use of AI tools.} \TODO{Author to state whether and how generative AI tools assisted the writing.}
+
+\bibliographystyle{elsarticle-num}
+\bibliography{refs/references}
+
+\end{document}

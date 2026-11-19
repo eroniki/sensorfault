@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Rebuild draft_v0.pdf whenever a manuscript source is part of the commit, and add it to the same commit.
+# Enable once per clone: git config core.hooksPath .githooks
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+if git diff --cached --name-only | grep -qE '^(main\.tex|sections/|figures/|refs/references\.bib|latexmkrc)'; then
+  echo "pre-commit: manuscript sources changed, rebuilding draft_v0.pdf"
+  scripts/build.sh
+  git add draft_v0.pdf
+fi
