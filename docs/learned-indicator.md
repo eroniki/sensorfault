@@ -48,7 +48,7 @@ Sections 3 and 4.
    appearance meet.
 3. **The monocular depth is a second spring on the same surface.** It pulls each surface towards
    where the depth network put it. For a planar surfel both springs act on the same three
-   coordinates, an offset and two tilts, and this is exact, not an analogy (Section 3.2).
+   coordinates, an offset and two tilts. This is a first-order identity, not an analogy (Section 3.2).
 4. **Two springs on one body store energy when they disagree.** The stretch is the misfit, in metres
    and radians. The energy is dimensionless, in nats, and has a null distribution. Alignment of
    geometry and appearance is therefore measurable. This is what the representation is for.
@@ -145,8 +145,10 @@ limit. What differs is that the evidence is stored in information form on a shar
 prior is audited.
 
 **Large-scale aerial splatting.** Tiled and hierarchical systems reconstruct city-scale scenes from
-structure-from-motion inputs. They are baselines for accuracy and completeness and do not store or
-evaluate what the map knows.
+structure-from-motion inputs, and some accept a monocular depth map as an optional regulariser. They are
+baselines for accuracy and completeness and do not store or evaluate what the map knows. Propagating
+covariance through the rendering Jacobian is likewise established; what is not is a record kept per
+source on shared coordinates, with a prior information that saturates.
 
 **Fault detection by redundancy.** Data snooping, solution separation and specification tests compare
 estimates of one quantity from different evidence. The energy between two sources is of this family;
@@ -211,7 +213,9 @@ Together,
 **The image Jacobian with respect to placement factors through the depth Jacobian.** Both families act
 on the same three coordinates through the same geometric row $\mathbf j_{uk}$ and differ by a scalar
 weight per pixel and primitive: $w_{uk} a_i^2 / \sigma_i^2$ for depth, $\lVert \mathbf g_{uk} \rVert^2 / \sigma_I^2$
-for the image. This holds because a surfel is a plane, and it is the precise sense in which the
+for the image. This holds to first order in the placement, with primitive order and the appearance
+behind held fixed, because a surfel is a plane; it is checked by finite differences on the reference
+renderer before anything is built on it. It is the precise sense in which the
 primitive is where the two meet. The pull of the pixels on every primitive is one backward pass of the
 image loss per frame, with visibility and occlusion supplied by the rasteriser.
 
@@ -320,11 +324,13 @@ $\boldsymbol\mu_m + \boldsymbol\alpha_{mj}$: a surface term every frame repeats 
 $\varrho = \operatorname{tr}\Sigma_\mu / (\operatorname{tr}\Sigma_\mu + \operatorname{tr}\Sigma_\alpha)$,
 the share of monocular error variance in the surface term, is estimated from the first and third
 components without ground truth, as a function of the left-out block. A plateau above zero is what no
-consensus method can see.
+consensus method can see. The estimate leans on honest pixel information, so it exists only where the
+pixels have stiffness; the law it feeds is validated against exact depth, and on pixel-blind entities
+$\varrho$ is carried over from textured entities of the same class as an assumption.
 
 **Units.** The stretch $\mathbf t_m$ is in metres of offset and radians of tilt; the stiffness in
-their inverse squares; the energy $E_m = T_m / 2$ is dimensionless, in nats, and is the
-log-likelihood ratio of "the two sources see one surface" against "they see two". Over $M$ tested
+their inverse squares; the energy $E_m = T_m / 2$ is dimensionless, in nats, and under Gaussian errors
+with the stated information is the log-likelihood ratio of "the two sources see one surface" against "they see two". Over $M$ tested
 entities, $\sum_m T_m / (3M)$ is one number that should be one.
 
 **Null distribution.** Image residuals at a fit are model misfit, not sensor noise, and are spatially
@@ -627,7 +633,8 @@ products; memory and speed of the foundation models; their behaviour on nadir ae
 
 A stored information is a forecast of error, so the primary experiment is calibration against exact
 geometry. The headline metric is the **surface log-score**: the negative log density of the true
-surface under the map, in nats per square metre. It is a proper scoring rule over geometry and
+placement of each entity under the map, taken on the signed error along the normal (in metres) and
+averaged over entities, in nats per entity. It is a proper scoring rule over geometry and
 information jointly: it cannot be improved by inflating or deflating the stated information, and it
 falls when either the geometry or its error bar improves. Reported with it: the robust scale of the
 standardised placement error (one if honest, above one if overconfident), coverage of the 68% and 95%
