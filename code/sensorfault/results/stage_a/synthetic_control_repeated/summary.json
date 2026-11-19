@@ -394,7 +394,8 @@
     "log_score": NaN
    }
   ],
-  "decision": "supported"
+  "decision": "supported",
+  "decision_without_A8_gate": "supported"
  },
  "repetition": {
   "r_s": [
@@ -731,5 +732,5 @@
   "p90_px_scale8": 0.2715412448993933,
   "n_pixels": 194698
  },
- "runtime_s": 31.963924884796143
+ "runtime_s": 32.167349100112915
 }

@@ -30,3 +30,11 @@ Common settings for every block 3 run:
   - **DAv2:** most frames cycle, by 0.2–0.3 in log scale. The scale-only inverse model probably does not fit DAv2's affine-invariant disparity.
 - **A8.** The single-frame calibration fails on held-out land for every real model (s_z 1.2–1.8). It also fails for the repeated control. It passes for the independent control, whose fused held-out land s_z is 1.12 [1.05, 1.23] at b886adb (1.25 at def370d, before the record-weight fix).
 - **Two folders sharing a name.** `synthetic_control_*` are the synthetic-block controls from the earlier commit. They are not block 3 results.
+
+### H1 decisions in the block 3 summaries
+
+The block 3 summaries were written before the driver gated H1 on A8. A8 (single-frame calibration
+on held-out land) fails for every real-model run and for the repeated control, so their H1 is
+undefined; the "supported" printed in those `summary.md` files is the decision without the A8
+gate. The driver now writes `undefined (A8 failed)` in that case and keeps the ungated decision as
+`decision_without_A8_gate`.

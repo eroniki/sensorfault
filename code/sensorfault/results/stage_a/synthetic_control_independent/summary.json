@@ -395,6 +395,7 @@
    }
   ],
   "decision": "refuted",
+  "decision_without_A8_gate": "refuted",
   "after_gate": "honest after gate"
  },
  "repetition": {
@@ -732,5 +733,5 @@
   "p90_px_scale8": 0.1383359193216567,
   "n_pixels": 194698
  },
- "runtime_s": 32.164543867111206
+ "runtime_s": 32.728933811187744
 }

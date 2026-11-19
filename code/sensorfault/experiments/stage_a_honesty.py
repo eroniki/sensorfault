@@ -436,7 +436,10 @@ def main(argv=None):
     h1 = metric_rows(z2F, ldF, ent.tile_id, class_groups(cls, quint, base), a.n_boot, a.seed)
     land_row = next(r for r in h1 if r["group"] == "land")
     ci = land_row.get("ci", {}).get("s_z")
-    log["H1"] = {"rows": h1, "decision": decide(ci["lo"], ci["hi"], 1.25) if ci else "no interval"}
+    raw_h1 = decide(ci["lo"], ci["hi"], 1.25) if ci else "no interval"
+    # H1 is defined only when the single-frame noise model is calibrated (A8)
+    h1_dec = raw_h1 if log["single_frame"]["pass"] else "undefined (A8 failed)"
+    log["H1"] = {"rows": h1, "decision": h1_dec, "decision_without_A8_gate": raw_h1}
 
     # A10: repetition
     ps = rp.pair_sums(rec.subset(held_r), finfo)
@@ -606,7 +609,12 @@ def render_summary(log) -> str:
         "",
         "## Decisions",
         "",
-        f"- **H1** (lower bound of s_z on held-out land, n >= 5, above 1.25): **{log['H1']['decision']}**.",
+        f"- **H1** (lower bound of s_z on held-out land, n >= 5, above 1.25): **{log['H1']['decision']}**"
+        + (
+            f" (without the A8 gate: {log['H1']['decision_without_A8_gate']})."
+            if log["H1"]["decision"].startswith("undefined")
+            else "."
+        ),
         f"- **H2** (realised/predicted fused variance in [0.67, 1.5] per n-bin): **{log['H2']['decision']}**.",
         f"- A8 single-frame calibration on held-out land: s_z = {_ci(log['single_frame']['s_z_heldout_land'])}, "
         f"{'pass' if log['single_frame']['pass'] else 'FAIL (noise model at fault, H1 undefined)'}.",
