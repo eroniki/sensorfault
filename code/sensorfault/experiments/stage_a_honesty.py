@@ -469,8 +469,17 @@ def main(argv=None):
         rep["rho_null"][B] = nul
     log["repetition"] = rep
 
-    # A11: H2 law (rho beyond the primary block, recomputed inside the bootstrap)
-    terms = rp.law_terms(rec, epsF, nF)
+    # A11: H2 law (rho beyond the primary block, recomputed inside the bootstrap). The law
+    # rho + (1 - rho)/n is that of the equal-weight mean of the frames' errors, and r(s) is pooled
+    # the same way (inner products over pooled squared norms), so the law is tested on the
+    # equal-weight mean. The information-weighted map gives records of small variance more
+    # weight and so falls below 1/n even for independent errors when record variances differ;
+    # its ratios are kept as a reference (``rows_info_weighted``).
+    cnt = np.maximum(nF, 1).astype(float)[:, None]
+    eps_eq = np.stack([np.bincount(rec.entity, rec.eps[:, c], rec.M) for c in range(3)], 1) / cnt
+    eps_eq[nF == 0] = np.nan
+    terms = rp.law_terms(rec, eps_eq, nF)
+    terms_info = rp.law_terms(rec, epsF, nF)
     rho_fn = lambda ii: rp.rho_hat(ps, B_PRIMARY, ii)
     law = law_table(terms, ent, ents_held, held & seen, rho_fn, min(a.n_boot, 2000), a.seed)
     rho_ci = rep["rho"][B_PRIMARY]
@@ -481,7 +490,19 @@ def main(argv=None):
         h2 = "supported"
     else:
         h2 = "inconclusive"
-    log["H2"] = {"rows": law, "rho_B3": rho_ci, "decision": h2}
+    rho3 = rho_fn(None)
+    law_info = []
+    for (a_, b_), lab in zip(rp.N_BINS, rp.n_bin_labels()):
+        sel = np.flatnonzero(held & seen & (nF >= a_) & (nF <= b_))
+        if len(sel):
+            law_info.append({"n_bin": lab, **rp.law_ratio(terms_info, rho3, sel)})
+    log["H2"] = {
+        "rows": law,
+        "rows_info_weighted": law_info,
+        "fused_for_law": "equal-weight mean of frame errors",
+        "rho_B3": rho_ci,
+        "decision": h2,
+    }
 
     # A12: consensus gate, re-fused without flagged frames
     gate_rows = {}
@@ -652,13 +673,18 @@ def render_summary(log) -> str:
         "",
         f"## H2: the law (A11), rho_hat(B={B_PRIMARY}) = {_ci(log['H2']['rho_B3'])}",
         "",
-        "| n bin | entities | R_real | R_pred | 1/n | real/pred |",
-        "|---|---|---|---|---|---|",
+        "Fused error for the law: equal-weight mean of the frames' errors. The last column is"
+        " real/pred for the information-weighted map, for reference.",
+        "",
+        "| n bin | entities | R_real | R_pred | 1/n | real/pred | info-weighted |",
+        "|---|---|---|---|---|---|---|",
     ]
+    info = {r["n_bin"]: r for r in log["H2"].get("rows_info_weighted", [])}
     for row in log["H2"]["rows"]:
+        iw = info.get(row["n_bin"], {}).get("ratio")
         L.append(
             f"| {row['n_bin']} | {row['n_ent']} | {_f(row['R_real'])} | {_f(row['R_pred'])} | {_f(row['R_nominal'])} | "
-            f"{_ci(row['ratio_ci']) if 'ratio_ci' in row else _f(row['ratio'])} |"
+            f"{_ci(row['ratio_ci']) if 'ratio_ci' in row else _f(row['ratio'])} | {_f(iw)} |"
         )
     px = log.get("parallax", {})
     L += [

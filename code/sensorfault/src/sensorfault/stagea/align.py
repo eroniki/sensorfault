@@ -373,7 +373,7 @@ def align_block(
     fit_beta: bool = True,
     tol: float = 0.02,
     fit_offset: bool = False,
-    n_graph: int = 6,
+    n_graph: int = 12,
 ) -> AlignResult:
     """Label-free alignment of ``raw`` (one array per view, model output on the view grid)."""
     F = len(views)
@@ -412,12 +412,16 @@ def align_block(
     # moves its points through parallax), before any frame is fitted to a rendered target
     hist = []
     logs = np.zeros(F)  # each frame's log scale relative to the gauge
-    for _ in range(n_graph):
+    for r in range(n_graph):
         g, _ = relative_scales(K, views, depths, nb, prior=logs)
+        hist.append(float(np.max(np.abs(g - 1))))  # the undamped step
+        # damped after the first two rounds: robust weights that switch pairs on and off can
+        # otherwise make a few frames cycle between rounds
+        if r >= 2:
+            g = np.sqrt(g)
         logs = logs - np.log(g)
         params = np.array([_apply_common(mode, params[i], 1.0 / g[i]) for i in range(F)])
         depths = [aligned_depth(mode, xs[i], params[i], beta) for i in range(F)]
-        hist.append(float(np.max(np.abs(g - 1))))
         if hist[-1] < 1e-3:
             break
     eff_gauge = _effective_scale(mode, xs, params)
