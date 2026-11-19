@@ -181,6 +181,20 @@ class Records:
         )
 
 
+def neighbour_median(d: np.ndarray, k: int = 5) -> np.ndarray:
+    """Median of the k x k neighbourhood of each pixel, the pixel itself left out (NaN-aware)."""
+    h = k // 2
+    P = np.pad(np.asarray(d, float), h, mode="constant", constant_values=np.nan)
+    W = np.lib.stride_tricks.sliding_window_view(P, (k, k)).reshape(*d.shape, k * k)
+    W = np.delete(W, (k * k) // 2, axis=-1)
+    with np.errstate(all="ignore"):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            return np.nanmedian(W, axis=-1)
+
+
 def frame_records(
     K: np.ndarray,
     view: Mapping,
@@ -188,6 +202,7 @@ def frame_records(
     ent: Entities,
     min_pixels: int = 4,
     max_cond: float = 1e6,
+    weight_window: int = 5,
 ) -> Records:
     """Placement records of one frame (pred_depth aligned, same grid as view['depth'])."""
     d_ex = view["depth"]
@@ -204,7 +219,12 @@ def frame_records(
     D = X - ent.p0[e]
     u = np.sum(D * ent.t1[e], 1) / L
     v = np.sum(D * ent.t2[e], 1) / L
-    wgt = 1.0 / (pred_depth[ok] * np.abs(nr)) ** 2
+    # the weight must not depend on the pixel's own error: with multiplicative noise, weights from
+    # the pixel's own predicted depth favour pixels whose noise pulls them closer, a bias that
+    # grows linearly under fusion (s_z 1.17 on the block 3 independent control at sigma 0.044)
+    d_w = neighbour_median(pred_depth, weight_window)
+    d_w = np.where(np.isfinite(d_w) & (d_w > 0), d_w, pred_depth)
+    wgt = 1.0 / (d_w[ok] * np.abs(nr)) ** 2
     phi = np.stack([np.ones_like(u), u, v], 1)
     M = ent.M
     A = np.zeros((M, 3, 3))
