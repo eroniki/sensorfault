@@ -246,6 +246,7 @@ def _bias_scene(n=6, hw=32, f=40.0, noise=0.005, bias=0.05, bias_view=3):
     return frames
 
 
+@pytest.mark.slow
 def test_newton_cavity_is_closer_to_a_refit_than_no_step():
     """Regression for the overlap overshoot: with w^2 blocks the leave-view-out step is several times
     too long and worse than no step; the lumped (w) blocks are a majoriser and must beat no step."""
