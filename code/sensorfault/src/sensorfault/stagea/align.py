@@ -47,6 +47,8 @@ D0 = 100.0
 OFFSET_PRIOR = {"metric": 0.02, "inverse": 0.2}
 # least share of a frame's points that must land in a neighbour's view for a pair to count
 MIN_OVERLAP = 0.2
+# sd of the prior on a frame's log scale about the gauge (Depth Pro per-frame errors are ~0.3)
+PRIOR_SD = 0.5
 
 
 @dataclass
@@ -291,14 +293,20 @@ def _pair_log_ratio(K, vi, vj, di, dj, step=2):
     return float(np.median(np.log(zz[fin] / zj[fin]))), int(fin.sum())
 
 
-def relative_scales(K, views, depths, nb, huber=0.05, iters=20, step=2):
+def relative_scales(K, views, depths, nb, iters=20, step=2, prior=None, prior_sd=PRIOR_SD):
     """Per-frame scale corrections g (median 1) that make overlapping frames agree.
 
     Each overlapping pair (i, j), in both directions, gives l_ij = log median(z_i->j / z_j); with
     frame i too large by a_i, l_ij = log a_i - log a_j. The log a are a robust (Huber IRLS)
     weighted least-squares solve on the pair graph with the median pinned to 0; frames outside the
     largest connected component keep g = 1. Frames are then divided by g. This is a global solve,
-    so it does not inherit the bias of a median target drawn from neighbours with large errors."""
+    so it does not inherit the bias of a median target drawn from neighbours with large errors.
+
+    Pairs are weighted by sqrt(points) / sigma_pair, with sigma_pair the residual MAD of a first
+    pass, and down-weighted beyond 1.5 sigma_pair (cut at 9). ``prior`` (F,) is each frame's
+    current log scale relative to the gauge; a Gaussian prior of sd ``prior_sd`` on the corrected
+    log scale keeps frames near the gauge, which only matters for frames with few or inconsistent
+    pairs (a weakly linked frame would otherwise follow one bad pair)."""
     F = len(views)
     rows = []
     for i in range(F):
@@ -312,6 +320,7 @@ def relative_scales(K, views, depths, nb, huber=0.05, iters=20, step=2):
     J = np.array([r[1] for r in rows])
     L = np.array([r[2] for r in rows])
     W0 = np.sqrt(np.array([r[3] for r in rows], float))
+    W0 = W0 / W0.mean()
     # largest connected component of the pair graph
     lab = np.arange(F)
     for _ in range(F):
@@ -327,21 +336,30 @@ def relative_scales(K, views, depths, nb, huber=0.05, iters=20, step=2):
     keep = comp[I] & comp[J]
     I, J, L, W0 = I[keep], J[keep], L[keep], W0[keep]
     idx = np.flatnonzero(comp)
+    nF = len(idx)
     pos = -np.ones(F, int)
-    pos[idx] = np.arange(len(idx))
-    A = np.zeros((len(L) + 1, len(idx)))
-    A[np.arange(len(L)), pos[I]] = 1.0
-    A[np.arange(len(L)), pos[J]] = -1.0
+    pos[idx] = np.arange(nF)
+    nP = len(L)
+    A = np.zeros((nP + nF + 1, nF))
+    A[np.arange(nP), pos[I]] = 1.0
+    A[np.arange(nP), pos[J]] = -1.0
+    A[nP + np.arange(nF), np.arange(nF)] = 1.0
     A[-1] = 1.0  # mean of log a = 0 (re-centred to the median below)
-    b = np.r_[L, 0.0]
-    w = np.r_[W0, W0.sum()]
-    for _ in range(iters):
+    p0 = np.zeros(F) if prior is None else np.asarray(prior, float)
+    # log a_i = p0_i would bring frame i back to the gauge
+    b = np.r_[L, p0[idx], 0.0]
+    sig = 1.0
+    hw = np.ones(nP)
+    for it in range(iters):
+        w = np.r_[W0 * hw / sig, np.full(nF, 1.0 / prior_sd), 10.0 * nF / sig]
         x = np.linalg.lstsq(A * w[:, None], b * w, rcond=None)[0]
-        r = A[:-1] @ x - L
-        w = np.r_[W0 * _huber_w(r, huber), W0.sum()]
+        r = A[:nP] @ x - L
+        if it == 0:
+            sig = max(1.4826 * float(np.median(np.abs(r))), 1e-3)
+        hw = _huber_w(r / sig, 1.5)
     loga = np.zeros(F)
     loga[idx] = x - np.median(x)
-    return np.exp(loga), len(L)
+    return np.exp(loga), nP
 
 
 def align_block(
@@ -393,8 +411,10 @@ def align_block(
     # global relative scales from the pair graph (a few rounds, since moving a frame's scale also
     # moves its points through parallax), before any frame is fitted to a rendered target
     hist = []
+    logs = np.zeros(F)  # each frame's log scale relative to the gauge
     for _ in range(n_graph):
-        g, _ = relative_scales(K, views, depths, nb, huber)
+        g, _ = relative_scales(K, views, depths, nb, prior=logs)
+        logs = logs - np.log(g)
         params = np.array([_apply_common(mode, params[i], 1.0 / g[i]) for i in range(F)])
         depths = [aligned_depth(mode, xs[i], params[i], beta) for i in range(F)]
         hist.append(float(np.max(np.abs(g - 1))))

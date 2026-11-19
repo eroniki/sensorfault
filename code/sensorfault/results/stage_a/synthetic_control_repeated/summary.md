@@ -17,7 +17,7 @@ Median relative depth residual: label-free with parallax datum 0.00248, after da
 
 ## Records (A7)
 
-23660 records, 3402 entities seen, median n = 4, median pixels per record 9, median shape remainder 0.312 m; additivity max relative difference 3.84e-16.
+23660 records, 3402 entities seen, median n = 4, median pixels per record 9, median shape remainder 0.312 m; additivity max relative difference 5.75e-16.
 
 ## H1: depth-only map on held-out tiles, n >= 5 (A9)
 
