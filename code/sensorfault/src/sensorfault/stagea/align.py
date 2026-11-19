@@ -40,6 +40,8 @@ from sensorfault.stagea.geometry import pixel_rays_world, project
 D0 = 100.0
 # std of the per-frame offset prior, as a share of the frame's median depth
 OFFSET_PRIOR = {"metric": 0.02, "inverse": 0.2}
+# least share of a frame's points that must land in a neighbour's view for a pair to count
+MIN_OVERLAP = 0.2
 
 
 @dataclass
@@ -192,6 +194,11 @@ def _pair_disagreement(K, vi, vj, xi, xj, k):
     h, w = xj.shape
     ui, vi_ = np.rint(u).astype(int), np.rint(v).astype(int)
     ok = (ui >= 0) & (ui < w) & (vi_ >= 0) & (vi_ < h) & (z > 0)
+    # a factor that throws the frame's points out of the neighbour's view is not a candidate: a
+    # handful of stray points would otherwise give a spuriously small disagreement (tiny k
+    # puts all points next to camera i)
+    if ok.sum() < MIN_OVERLAP * len(X):
+        return np.array([])
     dj = k * xj[vi_[ok], ui[ok]]
     zz = z[ok]
     fin = np.isfinite(dj) & (dj > 0)
@@ -218,7 +225,9 @@ def global_gauge(
     def cost(k):
         rs = [_pair_disagreement(K, views[i], views[j], xs[i], xs[j], k) for i, j in pairs]
         rs = [r for r in rs if r.size]
-        return float(np.median(np.concatenate(rs))) if rs else np.inf
+        if len(rs) < 0.5 * len(pairs):
+            return np.inf
+        return float(np.median(np.concatenate(rs)))
 
     grid = np.geomspace(lo, hi, n)
     c = np.array([cost(k) for k in grid])
