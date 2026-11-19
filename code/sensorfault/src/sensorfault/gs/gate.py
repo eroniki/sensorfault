@@ -8,8 +8,9 @@ Pipeline per call
 1. every fused view i: ``ViewInfo`` from ``backend.view_information`` (scaled by its fit weight and
    the information deflation); fused information ``Lambda = prior + sum_i Lambda_i``.
 2. per tested view j: cavity = subtract ``Lambda_j`` (or the block's) and one Newton step on the nine
-   geometric coordinates (``leave_view_out_newton``); keep only supported surfels (normal-offset
-   information from the other views, and the opacity-share rule); ``backend.render_cavity`` into j.
+   geometric coordinates (``leave_view_out_newton``); keep only supported surfels (the other views'
+   normal-offset information at least the prior's, ``lam_min``, and the opacity-share rule);
+   ``backend.render_cavity`` into j.
 3. shared distance bias beta (``d_hat = D + beta D^2``), fitted by weighted least squares over all
    fused views with view j (its block) removed by subtraction of normal equations.
 4. one scene temperature gamma^2 (median ratio of the other views' energies to the chi2 median);
@@ -156,7 +157,12 @@ class ViewGateTest:
         self.sigma = float(sigma)
         self.prior = prior_precision * np.eye(DIM)
         self.rho = rho
-        self.lam_min = 25.0 / self.sigma**2 if lam_min is None else lam_min
+        # support rule: the other views' data information on a surfel's normal offset must at least
+        # match the prior's, i.e. the cavity is data-driven, not prior-driven. (The former default
+        # 25 / sigma^2 asked the other views to pin every surfel to sd <= sigma / 5 = 2 mm; on the bunny
+        # 278 of 289 surfels failed it and were inflated to ~10 cm, so the test saw 25-46 mm of rendered
+        # sd. Weakly observed surfels keep their honest cavity covariance instead.)
+        self.lam_min = float(prior_precision) if lam_min is None else lam_min
         self.scan_grids = tuple(scan_grids)
         self.min_region_pixels = min_region_pixels
         self.fit_affine = fit_affine
