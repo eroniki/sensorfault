@@ -39,6 +39,7 @@ evidence logs (removed in the clean-up; see git history). Re-check all entries b
 | data_usegeo | https://api.crossref.org/works/10.1016/j.ophoto.2024.100070 / ISPRS Open J. Photogramm. Remote Sens. 13:100070, 2024; ten authors (record; checked 2026-11-14). Licence CC BY-NC-SA 4.0 per github.com/3DOM-FBK/usegeo. |
 | data_h3d | https://api.crossref.org/works/10.1016/j.ophoto.2021.100001 ; arXiv 2102.05346 / ISPRS Open J. Photogramm. Remote Sens. 1:100001, 2021; seven authors (record; checked 2026-11-14). Licence not stated on the benchmark page. |
 | data_matrixcity | https://api.crossref.org/works/10.1109/ICCV51070.2023.00297 ; arXiv 2309.16553 / ICCV 2023, pp. 3182-3192 (record; checked 2026-11-14). Licence CC BY-NC 4.0 per the project page. |
+| data_bunny | https://api.crossref.org/works/10.1145/192161.192241 / Turk, Levoy; SIGGRAPH '94, ACM Press, pp. 311-318, 1994 (record; checked 2026-11-18). Mesh from the Stanford 3D Scanning Repository (graphics.stanford.edu/data/3Dscanrep): research use and redistribution with acknowledgement, no commercial use. |
 | data_beyondlight | arXiv 2512.14200 (arXiv API record) / first six authors listed, "and others"; arXiv comment says ECCV 2026; cited as arXiv (checked 2026-11-14). |
 | rec_nerf | https://api.crossref.org/works/10.1007/978-3-030-58452-8_24 / ECCV 2020, LNCS, pp. 405-421 (record; checked 2026-11-14). |
 | rec_mvsnet | https://api.crossref.org/works/10.1007/978-3-030-01237-3_47 / ECCV 2018, LNCS, pp. 785-801 (record via search; checked 2026-11-14). |
