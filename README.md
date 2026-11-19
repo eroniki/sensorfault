@@ -51,7 +51,7 @@ head with "Anonymous". The repository URL TODO in the Acknowledgment must stay a
 
 ## Layout
 - `main.tex` RA-L letter: title, abstract, index terms, section includes, acknowledgment; `supplement.tex` supplementary material; `preamble.tex` shared packages and macros
-- `sections/` main text: `intro`, `related`, `method`, `setup`, `results`, `conclusion`; `supp_*.tex` for the supplement; `macros.tex`
+- `sections/` new letter: `intro`, `related`, `method`, `setup`, `results`, `conclusion`; view-gate letter: `vg_*.tex`; its supplement: `supp_*.tex`; `macros.tex`
 - `refs/references.bib` cited entries only; `refs/EVIDENCE.md` how each was checked
 - `figures/e1/` E1 figures (pgfplots) and summary table, with their CSV data, copied from `eroniki/sensorfault` `results/e1/figures/` (regenerate there with `experiments/e1_figures.py`); `figures/e1q/` E1 qualitative checks (PNG panels and LaTeX), copied from `results/e1/qualitative/` (regenerate with `experiments/e1_qualitative.py`); remaining placeholders are drawn by `\todofig` in `sections/macros.tex`
 
