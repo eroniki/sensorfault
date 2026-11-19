@@ -1,5 +1,5 @@
 # Design v3.4: depth-only view gate on Gaussian surfels whose uncertainty renders; aerial survey setting.
-extends: base.yaml
+extends: ../base.yaml
 id: h7_pose_perturbation_check
 status: preregistered_draft
 design: v3_rendered_uncertainty_gate

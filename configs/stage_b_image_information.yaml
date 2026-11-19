@@ -1,0 +1,45 @@
+# Design v4: per-source information on Gaussian surfels (depth prior against pixels).
+# Protocol: docs/learned-indicator/experiment-design.md; paper: docs/learned-indicator/paper-plan.md.
+# Thresholds are proposals until the pre-registration tag; they are copied from the protocol, which wins.
+id: stage_b_image_information
+status: preregistered_draft
+design: v4_per_source_information
+paper: ral_first_submission
+stage: B
+title: Is the pixel information honest, and how far does it reach?
+hypotheses:
+- id: H3
+  prediction: The image record recovers displacements of the size the prior leaves.
+  primary_metric: median relative error of the recovered offset, per image scale
+  supported_if: <= 0.25 up to the 90th percentile of residual parallax on textured land
+  refuted_if: no scale recovers displacements of that size
+  stop: S2
+- id: H4
+  prediction: Realistic faults carry energy.
+  primary_metric: noncentrality at the 75th-percentile surface term, median textured-land entity, after dispersion
+  supported_if: '>= 11 (80% power at 5% size, chi-square with 3 degrees of freedom)'
+  refuted_if: < 5
+  stop: S2
+- id: H5
+  prediction: An appearance regime keeps an injected fault and still renders healthy surface.
+  primary_metric: absorbed fraction of an injected fault; PSNR loss on judging frames
+  supported_if: absorbed fraction <= 0.5, retained information >= 0.5, PSNR loss <= 1 dB
+  refuted_if: no regime meets all three
+  stop: S3
+- id: H6
+  prediction: Stated image information is honest on blank surface after dispersion.
+  primary_metric: ratio of nominal to realised information on water and low-contrast roofs
+  supported_if: inside [1/3, 3]
+  refuted_if: outside (reported, not a stop)
+  stop: null
+data:
+  dev: MatrixCity aerial block 3, depth-placed surface
+  seeds: 5
+compute: gpu
+baselines:
+- no_dispersion
+- no_honesty_factor
+- fitted_appearance
+paper_items:
+- Fig. 3 (stated against realised information)
+implemented: false

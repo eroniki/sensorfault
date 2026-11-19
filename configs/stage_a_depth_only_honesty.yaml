@@ -1,0 +1,49 @@
+# Design v4: per-source information on Gaussian surfels (depth prior against pixels).
+# Protocol: docs/learned-indicator/experiment-design.md; paper: docs/learned-indicator/paper-plan.md.
+# Thresholds are proposals until the pre-registration tag; they are copied from the protocol, which wins.
+id: stage_a_depth_only_honesty
+status: preregistered_draft
+design: v4_per_source_information
+paper: ral_first_submission
+stage: A
+title: Is a depth-only information map overconfident, and by the predicted amount?
+hypotheses:
+- id: H1
+  prediction: A depth-only information map is overconfident.
+  primary_metric: robust scale s_z of the standardised placement error after single-frame calibration, entities
+    seen by >= 5 frames, held-out tiles
+  supported_if: lower bound of the 95% interval > 1.25
+  refuted_if: upper bound <= 1.25 after the consensus gate
+  stop: S1
+- id: H2
+  prediction: 'The overconfidence equals the repeated share: fused variance is rho + (1 - rho)/n times the single-frame
+    variance.'
+  primary_metric: ratio of realised to predicted fused variance per n-bin, rho estimated beyond block B
+  supported_if: interval inside [0.67, 1.5]
+  refuted_if: upper bound of rho < 0.1, or ratio outside [0.5, 2]
+  stop: S1
+data:
+  dev: MatrixCity aerial block 3 (185 frames, exact depth)
+  split: 64 m ground tiles, checkerboard calibration / held-out with a one-tile buffer
+  real_check: ETH3D, 13 scenes, cached depth of four models
+depth_models:
+  primary: depth_pro
+  scope_only:
+  - metric3d_v2
+  - unidepth_v2
+  - depth_anything_v2
+block_sizes:
+- 0
+- 1
+- 2
+- 3
+- 5
+- 9
+compute: one depth pass on a GPU, then CPU
+baselines:
+- depth_only
+- consensus_gate
+paper_items:
+- Fig. 3 (law)
+- Table 3 (real scenes)
+implemented: false

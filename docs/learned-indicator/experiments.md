@@ -91,7 +91,7 @@ z^2_m = \boldsymbol\epsilon_m^\top \Lambda_m\, \boldsymbol\epsilon_m \ \sim\ \ch
 ```
 
 with $A_m$ the entity's area. $\mathcal S$ is the negative log density of the true surface under
-the map, in nats per square metre: the **surface log-score**. It is a proper scoring rule: it
+the map, in nats per entity on the signed normal error: the **surface log-score**. It is a proper scoring rule: it
 cannot be improved by inflating or deflating the stated information, and it falls when either
 the geometry or its error bar improves. Reported with it: the robust scale of $z_m$ (one if
 honest; above one is overconfidence), coverage of the 68% and 95% regions, and the same per

@@ -1,4 +1,4 @@
-"""Schema checks for the design-v3 configs (depth-only gate on surfels whose uncertainty renders).
+"""Schema checks for the design-v3 configs in configs/legacy_view_gate (depth-only gate on surfels whose uncertainty renders).
 
 No experiment is run.
 """
@@ -14,6 +14,7 @@ from sensorfault.baselines.gate_testbed import GATE_TESTBED_NAMES, IMPLEMENTED
 from sensorfault.runner import load_config
 
 CFG = Path(__file__).resolve().parents[2] / "configs"
+VG = CFG / "legacy_view_gate"  # design-v3 hypothesis configs, kept for the consensus-gate baseline
 HYP = [
     "h1_residual_measurement",
     "h2_cross_view_repetition",
@@ -44,7 +45,7 @@ def baseline_ids():
 
 @pytest.mark.parametrize("name", ALL)
 def test_experiment_configs_complete(name):
-    c = load_config(CFG / f"{name}.yaml")
+    c = load_config(VG / f"{name}.yaml")
     assert c["status"] == "preregistered_draft" and c["design"] == "v3_rendered_uncertainty_gate"
     h = c["hypothesis"]
     assert h["prediction"] and h["falsification_criterion"]
@@ -72,10 +73,10 @@ def test_baseline_files_use_registered_names_and_cover_all_stubs():
 
 
 def test_hypothesis_ids_and_residual_measurement_first():
-    assert [load_config(CFG / f"{n}.yaml")["hypothesis"]["id"] for n in HYP] == [
+    assert [load_config(VG / f"{n}.yaml")["hypothesis"]["id"] for n in HYP] == [
         f"H{i}" for i in range(1, 8)
     ]
-    h1 = load_config(CFG / "h1_residual_measurement.yaml")
+    h1 = load_config(VG / "h1_residual_measurement.yaml")
     assert h1["first_task"] is True
     assert load_config(CFG / "base.yaml")["measurement_model"]["calibration"]["first_task"] is True
 
@@ -92,7 +93,7 @@ def test_no_sub_noise_claims_and_faults_are_regional():
     assert "repeated_same_error_across_views" in g["injected_regional"]["across_views"]
     assert g["controls"]["whole_view_affine"]["absorbed"] is True
     for name in ALL:
-        assert "sub_noise" not in (CFG / f"{name}.yaml").read_text()
+        assert "sub_noise" not in (VG / f"{name}.yaml").read_text()
 
 
 def test_surface_appearance_and_uncertainty_blocks():
@@ -126,15 +127,15 @@ def test_required_baselines_present():
         "no_gate",
     ):
         assert b in ids
-    h4 = load_config(CFG / "h4_reconstruction_with_and_without_gate.yaml")
+    h4 = load_config(VG / "h4_reconstruction_with_and_without_gate.yaml")
     assert {"no_gate", "gate", "spotless_splats", "robustnerf_loss"} <= set(h4["baselines"])
     assert h4["hypothesis"]["levels"]["dataset"] == ["usegeo", "matrixcity", "eth3d"]
-    h6 = load_config(CFG / "h6_gate_design_ablations.yaml")
+    h6 = load_config(VG / "h6_gate_design_ablations.yaml")
     assert {"gate_fisherrf_diag", "gate_bayesrays", "gate_keep_unsupported"} <= set(h6["baselines"])
 
 
 def test_h2_tests_repetition_in_textureless_regions():
-    h2 = load_config(CFG / "h2_cross_view_repetition.yaml")
+    h2 = load_config(VG / "h2_cross_view_repetition.yaml")
     assert "textureless_roof_road_wall" in h2["hypothesis"]["levels"]["appearance_class"]
     assert h2["hypothesis"]["levels"]["frame_separation"][0] == 1
     assert h2["metrics"]["textureless_min"] == 0.5
@@ -179,7 +180,7 @@ def test_outer_loop_block_and_its_ablations():
     ids = baseline_ids()
     for b in ("gate_single_pass", "gate_drop_all_rejected", "gate_downweight", "gate_readmit"):
         assert ids[b] == "view_gate"
-    h6 = load_config(CFG / "h6_gate_design_ablations.yaml")
+    h6 = load_config(VG / "h6_gate_design_ablations.yaml")
     assert "gate_single_pass" in h6["baselines"] and h6["hypothesis"]["levels"]["round_cap"] == [
         1,
         3,
@@ -202,7 +203,7 @@ def test_aerial_setting_datasets_and_leave_block_out():
     assert "M = n_views * round_cap" in blk["holm_family"]
     ids = baseline_ids()
     assert ids["gate_block_1"] == "view_gate" and ids["gate_perturbed_poses"] == "view_gate"
-    h6 = load_config(CFG / "h6_gate_design_ablations.yaml")
+    h6 = load_config(VG / "h6_gate_design_ablations.yaml")
     assert h6["hypothesis"]["levels"]["block_size_B"] == [1, 3, 5, 9]
     assert (CFG.parent / b["poses"]["theory_module"]).exists()
 
@@ -214,7 +215,7 @@ def test_off_the_shelf_depth_models_and_pose_check():
     assert set(b["depth_model"]["altitude_comparison"]["models"]) >= {"depth_pro", "metric3d_v2"}
     pc = b["pose_check"]
     assert set(pc["checks"]) == {"a", "b"} and "recovery error" in pc["report"]
-    h7 = load_config(CFG / "h7_pose_perturbation_check.yaml")
+    h7 = load_config(VG / "h7_pose_perturbation_check.yaml")
     assert h7["hypothesis"]["id"] == "H7" and "rotation_deg" in h7["hypothesis"]["levels"]
     assert b["downloads"]["policy"].startswith("no large download")
 

@@ -1,124 +1,138 @@
-# View-level fault rejection for depth-supervised Gaussian splatting — research plan (design v3.4)
+# Auditing monocular depth with per-source information on Gaussian surfels — research plan (design v4.0)
 
-Target: Elsevier `elsarticle` preprint first, then a subscription (no-APC) journal to be chosen; no pay-to-publish venue; solo author, 14–18 evening weeks (~10 h/wk), one 8 GB consumer GPU.
-Title (fixed): *View-Level Fault Rejection for Monocular-Depth Reconstruction via a Shared Gaussian Surface*.
-Status: v3.4 of 2026-11-15 (pivot after an external critique, the decisions of `docs/design-3dgs-bayes.md` §7, then the outer loop, then the aerial setting, spline poses and leave-block-out, then off-the-shelf depth only and the pose check). **Reference design: `docs/design-3dgs-bayes.md`** (§8, the per-view bias field, is background for a separate paper and stays out of this one beyond a one-line future-work pointer). No experiments yet. Items marked **[UNVERIFIED]** are not yet checked.
-Hygiene: public datasets, public pretrained models and public code only; nothing from any employer.
+Target: **IEEE RA-L with the IROS 2027 presentation option** (6 pages, up to 2 paid; no supplementary PDF, video only; double-anonymous; abstract of 1,200 characters). Submission window for the IROS 2027 option closes 2027-04-30; internal target **2027-03-31**. A longer paper with the full method follows at a vision venue.
+Title (working): *Auditing Monocular Depth with Per-Source Information on Gaussian Surfels*.
+Status: v4.0 of 2026-11-19 (pivot from the depth-only view gate of v3.4). **Reference documents:** method `docs/learned-indicator.md`; protocol and thresholds `docs/learned-indicator/experiment-design.md`; paper design `docs/learned-indicator/paper-plan.md`; prior work and reviewer objections `docs/learned-indicator/positioning.md`. The v3.4 plan is kept as `docs/plan-v3-view-gate.md`.
+Hygiene: public datasets, public pretrained models and public code only; nothing from any employer. Solo author, one GPU.
 
 ---
 
 ## 1. Framing
 
-- **Contribution: the gate.** The representation is standard 2DGS surfels augmented with information blocks — not new. Position it as sparse, with correspondence-free fusion and testing, unlike dense TSDF/voxels, NeRF fields or MVS cost volumes; geometry is depth-only, so reflectance cannot corrupt it.
-- **Setting: aerial survey imagery** (UAV nadir strips, GNSS/IMU or exterior orientation). Main real set UseGeo; H3D pending; MatrixCity synthetic for exact-truth fault injection; ETH3D a small sanity check; ScanNet++ dropped. Monocular depth models are trained mostly near the ground, so nadir views from altitude are a different failure regime (H1 measures it).
-- **Lighting:** light-source estimation and relighting are future work only (one line; varying-illumination aerial set as pointer).
-- **Depth source: off-the-shelf released models only** (Depth Pro default; Metric3D v2 and UniDepthV2 for the confidence baseline and the altitude comparison). No unreleased or in-house depth model in this paper. The altitude failure comparison (ground-trained models on nadir views from altitude vs near-ground views) is a results item.
-- **Downloads:** nothing large without the author's explicit yes (a single MatrixCity aerial block tar is about 15.8 GB; UrbanScene3D is 1.43 TB).
+- **Claim.** A Gaussian-surfel map built from posed aerial video and monocular depth is overconfident by the share of depth error that all frames repeat. Storing a calibrated Fisher information on placement separately for the depth prior and for the pixels, on the same three coordinates, exposes that repeated error as a between-source statistic with a null distribution, and gives a map whose stated uncertainty predicts its realised error.
+- **Contributions (three, each checkable).**
+  - **C1** Per-source information records on planar surfels. To first order the image Jacobian with respect to placement factors through the depth Jacobian, so prior and pixels are quadratic forms on one offset and two tilts; records add over frames and tiles.
+  - **C2** The overconfidence law ϱ + (1−ϱ)/n for depth-only fusion (ϱ = share of depth error variance that frames repeat, n = frames), and a score test at the depth-placed surface that detects repeated faults; both against a depth-consensus gate.
+  - **C3** A label-free calibration of the pixel information (dispersion from frame replicates, honesty factor from displacements injected through the renderer), scored by a proper rule, the surface log-score.
+- **What changed from v3.4.** The v3.4 gate tests each depth map against the other depth maps. An error that every frame repeats is invisible to it by construction. The witness is now the pixels, through the differentiable renderer. The v3.4 gate stays in the paper as the **depth-consensus baseline**; its theory, code, E1 and the pose check are reused, not discarded (Section 8).
+- **Setting.** Posed aerial video in strips, one off-the-shelf monocular depth map per frame (Depth Pro primary; Metric3D v2, UniDepthV2, Depth Anything V2 for scope). No fault labels at any stage; frozen released models only.
+- **Not claimed in this paper** (deferred to the longer paper): large-area scaling, better-than-matching accuracy, learned heads on frozen video features, segmenter-lifted entities, reflections and the layer test, the full nuisance ledger, cross-strip and repeated-pass evidence.
+- **Naming.** "Information-theoretic Gaussian splatting" is avoided: GauSS-MI uses Shannon mutual information with splatting, FisherRF uses Fisher information for view selection. The paper says "per-source information on Gaussian surfels".
+- **Downloads:** nothing large without the author's explicit yes.
 
-- **Faults are regional and appearance-driven** (reflections and glass, textureless walls), many σ inside a connected region of a view. **No sub-noise claims.** Whole-view affine errors are absorbed by the per-view alignment and are not faults.
-- **The gate must beat cheap baselines on these faults**: per-view aligned RMS, depth-model confidence, robust depth losses, RobustNeRF, SpotLessSplats.
-- **3DGS camp:** 2DGS-style surfels rendered with gsplat into depth and variance. **Colour is a separate appearance block that may refine poses but never updates map geometry or opacity**; colour reaches map geometry only through the depth model. **The gate is depth-only.**
-- **What is classical:** the test (Baarda data snooping / Teunissen DIA), solution separation = leave-one-out innovation (Joerger 2014), surfel fusion (Keller 2013), per-view alignment (MonoSDF).
-- **What is new (claim):** every Gaussian carries an uncertainty that renders, used for fault testing with exact leave-view-out. Compare with FisherRF (Fisher information, view selection) and Bayes' Rays (post-hoc perturbation-field uncertainty).
+## 2. Method in brief (reference: docs/learned-indicator.md §3–4)
 
-## 2. Method (reference: docs/design-3dgs-bayes.md §1–4, 9, 10)
+- **Unit.** An entity is a set of planar surfels; in this paper a fixed ground tile of 8 m side with a depth-normal split. Its placement has three coordinates: normal offset and two tilts.
+- **Depth record.** Per frame, per entity: information Λᴰ and pull ηᴰ from the aligned monocular depth, lumped (weights w, not w²), with per-frame scale and offset marginalised.
+- **Image record.** ∂ĉ/∂θ = g·j with g = −w (a − b)(sᵀm): compositing weight, contrast with what lies behind, slide of the intersection. Λᴵ and ηᴵ from one backward pass of the image loss per frame. First-order identity; verified by finite differences on the reference renderer.
+- **Tension and energy.** Stretch t = difference of the two placements; T = tᵀ(Λᴰ⁻¹ + φ̂ Λᴵ⁻¹)⁻¹ t, χ² with 3 degrees of freedom under the null; E = T/2 in nats.
+- **Score test.** Evaluated at the depth-placed surface with projective appearance, source and judging frames disjoint, so a fault cannot be explained away by repainting.
+- **Honest information.** Dispersion φ̂ from frame replicates; honesty factor from displacements injected by moving groups of Gaussians; prior information saturates, (Σ_μ + Σ_α/n)⁻¹ ≤ Σ_μ⁻¹.
+- **Fusion.** Information-weighted with the saturated prior; optional gate on E.
+- **Metric.** Surface log-score: negative log density of the true placement of each entity on the signed normal error, in nats per entity.
 
-- **Surfel shape** (rendering only): μ, R = [t1 t2 n], scales s, opacity α.
-- **Surfel uncertainty** (separate): **10×10** information Λ_k over θ = [δμ (3, world), δφ (3, tangent-space/body rotation error, R ← R exp([δφ]×)), δ log s (3), δ logit α (1)]. Opacity is the 10th coordinate, **trained in a warm-up and then frozen**; it is not re-estimated in the leave-out and is used for the support rule.
-- **Rendered sub-block:** normal offset ν = nᵀδμ and tilt τ1 = δφ2, τ2 = −δφ1. Ray-surfel z-depth d = nᵀ(μ−c)/nᵀw; ∂d/∂(ν,τ) = [1, −t1ᵀ(x−μ), −t2ᵀ(x−μ)]/nᵀw. Opacity enters through the compositing weights (∂D/∂logit α incl. transmittance, from the rasteriser backward pass). Scales keep their prior.
-- **Rendering:** D(u) = Σ_k w_uk d_k (gsplat); V(u) = Σ_k w_uk² J P_k Jᵀ with P_k the inverse geometric 9×9 block.
-- **Fusion:** Laplace at the MAP, Λ_k = Λ_0 + Σ_i Σ_u a² gᵀg/(γ² σ_u²), g = alpha-weighted rasteriser Jacobian. No correspondences.
-- **Leave-view-out:** Λ_{−j} = Λ − Λ_j plus one Newton step μ_{−j} = μ + Λ_{−j}⁻¹ ∇L_j on the 9 geometric coordinates (infinitesimal jackknife; one backward pass of view j; exact for the linear-Gaussian model).
-- **Noise:** Σ_ε = γ² D C D. Shape (σ(·), ℓ, ν) calibrated offline on dev; **one free noise variable, the scene temperature γ**, fitted leave-view-out (γ̂²_{−j}: median_{i≠j} T_i/q_0.5(χ²_{m_i}) = 1). **No per-view or per-pixel noise parameters.** γ̂ above its dev range → scene-level alarm.
-- **Shared bias:** distance term d → d + β d², β shared by all views, least squares; leave-view-out by subtracting view j's normal equations. Grazing/texture terms only if dev residuals show them. Per-view bias field: separate paper.
-- **Poses (v3.3):** input is posed images. Trajectory = uniform cubic B-spline in time (positions standard basis; rotations cumulative on SO(3)), fitted to GNSS/IMU or dataset poses with a second-difference prior, then control points refined by differentiable PGO with GNSS/IMU prior + smoothness + render-and-compare depth terms (optionally photometric render-and-compare); **no feature correspondences**. Tested view: its own render-and-compare term is subtracted before use; Σ_q = b(t_j) Σ_ctrl b(t_j)ᵀ enters Σ_r. Ablation: perturbed starting poses. ETH3D: registered poses as given. Pose faults out of scope. Code: `src/sensorfault/eval/trajectory_spline.py` (tests `tests/core/test_trajectory_spline.py`).
-- **Pose check (v3.4, H7):** after the gate has run, perturb poses of chosen views (isolated, a block, the flagged view) by known rotations {0.05…2°} and translations {1…50 GSD}; check (a) whether the gate flags them before refinement (own depth excluded from the tested pose) and (b) whether spline + PGO + render-and-compare pulls them back; report detection rate and recovery error vs perturbation size. Pose faults are not a target of the gate; this is a controlled check. Helpers `perturb_pose`, `pose_error`, `recovery_curve` (tests: exact known perturbation, spline refit pulls a perturbed frame back).
-- **Leave-block-out (v3.3):** cavity for view j removes a block of B neighbouring frames of the same strip (centred, shifted inwards at strip ends, never across strips) by subtracting the block's summed information + one Newton step (exact for the linear model). Motivation: neighbouring frames repeat the same error (H2) and would mask it. Only view j is tested; Holm family unchanged, M = N·R_max (block-level testing would be ⌈N/B⌉·R_max; not used). In the loop a rejected view is dropped alone. Cost: weaker cavity (higher MDB, more untestable pixels). B from the sweep {1,3,5,9} on dev against H2's correlation decay; B=1 is the ablation. Code: `block_for_view`, `block_information`, `leave_block_out_newton` in `gaussian_uncertainty.py` (tests: strip windows, exact block subtraction = refit = sequential subtraction, weaker cavity).
-- **Gate:** render the other views' surface into view j; drop surfels without other-view normal-offset information ≥ λ_min **or** with Λ_j[α,α]/Λ[α,α] > ρ = ½ (**the tested view spawns nothing**); pixels with accumulated opacity < τ_W are **untestable**; align (a_j, b_j); whiten with γ̂_{−j}; energy statistic (n_eff dof; threshold absorbs the per-view heterogeneity ω) and region scan over appearance segments; exclusion by the outer loop below; scene-level alarm if >½ excluded.
-- **Algorithm "train, freeze, fuse, test":** cached depth → warm-up (μ, R, s, α on depth; (a,b) closed form; β by LS; densify only with ≥2 supporting views; prune) → freeze opacity, stop densify/prune → fit geometry and poses to convergence, colour on frozen geometry → Laplace Λ → gate loop.
-- **Outer loop (v3.2):** rounds of train (opacity unfrozen again, densify/prune on, warm-started from the previous round) → freeze → fuse → test. Default: drop the single most significant Holm-rejected view per round (swamping protection), no readmission (monotone, terminates), round cap R_max = 10; stop when no view is rejected, at the cap, or at the scene-level alarm. **Holm across rounds:** family M = N·R_max (every view in every round, re-tests and readmission tests included); the (k+1)-th rejection overall uses α/(M−k); step-down within a round; overall level calibrated by clean-run permutation of the whole loop (p-values change between rounds). Removes the warm-up pruning risk for caught views (they stop shaping the geometry; the next round re-densifies without them). Risks: masking (resolved over rounds), swamping (one view per round), cap reached (alarm). Ablations: loop off (single pass), drop all rejected per round, down-weight instead of drop, readmission, cap 3. Framing: Baarda-style iterative data snooping and hard EM (gate = E-step, train = M-step), EP cavity within each round — known ideas, not contributions. Fusion is not differentiated; gradients run only inside the train step. Code: `src/sensorfault/eval/gate_loop.py`, tests `tests/core/test_gate_loop.py` (Holm counting, masking, swamping, readmission, down-weighting, alarm, null FWER ≤ α by simulation).
-- **Limitation (stated; no deeper fix yet):** independent per-Gaussian blocks ignore cross-surfel, within-view and shared-pose correlations, so the rendered variance is overconfident (H5). Ablations: deflate view information by n_eff/n; jackknife inflation.
-- Code: `src/sensorfault/eval/gaussian_uncertainty.py` (10-dim block, opacity Jacobian, Newton leave-out, opacity support rule, shared distance bias) and `src/sensorfault/eval/detection_theory.py` (scene temperature, heterogeneity-calibrated energy threshold). Tests: `tests/core/test_gaussian_uncertainty.py`, `tests/core/test_detection_theory.py`. **Still to write:** a vectorised/GPU version on top of gsplat's backward pass.
+## 3. Hypotheses of the first paper (configs/stage*.yaml; thresholds are proposals until the tag)
 
-## 3. Measurement model and the first task
+IDs are those of `docs/learned-indicator/experiment-design.md`. The v3.4 hypotheses are referred to as VG-H1…VG-H7 from here on; their configs are in `configs/legacy_view_gate/`.
 
-d̂_i = a_i (d + β d²) + b_i + ε, Σ_ε = γ² D C D, D = diag σ(range, texture, grazing), C = (1−ν)K_ℓ + νI.
-**Weeks 1–2, before anything else (H1):** on UseGeo (LiDAR depth maps) and ETH3D dev scenes with Depth Pro, nadir-from-altitude and near-ground views separately, fit σ(·), ℓ, ν, tails, β, the γ range and the per-view heterogeneity ω of the aligned residuals against laser depth; characterise natural regional failures (area fraction, magnitude in σ, appearance class) and their harm to the fused surface; measure cross-view repetition of errors (H2). This is Figure 1. Go/no-go on H1. If ω ≳ 0.05, lead with the region scan (energy MDB grows ×1.64 at ω = 0.05, ×2.43 at 0.10).
-Confidence outputs (public READMEs, 2026-11-14): Metric3D v2 (ViT) and UniDepthV2 yes; Depth Pro no; MoGe mask only; Depth Anything V2, Marigold none.
+| ID | Stage | Statement | Supported if | Stop |
+|---|---|---|---|---|
+| H3, H14 | 0 | The image record recovers an injected placement of a synthetic entity; records are additive | slope in [0.8, 1.2], R² ≥ 0.9 at ≤ 1 px; difference ≤ 1e-6 | S2 |
+| H1 | A | A depth-only information map is overconfident | s_z > 1.25 (lower bound) | S1 |
+| H2 | A | The overconfidence is ϱ + (1−ϱ)/n | realised/predicted in [0.67, 1.5] | S1 |
+| H3, H4 | B | Pixels recover displacements of the size the prior leaves; realistic faults carry energy | relative error ≤ 0.25; noncentrality ≥ 11 | S2 |
+| H5 | B | An appearance regime keeps a fault and still renders healthy surface | absorbed ≤ 0.5, retained ≥ 0.5, PSNR loss ≤ 1 dB | S3 |
+| H6 | B | Stated image information is honest on blank surface | ratio in [1/3, 3] | none |
+| H9 | C | Repeated faults: visible to the tension, not to consensus | AUROC ≥ 0.9 against ≤ 0.6 | S5 |
+| H10 | C | The energy has its stated null | mean T/3 in [0.85, 1.15] | S4 |
+| H7 | C | The fused map is calibrated | s_z in [0.8, 1.25], coverage within 0.08 / 0.04 | S4 |
+| H8 | C | Gating adds to saturated fusion (secondary) | ratio ≤ 0.5 | S5 |
 
-## 4. Hypotheses (configs/h*.yaml, mirrored in the manuscript)
+Stop rules: **S1** the depth-only map is already honest; **S2** the image record is not a measurement; **S3** a fault is always explained away; **S4** stated covariance does not predict error; **S5** fusion or a decaying depth weight already answers it. Fallback papers for each are in the paper design, §4.
 
-- **H1 (residuals first; go/no-go).** Also measures β, the γ range and ω. Go if ≥10% of views carry a failure covering ≥2% of pixels at >3σ and keeping them costs ≥2 F-score points; no-go (analysis paper) below 5% or 1 point.
-- **H2 (repetition across views).** Cross-view error correlation at the same reference point: ≥0.5 textureless, ≤0.3 specular, ≤0.2 textured, decaying with frame separation along the strip (sets B). Predicts a blind spot for errors repeated beyond the block.
-- **H3 (detection vs cheap baselines).** At 5% FA, on reflective-region failures, gate beats the best cheap/robust baseline by ≥15 points; no gain predicted on textureless.
-- **H4 (reconstruction).** Depth-supervised splatting on UseGeo and ETH3D (natural failures) and MatrixCity (injected faults): gate improves held-out AbsRel and F-score by ≥10% relative on failure scenes vs no gate and the best robust-splatting baseline; ≤2% change on clean scenes.
-- **H5 (calibration).** Raw mean T/m > 1.2 on clean views (overconfidence of independent blocks); with the leave-view-out scene temperature and the ω-calibrated energy threshold, FA in [0.5α, 1.5α] on test scenes; n_eff/n deflation and jackknife inflation are ablations.
-- **H6 (ablations).** Joint surface −10 pts; keeping tested-view-only surfels −20 pts on large regions; unwhitened −5 pts; rendered 10×10 ≥ FisherRF-style diagonal Fisher and Bayes' Rays-style uncertainty; no temperature / no shared bias raise clean FA; fold-wise opacity warm-up changes FA and power by < 2 pts. Outer loop vs single pass: ≥10 pts more detections when ≥2 faulty views share a region, clean FA within band; all-rejected policy swamps; readmission changes < 2 pts. Leave-block-out (B from {1,3,5,9}) ≥10 pts over B=1 when neighbours repeat the error; perturbed starting poses <5 pts.
-- **H7 (pose perturbation check).** (a) gate flags ≥80% of views perturbed by ≥0.5° or ≥10 GSD before refinement; (b) refinement removes ≥80% of the perturbation up to 1° / 25 GSD; recovery error vs size reported, including failures.
-- **Breakdown:** common-mode repetition, low overlap (untestable), faulty views dominating a region, misspecified measurement model, linearisation limit.
+## 4. Baselines
 
-## 5. Baselines (configs/baselines/)
-
-| Family | Methods | Registry |
+| Baseline | Isolates | Status |
 |---|---|---|
-| Robust splatting | SpotLessSplats, RobustNeRF loss, Huber / Geman–McClure depth loss | `spotless_splats`, `robustnerf_loss`, `robust_depth_loss` |
-| Cheap view tests | per-view aligned RMS vs other views' render; depth-model confidence | `aligned_rms_view_test`, `depth_confidence_score` |
-| Bounds | no gate; oracle gate | `no_gate`, `oracle_gate` |
-| Gate and ablations | full; joint; keep unsupported; unwhitened; deflated; jackknife-inflated; no temperature; no shared bias; fold-wise warm-up; loop off; drop all rejected; down-weight; readmission; FisherRF-style; Bayes' Rays-style | `view_gate` |
+| Depth-only fit | any image evidence | `gs/fit.py`, exists |
+| Depth-consensus gate (the v3.4 view gate, B ∈ {1, 3, 5, 9}) | the between-source test | `gs/gate.py`, linearised version exists; cavity uses lumped information |
+| Decaying depth weight; fixed weight; pixels only | calibration against a schedule | to build in `gs/fusers.py` |
+| Information fusion without saturation / without gate | saturation; the gate | to build |
+| Photometric-error mask; virtual-stereo mask (reimplemented from their descriptions) | published selection devices | to build |
+| Fisher-information field in the style of FisherRF | per-source storage against one image information | to build |
+| Single summed confidence | per-source storage | ablation |
+| Oracle gate | upper bound | exists as stub |
 
-## 6. Data and faults (configs/datasets/, configs/faults/view_fault_grid.yaml)
+## 5. Data
 
-Licences, checked against the actual pages/files on 2026-11-15 — **all non-commercial**, recorded in the data statement:
-- UseGeo (main real): CC BY-NC-SA 4.0, stated in the README "License" section of github.com/3DOM-FBK/usegeo (no LICENSE file in the repo; the dataset site itself names none). Three sets of 8 strips (224/328/277 images).
-- MatrixCity (synthetic): CC BY-NC 4.0 on the Hugging Face card BoDai/MatrixCity (not gated); depth, normals and transforms.json poses confirmed in the file list; one aerial test block ≈ 15.8 GB.
-- H3D (pending): download link only after registration; data "as is"; no licence stated; pages describe LiDAR point clouds and textured meshes, images/poses not stated — treated as non-commercial research use until confirmed.
-- UrbanScene3D (optional, one scene at most): non-commercial only, "AS IS", no dissemination of the data or altered variations; 1.43 TB in total.
-- ETH3D (sanity check): licence still to check. Fallback: ISPRS Vaihingen (research only, no redistribution). Not used: Dortmund (125–350 GB), Mill-19 (no geometric reference), ScanNet++ (dropped).
-Natural failures labelled vs LiDAR/laser on connected regions (specular glass/water, textureless roofs/roads/walls, other). Injected regional faults: offset, plane replacement, blurred copy, mirrored depth; 2–40% of a view; 2–16σ; on appearance masks or random superpixels; independent or repeated across views. Controls: fault-free; whole-view affine (absorbed).
+- **MatrixCity aerial block 3** (synthetic, exact depth; on disk): dev set for stages A–C. Further blocks are the test set and need a download approval; with block 3 only, scoring is on held-out 64 m tiles and tables are marked "same scene".
+- **ETH3D** (13 scenes, 454 views, laser depth; depth cache of four models exists): real-scene check of H1 and H2. Laser depth is in distorted geometry and must be warped.
+- **UseGeo** (real UAV, LiDAR): optional for this paper; not on disk.
+- Licences as recorded in `docs/plan-v3-view-gate.md` §6 (all non-commercial).
 
-## 7. Schedule (18 weeks, ~10 h/wk)
+## 6. Work packages and task list
 
-| Wk | Work | Milestone |
-|---|---|---|
-| 1 | UseGeo and ETH3D access/licence/scenes; Depth Pro licence and 8 GB memory; depth cache on dev scenes; prereg tag | M1 |
-| 2 | **H1 residual measurement + natural-failure characterisation + harm; H2 repetition** (Figure 1) | **go / no-go** |
-| 3 | gsplat 2DGS depth-supervised fit: warm-up, opacity freeze, appearance block (stop-grad into geometry/opacity, may refine poses); shared distance bias; metrics harness ; trajectory spline fit and render-and-compare pose refinement | M3 |
-| 4 | Laplace 10×10 information from gsplat backward passes (vectorised); Newton leave-out and leave-block-out render; support rules | M4 |
-| 5 | Gate: scene temperature, whitening, energy (ω threshold) + region scan, outer loop (Holm across rounds), calibration (H5) | M5 |
-| 6 | Cheap baselines (aligned RMS, depth confidence); fault injectors | |
-| 7–8 | H3 detection; SpotLessSplats / RobustNeRF / robust depth losses | Gate 2 |
-| 9–10 | H4 reconstruction on UseGeo and MatrixCity, then ETH3D; block-size sweep | |
-| 11 | H6 ablations (FisherRF-style, Bayes' Rays-style); breakdown scenarios | |
-| 12 | **Experiment freeze** | tag |
-| 13–15 | Draft, figures, supplement, reproducibility package | preprint-ready |
-| 16–18 | Buffer | |
+Estimates are for one 24 GB GPU and are not measurements.
 
-**Cut order:** H3D → Bayes' Rays-style ablation → FisherRF-style ablation → injected-fault sweeps beyond the core grid. **Never cut:** H1, H3 against the cheap baselines, H5.
+| WP | Task | Code | Cost | Needs | Decides |
+|---|---|---|---|---|---|
+| **0** | Stage 0: colour render and image Jacobian in the reference renderer; finite-difference test; recovery and dispersion on a synthetic entity; additivity test | `gs/reference.py`, new `gs/image_info.py`, `tests/core/test_image_info.py`, `experiments/stage0_entity.py` | CPU, 3 days | none | H3, H14; early S2 |
+| **1** | Data: strip table, RGB loader, 64 m tile map, class labels from exact depth; Depth Pro cache on block 3, then the other three models | `experiments/matrixcity_io.py`, `depthcache/run.py`, new `eval/calibration.py` | 1 GPU h, 1 day | GPU | none |
+| **2** | Stage A: depth-only map from real monocular depth, per-frame alignment without ground truth, per-entity records, single-frame calibration; s_z, ϱ(B), realised against predicted variance | `gs/fit.py`, `eval/calibration.py`, new `experiments/stage_a_honesty.py` | 20 CPU h, 2 days | WP1 | **H1, H2; S1** |
+| **3** | Stage B: projective appearance, injection ladder, capture range, dispersion and honesty factor | `experiments/rgb_train_2dgs.py`, new `gs/inject.py` | 14 GPU h, 2 days | WP0, WP1 | H3–H6; S2, S3 |
+| **4** | Stage C: two-source records on tiles, saturated fusion, score test, fault grid, six maps, tile bootstrap | `gs/fit.py`, `gs/fusers.py`, `gs/gate.py`, `faults/injectors.py`, `eval/stats.py` | 40 GPU h, 5 days | WP2, WP3 | H7–H10; S4, S5 |
+| **5** | Baselines: consensus gate on real depth, decaying and fixed weight, photometric and virtual-stereo masks, Fisher field | `gs/gate.py`, `gs/fusers.py`, new `baselines/selective_depth.py`, `baselines/fisher_field.py` | 15 GPU h, 3 days, parallel with WP4 | WP1 | H8, H9 |
+| **6** | ETH3D: warp laser depth, repeat Stage A on 13 scenes and four models | `depthcache/datasets.py`, `experiments/stage_a_honesty.py` | 10 GPU h, 2 days | WP2 | real-scene table |
+| **7** | Pre-registration: fix thresholds on dev data, tag | `prereg/`, `configs/stage*.yaml` | 1 day | WP0–WP2 dev results | — |
+| **8** | Figures: teaser, overview, law and honesty, detection; generators in the house TikZ style | `experiments/*_figures_tikz.py` | 4 days | WP2–WP5 | — |
+| **9** | Writing: method and introduction first, results as milestones close; full read of FisherRF, GauSS-MI, PUP 3D-GS, OUGS, "In Depth We Trust" before related work is final | manuscript repo | continuous | — | — |
 
-## 8. Paper outline (elsarticle; main text ≤ 8 pages)
+**Milestones (go / no-go).**
 
-1 Introduction; 2 Related Work (short); 3 Method (setting and faults, surfels with an uncertainty that renders, fusion on rendering and leave-view-out, the view gate); 4 Experimental Design and Hypotheses; 5 Results; 6 Conclusions, Limitations, Future Work; Declarations; References; Supplement (related work, derivations, setup in full, planned tables and figures).
+| Date | Milestone | Go if | If not |
+|---|---|---|---|
+| 2026-12-04 | M0: WP0–WP2 | H1 and H2 supported on block 3 | fallback paper 3 or a negative-result note |
+| 2026-12-23 | M1: WP3 | H3 and H4 supported on land | fallback paper 2 (overconfidence law and saturated prior only) |
+| 2027-01-15 | M2: WP6 | repetition visible on at least half of the ETH3D scenes | synthetic-only paper |
+| 2027-01-31 | M3: WP4, WP5 | H9 supported; H7 not refuted | fallback paper 1 (the audit without mapping gains) |
+| 2027-02-15 | Go / no-go for RA-L | M0–M3 met | resize the claim |
+| 2027-03-07 | Tables frozen | | |
+| 2027-03-31 | Submission | | |
 
-## 9. Venue and preprint plan
-- Template: Elsevier `elsarticle` (TeX Live), `5p,twocolumn`; main text at most 8 pages, then declarations, references and a Supplementary Material appended to the same PDF (split into a separate file if the chosen journal requires it).
-- No pay-to-publish venue: no APC / open-access fee. Preprint first (e.g. arXiv, once the results exist and the repositories are ready to be made public); choose a subscription-model Elsevier journal afterwards. **[UNVERIFIED]** which journal and its current policies: check its guide for authors before submitting.
-- Elsevier asks for a declaration of generative-AI use and a data/code availability statement: both are open TODOs in `main.tex`.
-- The IEEE Access template, biography and boilerplate were removed from the manuscript repo.
+**Deferred to the longer paper:** nuisance ladders (pose, scale, exposure), segmenter entities and the tile-against-entity test, heads on frozen features, outline parallax and the layer test, matching baselines, additivity at scale, UseGeo blocks.
+
+**Cut order if time runs short:** H8 and the gated map → photometric and virtual-stereo masks → three of the four depth models → ETH3D test scenes beyond the dev four. **Never cut:** Stage 0 Jacobian test, H1, H2, H9 against the consensus gate, H7.
+
+## 7. Paper outline (RA-L, 6 pages)
+
+1 Introduction (0.6); 2 Related work (0.3); 3 Method (1.7: records and factorisation; tension and score test; honest prior saturation; calibration by injection); 4 Experiments (2.4: exact-depth block — law, honesty, detection, log-score; real scenes with laser truth); 5 Limitations and conclusion (0.3); references (0.7). Four figures (teaser; overview; law and honesty; detection) and three tables (six maps; detection at 5% false alarms; real scenes). Video attachment: the map with its stated uncertainty.
+
+## 8. What carries over from v3.4
+
+| Item | Role now |
+|---|---|
+| Lumped information blocks, leave-view-out and leave-block-out cavity (`eval/gaussian_uncertainty.py`, `gs/gate.py`) | the depth record, and the depth-consensus baseline |
+| Detection theory, scene temperature, Holm loop (`eval/detection_theory.py`, `eval/gate_loop.py`) | baseline; the temperature idea becomes single-frame calibration in Stage A |
+| E1 (injected faults, exact geometry, MatrixCity block 3) | fault injectors and the result that leave-block-out does not reveal repeated faults: the motivating negative result |
+| Pose check (`experiments/h7_pose_check.py`) | pattern for the nuisance ladders of the longer paper; not in this paper |
+| RGB 2DGS trainer and the surface comparison | starting point of the image record (Stage B); known to place water 5.7 m off, the blank-surface case of H6 |
+| Depth cache (four models; ETH3D done) | input of Stage A and the real-scene check |
+| VG-H1…VG-H7 configs | `configs/legacy_view_gate/`, still schema-tested |
+
+## 9. Open items
+
+- [ ] WP0 and WP1 (start now; WP1 needs the GPU workstation).
+- [ ] Approval to download further MatrixCity aerial blocks (test set); otherwise results are "same scene".
+- [ ] Decide whether UseGeo is in this paper (optional).
+- [ ] Fix thresholds on dev data and tag the pre-registration (WP7) before any test tile is scored.
+- [ ] Verify RA-L rules on preprints and on the later longer paper; verify vision-venue dates when posted.
+- [ ] Read in full: FisherRF, GauSS-MI, PUP 3D-GS, OUGS, "In Depth We Trust" (differentiation rests on abstracts so far).
+- [ ] Check the math of `docs/learned-indicator.md` as rendered.
+- [ ] Carried over: lint on main; Baarda and Holm references; AI-use and code/data statements in the manuscript.
 
 ---
 
----
-
-## 10. Open items
-- [ ] **Weeks 1–2: H1 residual measurement and H2 repetition on UseGeo and ETH3D dev scenes** (go/no-go).
-- [ ] Confirm ETH3D licence; ask the H3D maintainers about images, orientations and licence; pick at most one UrbanScene3D scene (check which real scenes have LiDAR and poses). **No large download without the author's yes.**
-- [ ] Baarda (1968) is named but cited through Teunissen (2018); add a checked Baarda reference if one can be verified.
-- [ ] Final literature pass: uncertainty-aware Gaussian splatting; depth-prior filtering.
-- [ ] Vectorised/GPU gate on gsplat; fix λ_min, ρ, τ_W, Λ_0, warm-up length, γ_max and the segmentation on dev scenes.
-- [ ] Holm (1979) is named for the step-down schedule but not yet cited (no DOI found); add a checked reference.
-- [ ] AI-use declaration and code/data statement in the manuscript (author's decision).
-
-## 11. Change log
+## 10. Change log
 - 2026-11-13: v2 design (gate = contribution, pipeline = test bed).
 - 2026-11-14: v2.1 shared splat surface restored; v2.2 one metric depth model per image, ensemble → ablation.
 - 2026-11-14: **v2.3 integrity-monitoring framing (RAIM-style FDE).** Core argument made explicit (sub-noise per pixel, coherent per view; MDB ∝ 1/(f√n_eff)); pose faults added; soft down-weighting is a baseline; conditional protection level added (optional); hypotheses reorganised to H1–H10 (new H1 regime map, H8 pose faults, H9 protection level; ties/losses pre-registered where gating should not help); `detection_theory` module + tests; configs and tests regenerated; five RAIM/integrity references added.
@@ -139,3 +153,4 @@ Natural failures labelled vs LiDAR/laser on connected regions (specular glass/wa
 - 2026-11-15: **Main-text figures** (`experiments/main_figures_tikz.py` → manuscript `figures/main/`, checks in `results/main_figures/`), existing results only, no new runs: method overview (Fig. 1, replaces the pipeline placeholder; E1 faulty-view thumbnails), aerial schematic (lawnmower strips, held-out block B=3, spline + pose-graph factors with the tested view's own term removed), an analytic U P Uᵀ example (full vs diagonal; region-sum variance ratio 6.1 over the weak surfel), compact E1 per-view panel (clean / faulty / swamped; full set stays Fig. S5) and the median-test-view RGB render (frame 13, 23.8 dB; full set Fig. S8), plus a short RGB subsection in the results. Placeholders for untested hypotheses (H1 residuals, H7 pose check, altitude table) left as marked TODOs.
 - 2026-11-15: **Surface comparison** (no retraining; `experiments/surface_render_rgb.py` renders the RGB 2DGS median depth of the 185 views, `surface_dsm.py` fuses DSMs, `surface_figures_tikz.py` → manuscript `figures/surface/`; `thermal_guard.sh` pauses a job above 80 °C). One operator for all sources: per view the highest point per cell, median over ≥3 views. GT from the exact depth (480×270). RGB 2DGS vs GT (2 m): land median +0.49 m, RMSE 6.0 m, 81% within 1 m; water (46% of the area, flat plane at −3.4 m) median +5.7 m, P95 +48 m, 5% within 1 m; depth normals of frame 88: median 12.3° on land, 30.0° on water. E1 surfels (4 m), Fig. S5 fault scene: the Holm loop (B=1) excluded only view 59 (two rounds); under the fault the median residual is −2.16 m with all views, −0.16 m without view 59, −0.19 m with no fault (18/54/57% within 1 m); on − off median +1.59 m; block-wide stats differ ≤0.03 m. Run time ~3 min, max 40 °C GPU / 60 °C CPU.
 - 2026-11-15: **H7 pose check run** (MatrixCity block 3, E1 setting; `experiments/h7_pose_check.py`, settings and criteria fixed in `configs/experiments/h7_matrixcity_pose.yaml` before the run; figures `h7_figures_tikz.py`). Perturbed input poses one group at a time (isolated view, block of 3 sharing a perturbation, the flagged view), rotation 0.05–2°, translation 1–50 GSD (GSD 0.141 m), both paired; 2 seeds, 16 perturbed clean views per level; size-0 control. (a) **holds**: 100% flagged at all 9 levels in range and at every smaller size; control 0. Small-size detection comes from surfel switches at building edges of point-sampled exact depth (0.2–0.7% of pixels carry 97–99% of the squared residual), not from the pose term. Swamping: 1.2–27.5 unperturbed views rejected per perturbed group in the same Holm round (max 67); loop not run. (b) **falsified**: 0/15 levels; 63–64% of rotation removed at every size, translation 38–79.6%; blocks 11–35%; the GNSS/IMU prior of the perturbed frame holds it at its input. Exploratory (not preregistered): dropping that prior removes 85–89% of rotations ≥0.5° and 86% at 25 GSD (4/15 levels). Revisions during the run (Huber + step halving before any outcome; spline-as-corrections bug fixed and rerun) recorded in the config. 51 min, 4 threads, max 60 °C CPU.
+- 2026-11-19: **v4.0 pivot to per-source information.** The paper is no longer the depth-only view gate. Claim: a depth-only surfel map is overconfident by the share of depth error that frames repeat (ϱ + (1−ϱ)/n against 1/n); a Fisher information record kept separately for the depth prior and the pixels on one offset and two tilts exposes the repeated error as a between-source statistic; label-free calibration by replicates and injection through the renderer. The view gate becomes the depth-consensus baseline. First submission RA-L with the IROS 2027 option (narrow claim, tiles as entities); the full method (learned heads on frozen features, segmenter entities, nuisance ledger, large area) is deferred. Hypotheses renumbered (H1–H16 of `docs/learned-indicator/experiment-design.md`; old ones are VG-H1…VG-H7 in `configs/legacy_view_gate/`); new stage configs `configs/stage*.yaml`; v3.4 plan kept as `docs/plan-v3-view-gate.md`. Nothing of v4 is measured yet.

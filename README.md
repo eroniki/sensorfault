@@ -1,19 +1,25 @@
 # sensorfault
 
-Research scaffold for **view-level fault rejection in depth-supervised Gaussian splatting** (design v3.3; reference design `docs/design-3dgs-bayes.md`; main setting aerial survey imagery: UseGeo, MatrixCity, ETH3D as a sanity check). One
-metric depth model is applied to each image; 2DGS-style surfels are fitted by depth supervision and rendered with gsplat;
-colour is a separate appearance block that may refine poses but never updates map geometry. Each surfel keeps its shape
-for rendering plus a separate 10x10 uncertainty (opacity frozen after a warm-up) whose normal-offset and tilt block
-renders into depth variance. Views add alpha-weighted J^T R^-1 J information; leaving a view out is a subtraction and one
-Newton step; the noise has one free variable (a scene temperature) and the bias is a shared distance term; the other views' surface is rendered into the tested view
-and its whitened depth residuals are tested (depth only, no correspondences, unseen pixels untestable, the tested view
-spawns nothing). Faults are regional and appearance-driven (reflections, textureless walls); the gate must beat cheap
-baselines (aligned RMS, depth confidence, robust depth losses, RobustNeRF, SpotLessSplats). See `PLAN.md`.
+Research code for **auditing monocular depth with per-source information on Gaussian surfels** (design v4.0;
+plan `PLAN.md`; method `docs/learned-indicator.md`; protocol `docs/learned-indicator/experiment-design.md`; paper
+design `docs/learned-indicator/paper-plan.md`). Setting: posed aerial video in strips with one off-the-shelf
+monocular depth map per frame (MatrixCity for exact depth, ETH3D as a real-scene check).
 
-**Status:** configs, registry stubs, the detection theory (`src/sensorfault/eval/detection_theory.py`) and the rendered-
-uncertainty theory (`src/sensorfault/eval/gaussian_uncertainty.py`), both tested, exist. The residual measurement on
-ETH3D (the first task), the splatting pipeline and the gate on real data are **not implemented yet**. Design v1
-(sensor-level elimination) is kept in `configs/legacy_sensor_faults/`, with its implemented pieces still under `src/`.
+A depth-supervised surfel map looks complete and can be confidently wrong over whole surfaces, identically in every
+frame, because averaging depth maps removes only the part of their error that differs between frames. Each surface
+entity therefore carries two information records on the same three placement coordinates (normal offset and two
+tilts): one from the depth prior, one from the pixels, the second computed through the differentiable renderer. Their
+disagreement is a statistic with a null distribution; the pixel information is calibrated on the scene by frame
+replicates and by displacements injected through the renderer; the prior information saturates. No features are
+matched and no fault labels are used. The earlier depth-only view gate (design v3.4,
+`docs/plan-v3-view-gate.md`) is kept as the depth-consensus baseline.
+
+**Status:** nothing of design v4 is measured yet. Existing and tested: the depth-only surfel fit
+(`src/sensorfault/gs/`), the reference renderer with compositing weights and depth Jacobians, the information blocks
+and the consensus gate (`src/sensorfault/eval/`), the depth cache for four models (`src/sensorfault/depthcache/`),
+and the controlled experiments E1 and the pose check on one MatrixCity block (`experiments/`, `results/`). To build:
+the image record, injection through the renderer, the two-source fusion and test (work packages in `PLAN.md` §6).
+Design v1 (sensor-level elimination) is kept in `configs/legacy_sensor_faults/`.
 
 ## Layout
 
@@ -23,7 +29,8 @@ sensorfault/
   pyproject.toml          package metadata, extras, ruff/pytest config
   environment.yml         conda env (Python 3.10)
   Makefile                env / install / test / lint / data-help / clean
-  configs/                design-v3 experiment configs (H1-H6, breakdown, ablations, datasets, baselines)
+  configs/                design-v4 stage configs (stage0, stage A-C, real scenes), datasets, baselines
+  configs/legacy_view_gate/       design-v3 configs (depth-only view gate: H1-H7, breakdown, ablations); schema-tested
   configs/legacy_sensor_faults/   design-v1 configs (physical-sensor faults); still exercised by tests
   scripts/                data download helpers, third_party setup (nothing runs by default)
   src/sensorfault/
@@ -50,18 +57,16 @@ Optional extras: `pip install -e ".[tsdf]"` (Open3D), `".[gs]"` (torch, gsplat),
 
 ## Hypotheses and configs
 
-| Hypothesis | Claim (short) | Config |
-|---|---|---|
-| H1 | Residuals first (go/no-go): fit sigma, ell, nu, tails of Depth Pro on ETH3D; characterise natural regional failures and their harm | `configs/h1_residual_measurement.yaml` |
-| H2 | The depth model repeats its error across neighbouring views (textureless more than specular), decaying with frame separation; sets the block size | `configs/h2_cross_view_repetition.yaml` |
-| H3 | At 5% false alarm the gate beats the best cheap/robust baseline by >=15 points on reflective-region failures | `configs/h3_detection_vs_cheap_baselines.yaml` |
-| H4 | Depth-supervised splatting with the gate improves AbsRel and F-score on UseGeo, MatrixCity (injected faults) and ETH3D | `configs/h4_reconstruction_with_and_without_gate.yaml` |
-| H5 | Independent blocks are overconfident; with the scene temperature and omega-calibrated threshold, false alarm stays in [0.5, 1.5] alpha | `configs/h5_rendered_uncertainty_calibration.yaml` |
-| H6 | Ablations: leave-view-out, no spawning, whitening, temperature, shared bias, fold-wise opacity warm-up, rendered 10x10 vs FisherRF-style and Bayes' Rays-style, outer loop, leave-block-out sweep, perturbed poses | `configs/h6_gate_design_ablations.yaml` |
+| Stage | Question | Hypotheses | Config |
+|---|---|---|---|
+| 0 | Is the image record a measurement on a synthetic entity? Are records additive? | H3, H14 | `configs/stage0_entity.yaml` |
+| A | Is a depth-only information map overconfident, and by rho + (1 - rho)/n? | H1, H2 | `configs/stage_a_depth_only_honesty.yaml` |
+| B | Is the pixel information honest, and how far does it reach? | H3-H6 | `configs/stage_b_image_information.yaml` |
+| C | Are repeated depth faults detected where consensus is blind, and is the fused map calibrated? | H7-H10 | `configs/stage_c_two_source_map.yaml` |
+| real | Do the exact-depth findings reappear on scenes with laser truth? | H1, H2 | `configs/real_scenes_check.yaml` |
 
-Breakdown scenarios: `configs/breakdown_*.yaml`; ablations: `configs/ablations_gate.yaml`. All are
-`preregistered_draft` and flagged `implemented: false`. The manuscript is in the private repo
-`sensorfault-manuscript`.
+All are `preregistered_draft` and flagged `implemented: false`; thresholds are proposals until the
+pre-registration tag (`prereg/`). The manuscript is in the private repo `sensorfault-manuscript`.
 
 ## Licence caveats
 

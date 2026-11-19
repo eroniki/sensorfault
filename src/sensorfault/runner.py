@@ -11,7 +11,7 @@ Only numpy/scipy/pyyaml are needed for ``--dry-run``; two built-in reference fus
 (``builtin_naive_union``, ``builtin_oracle_exclusion``) always run so the evaluation path is
 exercised even when no baseline is installed. They are NOT paper baselines.
 
-Test-split guard: ``--split test`` refuses to run unless git tag ``prereg-v1`` exists
+Test-split guard: ``--split test`` refuses to run unless git tag ``prereg-v4`` exists
 (see prereg/TAGGING.md); override with ``--allow-untagged`` (results then marked untagged).
 """
 
@@ -261,10 +261,10 @@ def run_experiment(
         split == "test"
         and not dry_run
         and not allow_untagged
-        and not _git("tag", "-l", "prereg-v1")
+        and not _git("tag", "-l", "prereg-v4")
     ):
         raise SystemExit(
-            "refusing --split test: git tag prereg-v1 not found (see prereg/TAGGING.md)"
+            "refusing --split test: git tag prereg-v4 not found (see prereg/TAGGING.md)"
         )
     if dry_run:
         cfg = apply_dry_run(cfg)
@@ -377,7 +377,7 @@ def run_experiment(
                     json.dumps(cfg_clean, sort_keys=True, default=str).encode()
                 ).hexdigest(),
                 "git_commit": _git("rev-parse", "HEAD"),
-                "prereg_tag_present": bool(_git("tag", "-l", "prereg-v1")),
+                "prereg_tag_present": bool(_git("tag", "-l", "prereg-v4")),
                 "python": sys.version.split()[0],
                 "numpy": np.__version__,
                 "platform": platform.platform(),
