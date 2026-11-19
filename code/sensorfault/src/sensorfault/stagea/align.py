@@ -94,12 +94,23 @@ def _fit_frame(mode, x, t, beta, p_prev, delta, iters=10, offset_prior=None, fit
     if mode == "inverse":
         u = 1.0 / u
     A_, C_ = 1.0 / p_prev[0], -p_prev[1] / p_prev[0]
+    # robust restart of the slope when the previous parameters are far off: the redescending
+    # weights below would otherwise reject every pixel
+    ratio = np.median(x / u)
+    if (
+        np.isfinite(ratio)
+        and ratio > 0
+        and abs(np.median((A_ * u + C_ - x) / (A_ * u))) > 2 * delta
+    ):
+        A_, C_ = float(ratio), 0.0
     prior = OFFSET_PRIOR[mode] if offset_prior is None else offset_prior
     um = float(np.median(u))
     for _ in range(iters):
         pred = A_ * u + C_
         r = (pred - x) / np.abs(A_ * u)
         w = _huber_w(r, delta) / (A_ * u) ** 2
+        if not np.any(w > 0):
+            w = _huber_w(r, delta, cut=np.inf) / (A_ * u) ** 2
         D = np.stack([u, np.ones_like(u)], 1)
         DtD = D.T @ (D * w[:, None])
         Dtx = D.T @ (w * x)
@@ -264,14 +275,26 @@ def align_block(
     F = len(views)
     xs = [np.asarray(r, float) for r in raw]
     xs_depthlike = [np.where(x > 0, 1.0 / x, np.nan) for x in xs] if mode == "inverse" else xs
+    C = np.array([v["c"][:2] for v in views])
+    # several frames may share a camera centre (different headings or tilts); spacing is taken
+    # over distinct centres
+    U = np.unique(np.round(C, 3), axis=0)
+    if len(U) < 2:
+        raise ValueError("label-free alignment needs at least two distinct camera centres")
+    Du = np.linalg.norm(U[:, None] - U[None], axis=-1)
+    np.fill_diagonal(Du, np.inf)
+    spacing = float(np.median(Du.min(1)))
     if radius is None:
-        # footprint half-width at the gauge-free scale is unknown; use the spacing of camera centres
-        C = np.array([v["c"][:2] for v in views])
-        Dm = np.linalg.norm(C[:, None] - C[None], axis=-1)
-        np.fill_diagonal(Dm, np.inf)
-        radius = 3.5 * float(np.median(Dm.min(1)))
+        radius = 3.5 * spacing
     nb = neighbours(views, radius)
-    pairs = [(i, j) for i in range(F) for j in nb[i][:4]]
+    # gauge pairs need a baseline (parallax); co-located frames carry none
+    pairs = []
+    for i in range(F):
+        cand = [j for j in nb[i] if np.linalg.norm(C[j] - C[i]) > 0.25 * spacing]
+        cand.sort(key=lambda j: np.linalg.norm(C[j] - C[i]))
+        pairs += [(i, j) for j in cand[:4]]
+    if not pairs:
+        raise ValueError("no frame pairs with a baseline inside the neighbour radius")
     k, _, _ = global_gauge(K, views, xs_depthlike, pairs)
     params = np.tile([k, 0.0] if mode == "metric" else [1.0 / k, 0.0], (F, 1))
     beta = 0.0
