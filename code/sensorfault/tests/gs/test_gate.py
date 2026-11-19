@@ -215,8 +215,11 @@ def test_temperature_does_not_hide_a_biased_view():
 
 
 def test_unsupported_surfels_dropped_unless_spawn_kept():
-    (_, _), g1 = run(0, params={"unsupported": "drop"}, views=["v0"])
-    (_, _), g2 = run(0, params={"spawn": "keep_view_j_only_surfels"}, views=["v0"])
+    # every plane tile is seen by some other view, so the default support rule (data information at
+    # least the prior's) keeps them all; a strict threshold makes edge tiles unsupported
+    strict = 25.0 / SIGMA**2
+    (_, _), g1 = run(0, params={"unsupported": "drop"}, views=["v0"], lam_min=strict)
+    (_, _), g2 = run(0, params={"spawn": "keep_view_j_only_surfels"}, views=["v0"], lam_min=strict)
     assert g1.last["v0"]["dof"] < g2.last["v0"]["dof"]
 
 

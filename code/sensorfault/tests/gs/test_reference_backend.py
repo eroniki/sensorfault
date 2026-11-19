@@ -266,3 +266,37 @@ def test_newton_cavity_is_closer_to_a_refit_than_no_step():
     m = exact.valid & nostep.valid & cav.valid
     rms = lambda a: float(np.sqrt(np.mean(a[m] ** 2)))
     assert rms(cav.depth - exact.depth) < 0.7 * rms(nostep.depth - exact.depth)
+
+
+def test_full_jacobian_matches_finite_differences():
+    """dD/d(nu, tau1, tau2) with the footprint term equals central differences of the renderer."""
+    from sensorfault.gs.reference import _apply_normal_tilt, _composite_chunk, _frame_rays
+
+    frames = [_frame(f"v{i}", x) for i, x in enumerate((-0.2, 0.0, 0.2))]
+    st = ref.init_surfels(frames, stride=4)
+    rng = np.random.default_rng(3)
+    st = SurfelState(
+        mu=st.mu + 0.01 * rng.standard_normal(st.mu.shape),
+        R=st.R,
+        log_s=st.log_s,
+        logit_alpha=rng.uniform(-1.0, 1.0, len(st.mu)),
+    )
+    f = frames[1]
+    rays, c, Rc = _frame_rays(f), f.T_wc[:3, 3], f.T_wc[:3, :3]
+    K = len(st.mu)
+    keep = np.ones(K, bool)
+    base = _composite_chunk(st.mu, st.R, st.log_s, st.logit_alpha, c, Rc, rays, keep)
+    ok = np.isfinite(base["D"]) & (base["W"] > 0.05)
+    h = 1e-6
+    for k in rng.choice(K, 5, replace=False):
+        for i in range(3):
+            dl = np.zeros((K, 3))
+            dl[k, i] = h
+            p = _composite_chunk(
+                *_apply_normal_tilt(st.mu, st.R, dl), st.log_s, st.logit_alpha, c, Rc, rays, keep
+            )
+            m = _apply_normal_tilt(st.mu, st.R, -dl)
+            q = _composite_chunk(*m, st.log_s, st.logit_alpha, c, Rc, rays, keep)
+            fd = ((p["D"] - q["D"]) / (2 * h))[ok]
+            jac = (base["w_hat"][k] * base["jsub"][k, :, i] + base["jfoot"][k, :, i])[ok]
+            assert np.allclose(jac, fd, rtol=1e-4, atol=1e-6 * max(1.0, np.abs(fd).max()))
