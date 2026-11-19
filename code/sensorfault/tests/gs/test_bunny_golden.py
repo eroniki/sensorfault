@@ -106,14 +106,17 @@ def test_faulty_view_rendered_with_bias(golden):
     assert exp["v3"]["n_fault"] > 100  # most of the window lands on the bunny
 
 
+@pytest.mark.slow  # shares the ~7 min gate_runs fixture
 def test_gate_flags_only_the_faulty_view(gate_runs):
     assert gate_runs["faulty_v3_seed0"]["excluded"] == ["v3"]
 
 
+@pytest.mark.slow  # shares the ~7 min gate_runs fixture
 def test_gate_no_false_alarm_on_clean_bunny(gate_runs):
     assert gate_runs["clean_seed1"]["excluded"] == []
 
 
+@pytest.mark.slow  # shares the ~7 min gate_runs fixture
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_gate_outputs_match_golden(golden, gate_runs, case):
     got, exp = gate_runs[case], golden["gate"][case]
