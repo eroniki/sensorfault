@@ -40,5 +40,6 @@ evidence logs (removed in the clean-up; see git history). Re-check all entries b
 | gs_hierarchical | https://arxiv.org/abs/2406.12080 / title and six authors from the abstract page; v1 2024-06-17; the page shows no journal reference or DOI, so the ACM TOG record is NOT entered (checked 2026-11-19). |
 | stat_gneiting_scoring | **NOT CHECKED.** JASA 102(477):359-378, 2007, DOI 10.1198/016214506000001437, entered from the standard record on 2026-11-19; the DOI page could not be fetched from the build container. Check against a resolver before submission. |
 | fus_julier_ci | **NOT CHECKED.** ACC 1997, pp. 2369-2373, DOI 10.1109/ACC.1997.609105, entered from the standard record on 2026-11-19; the IEEE Xplore page returned no content. Check against a resolver before submission. |
+| feat_dinov3 | **NOT CHECKED.** arXiv:2508.10104, Siméoni et al., Meta, 2025, entered from memory on 2026-11-20; check the author list and identifier against the abstract page before submission. |
 
 Abstract-level reading only (2026-11-19): unc_gaussmi, unc_pup3dgs, unc_ougs, dep_indepthwetrust, dep_reliability and the statements made about them and about unc_fisherrf in the Related Work section rest on abstracts and project pages. Read the full texts before the related work is final.

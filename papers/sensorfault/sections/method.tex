@@ -19,18 +19,15 @@ The input is a posed aerial video with frames $i=1,\dots,N$, images $\mathbf c_i
 $(\mathrm R_i,\mathbf p_i)$ known up to a small error, and one depth map $\hat d_i$ per frame from a frozen
 monocular network. The scene is a set of planar Gaussian surfels \cite{gs_2dgs}: surfel $k$ has center
 $\boldsymbol\mu_k$, tangents $\mathbf t_{k1},\mathbf t_{k2}$, normal $\mathbf n_k$, scales, opacity and
-color $\mathbf a_k$. Neither source is matched against the other or across frames; both are expressed on
-the surfels, which are therefore the joint space in which the sources meet.
+color $\mathbf a_k$. Nothing is matched; both sources are expressed on the surfels, the joint space where they meet.
 
 A surfel is a plane and so is the image, so the map between them is a homography. A point
 $\boldsymbol\mu_k+\sigma_1\mathbf t_{k1}+\sigma_2\mathbf t_{k2}$ projects to
 $\mathbf u\simeq\mathrm H_{ik}[\sigma_1,\sigma_2,1]^{\top}$ with
 $\mathrm H_{ik}=\mathrm K\bigl[\mathrm R_i\mathbf t_{k1},\ \mathrm R_i\mathbf t_{k2},\
 \mathrm R_i\boldsymbol\mu_k+\mathbf p_i\bigr]$, and two frames that see the surfel are related by
-$\mathrm H_{jk}\mathrm H_{ik}^{-1}$, the homography induced by its plane. This is the correspondence the
-method uses: implicit, one per surfel, and carried by the rasterizer \cite{gs_gsplat} through the
-compositing weights $w_{uk}$ of pixel $u$. Pose and surface enter the same matrix, which is why their
-effects on the residuals can be compared and separated (Section~\ref{sec:method:records}).
+$\mathrm H_{jk}\mathrm H_{ik}^{-1}$, the homography induced by its plane. This is the only correspondence used, carried by the rasterizer \cite{gs_gsplat} through the
+compositing weights $w_{uk}$ of pixel $u$; pose and surface enter the same matrix.
 
 The \emph{placement} of surfel $k$ is $\boldsymbol\theta_k=(\nu_k,\tau_{k1},\tau_{k2})$: an offset along
 the normal and two tilts, in meters and radians. For a ray of direction $\mathbf w_u$ (unit depth) that
@@ -51,13 +48,12 @@ $k$ at
 \label{eq:sensor}
 \end{equation}
 where $\boldsymbol\alpha^{s}_{ik}$ differs between frames and $\boldsymbol\beta^{s}_k$ is a \emph{bias
-field} on the surface, shared by every frame that sees surfel $k$. A frozen depth network makes the same
-mistake at the same place in every frame, so $\boldsymbol\beta^{D}$ is large; non-Lambertian appearance
-and model misfit give the pixels a bias $\boldsymbol\beta^{I}$ of their own. The model is symmetric in the
-two sources. Per frame the depth map also carries a scale $a_i$ and an offset $b_i$, and the pose an error
+field} on the surface, shared by every frame that sees surfel $k$. A frozen network repeats its mistake at the same
+place, so $\boldsymbol\beta^{D}$ is large; non-Lambertian appearance and misfit give the pixels a bias
+$\boldsymbol\beta^{I}$ of their own. Per frame the depth map also carries a scale $a_i$ and an offset $b_i$, and the pose an error
 $\boldsymbol\xi_i\in\mathfrak{se}(3)$; together they form the frame nuisance $\mathbf z_i$.
 
-The map is fit in two steps. First, depth-guided 2DGS is trained on a set of \emph{source} frames with
+The map is fit in two steps. First, depth-guided 2DGS is trained on a set of \emph{fitting} frames with
 \begin{equation}
 L=\sum_{i,u}\frac{\bigl(D_i(u)-a_i\hat d_i(u)-b_i\bigr)^2}{2\sigma_i^{2}}
 +\frac{\lVert\hat{\mathbf c}_i(u)-\mathbf c_i(u)\rVert^2}{2\sigma_I^{2}},
@@ -65,8 +61,8 @@ L=\sum_{i,u}\frac{\bigl(D_i(u)-a_i\hat d_i(u)-b_i\bigr)^2}{2\sigma_i^{2}}
 \end{equation}
 where $D_i=\sum_k w_{uk}d_{uk}$ and $\hat{\mathbf c}_i=\sum_k w_{uk}\mathbf a_k$ are rendered. The
 geometry follows the depth term, the photometric term fits appearance and opacity, and poses and
-$(a_i,b_i)$ are refined. Then the map is frozen. The frozen surface is the one the depth sensor places,
-and its appearance was learned without the interleaved \emph{judging} frames, which are rendered next.
+$(a_i,b_i)$ are refined. The frozen surface is thus placed by the depth sensor, and its appearance never
+saw the interleaved \emph{judging} frames rendered next.
 
 \subsection{Per-Source Information Records}
 \label{sec:method:records}
@@ -104,10 +100,9 @@ blocks of the same form, kept sparse.
 
 \runin{Nuisances.} The frame nuisance $\mathbf z_i$ is marginalized by a Schur complement,
 $\Lambda^{s}_{ik}\leftarrow\Lambda^{s}_{ik}-\Lambda^{s}_{k z_i}\Lambda_{z_iz_i}^{-1}\Lambda^{s}_{z_i k}$,
-where $\Lambda_{z_iz_i}$ pools every surfel in frame $i$ and the pose prior. A pose error moves all
-surfels of a frame together, and a surface fault moves one place in all frames; because one frame sees
-thousands of surfels, a fault on one surfel barely moves $\mathbf z_i$, while a pose error cannot hide in
-any single surfel. Records then add over frames, $\Lambda^{s}_{k}=\sum_i\Lambda^{s}_{ik}$, and leaving
+where $\Lambda_{z_iz_i}$ pools every surfel in frame $i$ and the pose prior. A pose error moves every
+surfel of a frame, a fault one place in every frame; a frame sees thousands of surfels, so a fault
+barely moves $\mathbf z_i$. Records then add over frames, $\Lambda^{s}_{k}=\sum_i\Lambda^{s}_{ik}$, and leaving
 out a block of frames is a subtraction.
 
 \subsection{Honest Information}
@@ -133,7 +128,7 @@ Project on $\mathbf e$ and divide.
 \end{equation}
 which is covariance intersection \cite{fus_julier_ci} with the correlation estimated rather than bounded.
 For the depth sensor, $\Sigma^{D}_\beta$ is the covariance that per-frame errors share across frames far
-apart along the strip, measured on development data with exact depth and pooled by surface class. For the
+apart along the strip, measured on development data with exact depth and pooled by segment class. For the
 pixels, a dispersion $\hat\varphi$ from frame replicates deflates $\Lambda^{I}$, and displacements injected
 by moving surfels and re-rendering give the ratio of stated to realized information. Without truth, only
 the difference $\boldsymbol\beta^{D}-\boldsymbol\beta^{I}$ is observable; on textured Lambertian ground,
@@ -141,31 +136,35 @@ where the injections show $\Sigma^{I}_\beta$ to be small, it is the depth bias.
 
 \subsection{Testing the Sources Against Each Other}
 \label{sec:method:test}
-A fault is read where the depth sensor placed the surface, with appearance from the source frames, so
+A fault is read where the depth sensor placed the surface, with appearance from the fitting frames, so
 that appearance and opacity cannot be refit to hide it. On the judging frames the pixel pull is the score
 $\mathbf s_k=\boldsymbol\eta^{I}_{k}$. If the depth-placed surface is off by $\boldsymbol\delta_k$, then
 $\mathbf s_k\approx\Lambda^{I}_k\boldsymbol\delta_k$ plus noise of covariance $\hat\varphi\Lambda^{I}_k$.
-A fault moves a surface, not a surfel, so the test is read on a \emph{facet} $f$, a set of neighboring
-surfels of one plane class that a fault would move together, against a basis $\mathrm B$ of fault shapes:
-each surfel alone ($\mathrm B=\mathrm I$), the rigid motion of the facet, or smooth deformations. With
-$\mathbf s_f$ the stacked scores and
-$\mathrm C_f=\hat\varphi\Lambda^{I}_f+\Lambda^{I}_f(\tilde\Lambda^{D}_f)^{-1}\Lambda^{I}_f$,
+A fault moves a surface, not a surfel, so the test is read on a \emph{segment} $q$: neighboring surfels
+that a fault would move together. They are cut on the graph of surfels that share pixels, by agreement of
+their planes and of frozen DINOv3 features \cite{feat_dinov3} lifted from the fitting frames only, so the
+cut never sees the tested pixels. A segment is tested
+against a basis $\mathrm B$ of fault shapes: each surfel alone ($\mathrm B=\mathrm I$), one rigid
+motion per plane, or smooth deformations; a fault that crosses segments is caught at the next coarser
+scale, with the scales corrected for multiple testing \cite{stat_holm}. With
+$\mathbf s_q$ the stacked scores and
+$\mathrm C_q=\hat\varphi\Lambda^{I}_q+\Lambda^{I}_q(\tilde\Lambda^{D}_q)^{-1}\Lambda^{I}_q$,
 under the null that both sensors see one surface,
 \begin{equation}
-T_f=\mathbf s_f^{\top}\mathrm B\bigl(\mathrm B^{\top}\mathrm C_f\mathrm B\bigr)^{+}\mathrm B^{\top}\mathbf s_f\ \sim\ \chi^{2}_{r},
+T_q=\mathbf s_q^{\top}\mathrm B\bigl(\mathrm B^{\top}\mathrm C_q\mathrm B\bigr)^{+}\mathrm B^{\top}\mathbf s_q\ \sim\ \chi^{2}_{r},
 \label{eq:tension}
 \end{equation}
-with $r$ the rank of $\mathrm B^{\top}\mathrm C_f\mathrm B$, the number of fault directions in which the
+with $r$ the rank of $\mathrm B^{\top}\mathrm C_q\mathrm B$, the number of fault directions in which the
 pixels have stiffness. A depth error that every frame repeats cancels when depth maps are compared with
-each other; it appears in $T_f$.
+each other; it appears in $T_q$.
 
 \subsection{Fusion and Scoring}
 \label{sec:method:fusion}
 The fused placement is one Gauss--Newton step from the frozen map,
 $\Delta\boldsymbol\theta_k=\Lambda_k^{-1}\bigl(\tilde{\boldsymbol\eta}^{D}_{k}+\hat\varphi^{-1}\boldsymbol\eta^{I}_{k}\bigr)$
 with $\Lambda_k=\tilde\Lambda^{D}_{k}+\hat\varphi^{-1}\Lambda^{I}_{k}$ its stated information, where
-$\tilde{\boldsymbol\eta}^{D}_{k}$ is the depth pull scaled as in \eqref{eq:saturation}. On facets where
-$T_f$ exceeds the $\chi^2_r$ quantile of a stated false-alarm rate the depth record is left out, and in
+$\tilde{\boldsymbol\eta}^{D}_{k}$ is the depth pull scaled as in \eqref{eq:saturation}. On segments where
+$T_q$ exceeds the $\chi^2_r$ quantile of a stated false-alarm rate the depth record is left out, and in
 directions without pixel stiffness the surface is reported as unsupported. A map is scored by the
 \emph{surface log-score}, the mean over surfels of $\tfrac12 z_k^2-\tfrac12\log\det\Lambda_k$, where
 $z_k^2=\boldsymbol\epsilon_k^{\top}\Lambda_k\boldsymbol\epsilon_k$ and $\boldsymbol\epsilon_k$ is the

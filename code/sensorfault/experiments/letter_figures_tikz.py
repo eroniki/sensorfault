@@ -235,7 +235,7 @@ def teaser() -> str:
 {scene(2, 3, "z", False)}
 \end{{axis}}
 \begin{{axis}}[{common}, at={{(b.south east)}}, anchor=south west, xshift=0.1cm, zmax=14, name=c, colormap name=sfviridis, point meta min=0, point meta max=6,
-  {cb.format(ticks="xtick={0,2,4,6}, xticklabels={0,2,4,6+}", label="energy $E_f=T_f/2$ [nat]")}]
+  {cb.format(ticks="xtick={0,2,4,6}, xticklabels={0,2,4,6+}", label="energy $E_q=T_q/2$ [nat]")}]
 {scene(4, 5, "E", True)}
 \end{{axis}}
 \coordinate (bot) at ([yshift=-1pt]current bounding box.south);
@@ -277,9 +277,9 @@ def overview() -> str:
   $\tilde\Lambda^{D}_k=\bigl(\Sigma^{D}_\beta+(\Lambda^{D}_k)^{-1}\bigr)^{-1}$};
 \node[box=sfred] (ih) at (4.75,-4.05) {\textbf{deflate the pixels}: $\hat\varphi$ from\\ frame replicates and injected $\boldsymbol\delta$};
 \node[box=sfred, wide, fill=sfred!7] (t) at (2.375,-5.1)
-  {\textbf{score test at the depth-placed surface}, facet $f$, fault basis $\mathrm B$: $T_f\sim\chi^2_r$};
+  {\textbf{score test at the depth-placed surface}, segment $q$, fault basis $\mathrm B$: $T_q\sim\chi^2_r$};
 \node[box, wide] (o) at (2.375,-6.0)
-  {\textbf{fuse}: one Gauss--Newton step, $\Lambda_k=\tilde\Lambda^{D}_k+\hat\varphi^{-1}\Lambda^{I}_k$, depth left out where $T_f$ fires;\\
+  {\textbf{fuse}: one Gauss--Newton step, $\Lambda_k=\tilde\Lambda^{D}_k+\hat\varphi^{-1}\Lambda^{I}_k$, depth left out where $T_q$ fires;\\
    pose, scale, offset marginalized; unsupported where the pixels have no stiffness};
 \draw[arr] (in) -- (r);
 \draw[arr] (r.south -| dres.north) -- (dres);

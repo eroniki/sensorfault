@@ -4,5 +4,6 @@ The pixels judge the prior only where they have stiffness: on blank or specular 
 depth fails most often, the map can report that a surface is unsupported but cannot correct it. The
 coupling is first-order and reaches only as far as a surfel footprint, so a prior that is far off is
 outside its range. Both sources read the same images, so their errors are not strictly independent. The
-facet is a fixed tile, not a surface found in the data.
+segments come from a frozen feature model; a fault that one segment splits is tested only at the coarser
+scale.
 \TODO{Conclusion after the results; if H1 is refuted, reframe as a negative result on the data at hand.}
