@@ -145,26 +145,27 @@ A fault is read where the depth sensor placed the surface, with appearance from 
 that appearance and opacity cannot be refit to hide it. On the judging frames the pixel pull is the score
 $\mathbf s_k=\boldsymbol\eta^{I}_{k}$. If the depth-placed surface is off by $\boldsymbol\delta_k$, then
 $\mathbf s_k\approx\Lambda^{I}_k\boldsymbol\delta_k$ plus noise of covariance $\hat\varphi\Lambda^{I}_k$.
-A fault moves a surface, not a surfel, so the test is read on a region $R$ against a basis $\mathrm B$ of
-fault shapes: one surfel ($\mathrm B=\mathrm I$), a rigid patch, or smooth deformations. With
-$\mathbf s_R$ the stacked scores and
-$\mathrm C_R=\hat\varphi\Lambda^{I}_R+\Lambda^{I}_R(\tilde\Lambda^{D}_R)^{-1}\Lambda^{I}_R$,
+A fault moves a surface, not a surfel, so the test is read on a \emph{facet} $f$, a set of neighboring
+surfels of one plane class that a fault would move together, against a basis $\mathrm B$ of fault shapes:
+each surfel alone ($\mathrm B=\mathrm I$), the rigid motion of the facet, or smooth deformations. With
+$\mathbf s_f$ the stacked scores and
+$\mathrm C_f=\hat\varphi\Lambda^{I}_f+\Lambda^{I}_f(\tilde\Lambda^{D}_f)^{-1}\Lambda^{I}_f$,
 under the null that both sensors see one surface,
 \begin{equation}
-T_R=\mathbf s_R^{\top}\mathrm B\bigl(\mathrm B^{\top}\mathrm C_R\mathrm B\bigr)^{+}\mathrm B^{\top}\mathbf s_R\ \sim\ \chi^{2}_{r},
+T_f=\mathbf s_f^{\top}\mathrm B\bigl(\mathrm B^{\top}\mathrm C_f\mathrm B\bigr)^{+}\mathrm B^{\top}\mathbf s_f\ \sim\ \chi^{2}_{r},
 \label{eq:tension}
 \end{equation}
-with $r$ the rank of $\mathrm B^{\top}\mathrm C_R\mathrm B$, the number of fault directions in which the
+with $r$ the rank of $\mathrm B^{\top}\mathrm C_f\mathrm B$, the number of fault directions in which the
 pixels have stiffness. A depth error that every frame repeats cancels when depth maps are compared with
-each other; it appears in $T_R$.
+each other; it appears in $T_f$.
 
 \subsection{Fusion and Scoring}
 \label{sec:method:fusion}
 The fused placement is one Gauss--Newton step from the frozen map,
 $\Delta\boldsymbol\theta_k=\Lambda_k^{-1}\bigl(\tilde{\boldsymbol\eta}^{D}_{k}+\hat\varphi^{-1}\boldsymbol\eta^{I}_{k}\bigr)$
 with $\Lambda_k=\tilde\Lambda^{D}_{k}+\hat\varphi^{-1}\Lambda^{I}_{k}$ its stated information, where
-$\tilde{\boldsymbol\eta}^{D}_{k}$ is the depth pull scaled as in \eqref{eq:saturation}. On regions where
-$T_R$ exceeds the $\chi^2_r$ quantile of a stated false-alarm rate the depth record is left out, and in
+$\tilde{\boldsymbol\eta}^{D}_{k}$ is the depth pull scaled as in \eqref{eq:saturation}. On facets where
+$T_f$ exceeds the $\chi^2_r$ quantile of a stated false-alarm rate the depth record is left out, and in
 directions without pixel stiffness the surface is reported as unsupported. A map is scored by the
 \emph{surface log-score}, the mean over surfels of $\tfrac12 z_k^2-\tfrac12\log\det\Lambda_k$, where
 $z_k^2=\boldsymbol\epsilon_k^{\top}\Lambda_k\boldsymbol\epsilon_k$ and $\boldsymbol\epsilon_k$ is the

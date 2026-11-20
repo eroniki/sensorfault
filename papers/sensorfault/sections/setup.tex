@@ -35,11 +35,11 @@ rendered-depth consistency mask \cite{dep_indepthwetrust} and by a photometric m
 \cite{dep_reliability}, both reimplemented from their descriptions; a single Fisher information field in
 the style of \cite{unc_fisherrf}.
 
-\runin{Metrics.} The standardized error $z_m$ of Section~\ref{sec:method:fusion} has $z_m^2\sim\chi^2_3$
+\runin{Metrics.} The standardized error $z_k$ of Section~\ref{sec:method:fusion} has $z_k^2\sim\chi^2_3$
 if the map is honest. We report its robust scale $s_z$ (1 if honest), coverage at the nominal 95\%, and
-the surface log-score. An entity is faulty if it lies in an injected region and its true error exceeds
+the surface log-score. A facet is faulty if it lies in an injected region and its true error exceeds
 twice the single-frame standard deviation; detection is the true-positive rate at 5\% false alarms on
-healthy entities of disjoint tiles. Intervals are 95\% percentile bootstrap intervals with the 64~m tile
+healthy facets of disjoint tiles. Intervals are 95\% percentile bootstrap intervals with the 64~m tile
 as the resampling unit.
 
 \runin{Hypotheses.} A hypothesis is supported or refuted only if the interval of its metric lies wholly on
@@ -54,7 +54,7 @@ one side of its threshold.
   \item[H4] \emph{Power:} realistic faults carry a noncentrality of at least 11.
   \item[H5] \emph{Detection:} on repeated faults the tension reaches an area under the curve of at
         least 0.9 where the consensus gate stays at or below 0.6.
-  \item[H6] \emph{Null:} on healthy entities the mean of $T_m/r$ lies in $[0.85,1.15]$.
+  \item[H6] \emph{Null:} on healthy facets the mean of $T_f/r$ lies in $[0.85,1.15]$.
   \item[H7] \emph{Calibration:} the fused map has $s_z$ in $[0.8,1.25]$ and coverage within 0.04 of the
         nominal 95\%.
 \end{description}
